@@ -1,3 +1,5 @@
+[BITS 32]
+
 section .asm
 
 global insb

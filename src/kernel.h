@@ -6,8 +6,8 @@
 
 void kernel_main();
 
-void print(const char* str);
+void print(const char *str);
 
-void kernel_panic(const char* msg);
+void kernel_panic(const char *msg);
 
 #endif // KERNEL_H
