@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "idt/idt.h"
+#include "memory/heap/kheap.h"
 
 uint16_t* vga_buffer = 0;
 uint16_t terminal_row = 0;
@@ -60,10 +61,19 @@ void print(const char* str) {
     }
 }
 
+void kernel_panic(const char* msg) {
+    print(msg);
+    while (1);
+}
+
 void kernel_main() {
     terminal_initialize();
     print("Hello, World!!\n");
 
+    // Initialize kernel heap
+    kheap_init();
+
+    // Initialize IDT
     idt_init();
 
 }
