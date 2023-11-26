@@ -1,7 +1,7 @@
 #include "kernel.h"
-#include "idt/idt.h"
 #include <stddef.h>
 #include <stdint.h>
+#include "idt/idt.h"
 
 uint16_t* vga_buffer = 0;
 uint16_t terminal_row = 0;
@@ -62,14 +62,8 @@ void print(const char* str) {
 
 void kernel_main() {
     terminal_initialize();
-    print("Hello, World!\n");
+    print("Hello, World!!\n");
 
     idt_init();
 
-    int a = 1;
-    int b = 0;
-
-    int c = a / (int)(int*)b;
-    
-    terminal_col = c;
 }
