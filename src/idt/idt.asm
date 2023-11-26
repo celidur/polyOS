@@ -6,6 +6,8 @@ extern no_interrupt_handler
 global int21h
 global no_interrupt
 global idt_load
+global enable_interrupts
+global disable_interrupts
 idt_load:
     push ebp
     mov ebp, esp
@@ -31,3 +33,11 @@ no_interrupt:
     popad
     sti
     iret
+
+enable_interrupts:
+    sti
+    ret
+
+disable_interrupts:
+    cli
+    ret

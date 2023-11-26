@@ -8,6 +8,25 @@ uint16_t* vga_buffer = 0;
 uint16_t terminal_row = 0;
 uint16_t terminal_col = 0;
 
+enum color{
+    BLACK = 0,
+    BLUE = 1,
+    GREEN = 2,
+    CYAN = 3,
+    RED = 4,
+    MAGENTA = 5,
+    BROWN = 6,
+    LIGHT_GREY = 7,
+    DARK_GREY = 8,
+    LIGHT_BLUE = 9,
+    LIGHT_GREEN = 10,
+    LIGHT_CYAN = 11,
+    LIGHT_RED = 12,
+    LIGHT_MAGENTA = 13,
+    LIGHT_BROWN = 14,
+    WHITE = 15
+};
+
 uint16_t terminal_make_char(char c, char color) {
     return (color << 8) | c;
 }
@@ -57,12 +76,15 @@ size_t strlen(const char* str) {
 void print(const char* str) {
     size_t len = strlen(str);
     for (size_t i = 0; i < len; i++) {
-        terminal_writechar(str[i], 15);
+        terminal_writechar(str[i], WHITE);
     }
 }
 
 void kernel_panic(const char* msg) {
-    print(msg);
+    size_t len = strlen(msg);
+    for (size_t i = 0; i < len; i++) {
+        terminal_writechar(msg[i], RED);
+    }
     while (1);
 }
 
@@ -75,5 +97,7 @@ void kernel_main() {
 
     // Initialize IDT
     idt_init();
+
+    enable_interrupts();
 
 }

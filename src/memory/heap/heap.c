@@ -140,5 +140,8 @@ void* heap_malloc(struct heap* heap, size_t size){
 }
 
 void heap_free(struct heap* heap, void* ptr){
+    if (ptr == NULL){
+        return;
+    }
     heap_mark_block_free(heap, heap_address_to_block(heap, ptr));
 }
