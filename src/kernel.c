@@ -4,6 +4,9 @@
 #include "idt/idt.h"
 #include "memory/heap/kheap.h"
 #include "memory/paging/paging.h"
+#include "disk/disk.h"
+#include "string/string.h"
+#include "fs/pparser.h"
 
 static struct paging_4gb_chunk *kernel_chunk = 0;
 
@@ -77,16 +80,6 @@ void terminal_initialize()
     }
 }
 
-size_t strlen(const char *str)
-{
-    size_t len = 0;
-    while (str[len])
-    {
-        len++;
-    }
-    return len;
-}
-
 void print(const char *str)
 {
     size_t len = strlen(str);
@@ -120,19 +113,26 @@ void kernel_main()
 
     enable_interrupts();
 
+    struct path_root *root = pathparser_parse("0:/bin/shell.exe", NULL);
+    if (!root)
+    {
+        kernel_panic("Failed to parse path");
+    }
+    char drive[2] = {'0' + root->drive_no, '\0'};
+    print(drive);
+    print(":/");
+    struct path_part *part = root->first;
+    while (part)
+    {
+        print(part->part);
+        if (part->next)
+            print("/");
+        part = part->next;
+    }
+    print("\n");
+
     // Initialize paging
     kernel_chunk = paging_new_4gb(PAGING_IS_WRITABLE | PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL);
     paging_switch(paging_4gb_chunk_get_directory(kernel_chunk));
-
-    char *ptr = kzalloc(4096);
-    paging_set(paging_4gb_chunk_get_directory(kernel_chunk), (void *)0x1000, (uint32_t)ptr | PAGING_IS_WRITABLE | PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL);
-
     enable_paging();
-
-    char *ptr2 = (char *)0x1000;
-    ptr2[0] = 'a';
-    ptr2[1] = 'b';
-    print(ptr2);
-    print("\n");
-    print(ptr);
 }
