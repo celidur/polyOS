@@ -7,6 +7,7 @@
 #include "disk/disk.h"
 #include "string/string.h"
 #include "fs/pparser.h"
+#include "disk/streamer.h"
 
 static struct paging_4gb_chunk *kernel_chunk = 0;
 
@@ -112,24 +113,6 @@ void kernel_main()
     idt_init();
 
     enable_interrupts();
-
-    struct path_root *root = pathparser_parse("0:/bin/shell.exe", NULL);
-    if (!root)
-    {
-        kernel_panic("Failed to parse path");
-    }
-    char drive[2] = {'0' + root->drive_no, '\0'};
-    print(drive);
-    print(":/");
-    struct path_part *part = root->first;
-    while (part)
-    {
-        print(part->part);
-        if (part->next)
-            print("/");
-        part = part->next;
-    }
-    print("\n");
 
     // Initialize paging
     kernel_chunk = paging_new_4gb(PAGING_IS_WRITABLE | PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL);

@@ -1,6 +1,8 @@
 #ifndef DISK_H
 #define DISK_H
 
+#include "fs/file.h"
+
 typedef unsigned int DISK_TYPE;
 
 #define DISK_TYPE_REAL 0
@@ -9,6 +11,7 @@ struct disk
 {
     DISK_TYPE type;
     int sector_size;
+    struct filesystem *fs;
 };
 
 void disk_search_and_init();

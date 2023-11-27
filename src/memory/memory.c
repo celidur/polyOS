@@ -23,3 +23,55 @@ int memcmp(void *ptr1, void *ptr2, size_t size)
     }
     return 0;
 }
+
+void *memcpy(void *restrict destination, const void *restrict source, size_t num)
+{
+    char *c_destination = (char *)destination;
+    const char *c_source = (char *)source;
+    if (c_destination == c_source || num == 0)
+    {
+        return destination;
+    }
+
+    if (c_destination < c_source)
+    {
+        for (size_t i = 0; i < num; i++)
+        {
+            c_destination[i] = c_source[i];
+        }
+    }
+    else
+    {
+        for (size_t i = num; i > 0; i--)
+        {
+            c_destination[i - 1] = c_source[i - 1];
+        }
+    }
+    return destination;
+}
+
+void *memmove(void *restrict destination, const void *restrict source, size_t num)
+{
+    char *c_destination = (char *)destination;
+    const char *c_source = (char *)source;
+    if (c_destination == c_source || num == 0)
+    {
+        return destination;
+    }
+
+    if (c_destination < c_source)
+    {
+        for (size_t i = 0; i < num; i++)
+        {
+            c_destination[i] = c_source[i];
+        }
+    }
+    else
+    {
+        for (size_t i = num; i > 0; i--)
+        {
+            c_destination[i - 1] = c_source[i - 1];
+        }
+    }
+    return destination;
+}

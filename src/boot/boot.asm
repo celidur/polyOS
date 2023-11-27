@@ -8,7 +8,28 @@ _start:
     jmp short start
     nop
 
- times 33 db 0
+; FAT16 Header
+OEMIdentifier     db "PolyOS  "
+BytesPerSector    dw 0x200
+SectorsPerCluster db 0x80
+ReservedSectors   dw 200
+FATCopies         db 0x02
+RootDirEntries    dw 0x40
+NumSectors        dw 0x00
+MediaType         db 0xF8
+SectorsPerFAT     dw 0x100
+SectorsPerTrack   dw 0x20
+NumHeads          dw 0x40
+HiddenSectors     dd 0x00
+SectorsBig        dd 0x773594
+
+; Extended BPB 
+DriveNumber       db 0x80
+WinNTBit          db 0x00
+Signature         db 0x29
+VolumeID          dd 0xD105
+VolumeIDString    db "POLYOS BOOT"
+SystemIDString    db "FAT16   "
  
 start:
     jmp 0:step2
