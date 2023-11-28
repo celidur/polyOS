@@ -82,7 +82,7 @@ struct filesystem *fs_resolve(struct disk *disk)
 
     for (int i = 0; i < MAX_FILESYSTEMS; i++)
     {
-        if (filesystems[i] && !filesystems[i]->resolve(disk))
+        if (filesystems[i] != 0 && filesystems[i]->resolve(disk) == 0)
         {
             return filesystems[i];
         }

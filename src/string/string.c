@@ -51,50 +51,47 @@ char tolower(char c)
     return c;
 }
 
-int strncmp(const char *s1, const char *s2, int n)
+int strncmp(const char *str1, const char *str2, int n)
 {
-    unsigned char c1, c2;
-    while (n--)
+    unsigned char u1, u2;
+
+    while (n-- > 0)
     {
-        c1 = *s1++;
-        c2 = *s2++;
-        if (c1 != c2)
-        {
-            return c1 - c2;
-        }
-        if (!c1)
-        {
+        u1 = (unsigned char)*str1++;
+        u2 = (unsigned char)*str2++;
+        if (u1 != u2)
+            return u1 - u2;
+        if (u1 == '\0')
             return 0;
-        }
     }
+
     return 0;
 }
 
 int istrncmp(const char *s1, const char *s2, int n)
 {
-    unsigned char c1, c2;
-    while (n--)
+    unsigned char u1, u2;
+    while (n-- > 0)
     {
-        c1 = tolower(*s1++);
-        c2 = tolower(*s2++);
-        if (c1 != c2)
-        {
-            return c1 - c2;
-        }
-        if (!c1)
-        {
+        u1 = (unsigned char)*s1++;
+        u2 = (unsigned char)*s2++;
+        if (u1 != u2 && tolower(u1) != tolower(u2))
+            return u1 - u2;
+        if (u1 == '\0')
             return 0;
-        }
     }
+
     return 0;
 }
 
-int strlen_terminator(const char *str, char terminator)
+int strnlen_terminator(const char *str, int max, char terminator)
 {
-    int len = 0;
-    while (str[len] && str[len] != terminator)
+    int i = 0;
+    for (i = 0; i < max; i++)
     {
-        len++;
+        if (str[i] == '\0' || str[i] == terminator)
+            break;
     }
-    return len;
+
+    return i;
 }

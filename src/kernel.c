@@ -140,9 +140,10 @@ char *itoa(int num, char *buffer)
 
 void print_int(int value)
 {
-    char buffer[20];
+    char buffer[32];
     itoa(value, buffer);
     print(buffer);
+    print("\n");
 }
 
 void kernel_main()
