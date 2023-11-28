@@ -102,6 +102,49 @@ void kernel_panic(const char *msg)
         ;
 }
 
+char *itoa(int num, char *buffer)
+{
+    int current = 0;
+    if (num == 0)
+    {
+        buffer[current++] = '0';
+        buffer[current] = '\0';
+        return buffer;
+    }
+    int is_negative = 0;
+    if (num < 0)
+    {
+        is_negative = 1;
+        num = -num;
+    }
+    while (num != 0)
+    {
+        int digit = num % 10;
+        buffer[current++] = digit + '0';
+        num /= 10;
+    }
+    if (is_negative)
+    {
+        buffer[current++] = '-';
+    }
+    buffer[current] = '\0';
+    int len = strlen(buffer);
+    for (int i = 0; i < len / 2; i++)
+    {
+        char tmp = buffer[i];
+        buffer[i] = buffer[len - i - 1];
+        buffer[len - i - 1] = tmp;
+    }
+    return buffer;
+}
+
+void print_int(int value)
+{
+    char buffer[20];
+    itoa(value, buffer);
+    print(buffer);
+}
+
 void kernel_main()
 {
     terminal_initialize();
@@ -113,6 +156,9 @@ void kernel_main()
     // Initialize filesystems
     fs_init();
 
+    // Initialize disks
+    disk_search_and_init();
+
     // Initialize IDT
     idt_init();
 
@@ -122,4 +168,24 @@ void kernel_main()
     kernel_chunk = paging_new_4gb(PAGING_IS_WRITABLE | PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL);
     paging_switch(paging_4gb_chunk_get_directory(kernel_chunk));
     enable_paging();
+
+    int fd = fopen("0:/hello.txt", "r");
+    if (fd)
+    {
+        print("File opened successfully!\n");
+    }
+    else
+    {
+        print("File could not be opened!\n");
+    }
+
+    int fd2 = fopen("0:/hello2.txt", "r");
+    if (fd2)
+    {
+        print("File opened successfully!\n");
+    }
+    else
+    {
+        print("File could not be opened!\n");
+    }
 }
