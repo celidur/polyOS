@@ -35,6 +35,7 @@ void disk_search_and_init()
     disk.type = DISK_TYPE_REAL;
     disk.sector_size = SECTOR_SIZE;
     disk.fs = fs_resolve(&disk);
+    disk.id = 0;
 }
 
 struct disk *disk_get(int index)

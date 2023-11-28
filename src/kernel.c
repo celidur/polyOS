@@ -8,6 +8,7 @@
 #include "string/string.h"
 #include "fs/pparser.h"
 #include "disk/streamer.h"
+#include "fs/file.h"
 
 static struct paging_4gb_chunk *kernel_chunk = 0;
 
@@ -108,6 +109,9 @@ void kernel_main()
 
     // Initialize kernel heap
     kheap_init();
+
+    // Initialize filesystems
+    fs_init();
 
     // Initialize IDT
     idt_init();

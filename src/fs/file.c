@@ -4,6 +4,9 @@
 #include "memory/heap/kheap.h"
 #include "status.h"
 #include "kernel.h"
+#include "fat/fat16.h"
+#include "string/string.h"
+#include "disk/disk.h"
 
 struct filesystem *filesystems[MAX_FILESYSTEMS];
 struct file_descriptor *file_descriptors[MAX_FILE_DESCRIPTORS];
@@ -32,7 +35,7 @@ void fs_insert_filesystem(struct filesystem *filesystem)
 
 static void fs_static_load()
 {
-    // load filesystems
+    fs_insert_filesystem(fat16_init());
 }
 
 void fs_load()
@@ -87,7 +90,79 @@ struct filesystem *fs_resolve(struct disk *disk)
     return NULL;
 }
 
-int fopen(const char *filename, FILE_MODE mode)
+FILE_MODE file_get_mode_by_string(const char *str)
 {
-    return -EIO;
+    FILE_MODE mode = FILE_MODE_INVALID;
+    if (!strncmp(str, "r", 1))
+    {
+        mode = FILE_MODE_READ;
+    }
+    else if (!strncmp(str, "w", 1))
+    {
+        mode = FILE_MODE_WRITE;
+    }
+    else if (!strncmp(str, "a", 1))
+    {
+        mode = FILE_MODE_APPEND;
+    }
+    return mode;
+}
+
+int fopen(const char *filename, const char *str)
+{
+    int res = 0;
+    struct path_root *root = pathparser_parse(filename, NULL);
+    if (!root)
+    {
+        res = -EINVARG;
+        goto out;
+    }
+    if (!root->first)
+    {
+        res = -EINVARG;
+        goto out;
+    }
+
+    struct disk *disk = disk_get(root->drive_no);
+    if (!disk)
+    {
+        res = -EIO;
+        goto out;
+    }
+    if (!disk->fs)
+    {
+        res = -EIO;
+        goto out;
+    }
+
+    FILE_MODE mode = file_get_mode_by_string(str);
+    if (mode == FILE_MODE_INVALID)
+    {
+        res = -EINVARG;
+        goto out;
+    }
+
+    void *descriptor_private_data = disk->fs->open(disk, root->first, mode);
+    if (ISERR(descriptor_private_data))
+    {
+        res = ERROR_I(descriptor_private_data);
+        goto out;
+    }
+
+    struct file_descriptor *desc = NULL;
+    res = file_new_descriptor(&desc);
+    if (res < 0)
+    {
+        goto out;
+    }
+    desc->disk = disk;
+    desc->fs = disk->fs;
+    desc->private = descriptor_private_data;
+    res = desc->index;
+
+out:
+
+    if (res < 0)
+        res = 0;
+    return res;
 }
