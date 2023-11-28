@@ -5,17 +5,34 @@ FLAGS = -g -ffreestanding -falign-jumps -falign-functions -falign-labels -falign
 DIRECTORIES = ./bin $(foreach dir, $(dir $(FILES)), $(dir $(dir)))
 # remove redundant directories
 DIRECTORIES := $(sort $(DIRECTORIES))
+OS := $(shell uname -s)
 
 all: $(DIRECTORIES) ./bin/boot.bin ./bin/kernel.bin 
 	rm -rf ./bin/os.bin
 	dd if=./bin/boot.bin >> ./bin/os.bin
 	dd if=./bin/kernel.bin >> ./bin/os.bin
 	dd if=/dev/zero bs=1048576 count=16 >> ./bin/os.bin
-	sudo mount -t vfat ./bin/os.bin /mnt/d
-	# Copy FILES
-	sudo cp ./hello.txt /mnt/d
 
-	sudo umount /mnt/d
+	# run mount-disk
+	rm -rf ./mnt
+	mkdir -p ./mnt/d
+ifeq ($(OS), Darwin)
+	@echo "Mounting disk image..."
+	$(eval DISK := $(shell hdiutil attach -imagekey diskimage-class=CRawDiskImage -nomount ./bin/os.bin))
+	sudo mount -t msdos $(DISK) ./mnt/d
+else
+	sudo mount -t vfat ./bin/os.bin ./mnt/d
+endif
+
+	# Copy FILES
+	sudo cp ./hello.txt ./mnt/d
+
+	sudo umount ./mnt/d
+ifeq ($(OS), Darwin)
+	hdiutil detach  $(DISK)
+endif
+	rm -rf ./mnt
+
 
 
 $(DIRECTORIES):
