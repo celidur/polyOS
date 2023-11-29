@@ -116,3 +116,32 @@ struct task *task_get_next()
 
     return current_task->next;
 }
+
+int task_switch(struct task *task)
+{
+    if (!task)
+    {
+        return -EINVARG;
+    }
+
+    current_task = task;
+    paging_switch(task->page_directory->page_directory);
+    return 0;
+}
+
+void task_run_first_ever_task()
+{
+    if (!current_task)
+    {
+        kernel_panic("task_run_first_ever_task: No current task exist! \n")
+    }
+
+    task_switch(task_head);
+    task_return(&task_head->regs);
+}
+
+int task_page()
+{
+    user_registers();
+    return task_switch(current_task);
+}
