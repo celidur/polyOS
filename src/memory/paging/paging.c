@@ -130,3 +130,18 @@ int paging_map_to(struct paging_4gb_chunk *directory, void *virt, void *phys, vo
     uint32_t total_pages = total_bytes / PAGING_PAGE_SIZE;
     return paging_map_range(directory, virt, phys, total_pages, flags);
 }
+
+uint32_t paging_get(uint32_t *directory, void *virtual_addr)
+{
+    if (!paging_is_aligned(virtual_addr))
+    {
+        return -EINVARG;
+    }
+
+    uint32_t directory_index = 0;
+    uint32_t table_index = 0;
+    paging_get_index(virtual_addr, &directory_index, &table_index);
+    uint32_t entry = directory[directory_index];
+    uint32_t *table = (uint32_t *)(entry & 0xFFFFF000);
+    return table[table_index];
+}

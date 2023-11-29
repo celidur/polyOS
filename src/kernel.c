@@ -118,6 +118,7 @@ void print(const char *str)
 
 void kernel_panic(const char *msg)
 {
+    disable_interrupts();
     size_t len = strlen(msg);
     for (size_t i = 0; i < len; i++)
     {
@@ -174,7 +175,6 @@ void print_int(int value)
 void kernel_main()
 {
     terminal_initialize();
-    print("Hello, World!!\n");
 
     memset(gdt_real, 0, sizeof(gdt_real));
     gdt_struct_to_gdt(gdt_struct, gdt_real, TOTAL_GDT_SEGMENTS);
@@ -209,8 +209,6 @@ void kernel_main()
 
     // initialize interrupts 80h
     int80h_register_commands();
-
-    print("Kernel initialized\n");
 
     struct process *process = NULL;
     int res = process_load("0:/blank.bin", &process);

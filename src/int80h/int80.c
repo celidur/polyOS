@@ -4,5 +4,5 @@
 
 void int80h_register_commands()
 {
-    // int80h_register_commands(SYSTEM_COMMANDO_SUM, int80h_commando_sum);
+    int80h_register_command(SYSTEM_COMMANDO_SUM, int80h_commando_sum);
 }

@@ -17,5 +17,7 @@ struct process
 };
 
 int process_load(const char *filename, struct process **process);
+void *task_get_stack_item(struct task *task, int item);
+int task_page_task(struct task *task);
 
 #endif

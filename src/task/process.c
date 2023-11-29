@@ -72,9 +72,15 @@ out:
 
 static int process_load_data(const char *filename, struct process *process)
 {
-    int res = 0;
+    int res;
     res = process_load_binary(filename, process);
-    return res;
+    if (res != ALL_OK)
+    {
+        return res;
+    }
+
+    paging_map_to(process->task->page_directory, (void *)USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END, process->stack, paging_align_address(process->stack + USER_PROGRAM_STACK_SIZE), PAGING_IS_PRESENT | PAGING_IS_WRITABLE | PAGING_ACCESS_FROM_ALL);
+    return ALL_OK;
 }
 
 int process_map_binary(struct process *process)
@@ -176,4 +182,21 @@ int process_load(const char *filename, struct process **process)
         return -EISTKN;
 
     return process_load_for_slot(filename, process, process_slot);
+}
+
+int task_page_task(struct task *task)
+{
+    user_registers();
+    paging_switch(task->page_directory);
+    return 0;
+}
+
+void *task_get_stack_item(struct task *task, int item)
+{
+    void *result = NULL;
+    uint32_t *stack = (uint32_t *)task->regs.esp;
+    task_page_task(task);
+    result = (void *)stack[item];
+    kernel_page();
+    return result;
 }

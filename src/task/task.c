@@ -4,6 +4,8 @@
 #include "memory/heap/kheap.h"
 #include "memory/memory.h"
 #include "idt/idt.h"
+#include "memory/paging/paging.h"
+#include "string/string.h"
 
 struct task *current_task = NULL;
 
@@ -175,4 +177,32 @@ void task_current_save_state(struct interrupt_frame *frame)
 
     struct task *task = task_current();
     task_save_state(task, frame);
+}
+
+int copy_string_from_task(struct task *task, void *virt, void *phys, int max)
+{
+    if (max >= PAGING_PAGE_SIZE)
+        return -EINVARG;
+
+    char *buffer = kzalloc(max);
+    if (!buffer)
+        return -ENOMEM;
+
+    uint32_t *directory = task->page_directory->page_directory;
+    uint32_t old_entry = paging_get(directory, buffer);
+
+    paging_map(task->page_directory, buffer, buffer, PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL | PAGING_IS_WRITABLE);
+    paging_switch(task->page_directory);
+    strncpy(buffer, virt, max);
+    kernel_page();
+
+    if (paging_set(directory, buffer, old_entry) < 0)
+    {
+        kfree(buffer);
+        return -EIO;
+    }
+
+    strncpy(phys, buffer, max);
+    kfree(buffer);
+    return 0;
 }
