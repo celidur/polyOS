@@ -95,3 +95,15 @@ int strnlen_terminator(const char *str, int max, char terminator)
 
     return i;
 }
+
+char *strncpy(char *dest, const char *src, int n)
+{
+    int i = 0;
+    while (src[i] && i < n - 1)
+    {
+        dest[i] = src[i];
+        i++;
+    }
+    dest[i] = 0;
+    return dest;
+}

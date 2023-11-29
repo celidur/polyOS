@@ -9,8 +9,23 @@
 #include "fs/pparser.h"
 #include "disk/streamer.h"
 #include "fs/file.h"
+#include "memory/memory.h"
+#include "gdt/gdt.h"
+#include "config.h"
+#include "task/tss.h"
 
+struct tss tss;
 static struct paging_4gb_chunk *kernel_chunk = 0;
+struct gdt gdt_real[TOTAL_GDT_SEGMENTS];
+struct gdt_struct gdt_struct[TOTAL_GDT_SEGMENTS] = {
+    {.base = 0x00, .limit = 0x00, .type = 0x00},                  // NULL Segment
+    {.base = 0x00, .limit = 0xFFFFFFFF, .type = 0x9A},            // Kernel code
+    {.base = 0x00, .limit = 0xFFFFFFFF, .type = 0x92},            // Kernel data
+    {.base = 0x00, .limit = 0xFFFFFFFF, .type = 0xF8},            // User code
+    {.base = 0x00, .limit = 0xFFFFFFFF, .type = 0xF2},            // User data
+    {.base = (uint32_t)&tss, .limit = sizeof(tss), .type = 0xE9}, // TSS segment
+
+};
 
 uint16_t *vga_buffer = 0;
 uint16_t terminal_row = 0;
@@ -151,6 +166,12 @@ void kernel_main()
     terminal_initialize();
     print("Hello, World!!\n");
 
+    memset(gdt_real, 0, sizeof(gdt_real));
+    gdt_struct_to_gdt(gdt_struct, gdt_real, TOTAL_GDT_SEGMENTS);
+
+    // Load GDT
+    gdt_load(gdt_real, sizeof(gdt_real));
+
     // Initialize kernel heap
     kheap_init();
 
@@ -163,28 +184,19 @@ void kernel_main()
     // Initialize IDT
     idt_init();
 
-    enable_interrupts();
+    // Initialize TSS
+    memset(&tss, 0, sizeof(tss));
+    tss.esp0 = 0x600000;
+    tss.ss0 = KERNEL_DATA_SELECTOR;
+
+    tss_load(0x28);
 
     // Initialize paging
     kernel_chunk = paging_new_4gb(PAGING_IS_WRITABLE | PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL);
     paging_switch(paging_4gb_chunk_get_directory(kernel_chunk));
     enable_paging();
 
-    int fd = fopen("0:/hello.txt", "r");
-    if (fd)
-    {
-        print("File opened successfully!\n");
-        struct file_stat stat;
-        if (fstat(fd, &stat) == 0)
-        {
-            print("File size: ");
-            print_int(stat.size);
-        }
-        else
-        {
-            print("Failed to get file size!\n");
-        }
-    }
-    fclose(fd);
-    print("File closed!\n");
+    enable_interrupts();
+
+    print("Kernel initialized\n");
 }
