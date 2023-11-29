@@ -37,6 +37,7 @@ struct task *task_new(struct process *process)
     {
         task_head = task;
         task_tail = task;
+        current_task = task;
         goto out;
     }
 
@@ -94,6 +95,7 @@ int task_init(struct task *task, struct process *process)
         return -EIO;
     }
 
+    task->regs.cs = USER_CODE_SEGMENT;
     task->regs.ip = PROGRAM_VIRTUAL_ADDRESS;
     task->regs.ss = USER_DATA_SEGMENT;
     task->regs.esp = USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START;
@@ -133,7 +135,7 @@ void task_run_first_ever_task()
 {
     if (!current_task)
     {
-        kernel_panic("task_run_first_ever_task: No current task exist! \n")
+        kernel_panic("task_run_first_ever_task: No current task exist! \n");
     }
 
     task_switch(task_head);

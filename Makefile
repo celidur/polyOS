@@ -26,6 +26,7 @@ endif
 
 	# Copy FILES
 	sudo cp ./hello.txt ./mnt/d
+	sudo cp ./programs/blank/blank.bin ./mnt/d
 
 	sudo umount ./mnt/d
 ifeq ($(OS), Darwin)
@@ -38,7 +39,7 @@ endif
 $(DIRECTORIES):
 	mkdir -p $(DIRECTORIES)
 
-./bin/kernel.bin: ./bin/ $(FILES)
+./bin/kernel.bin: ./bin/ $(FILES) user_programs
 	i686-elf-ld -g -relocatable $(FILES) -o ./build/kernelfull.o
 	i686-elf-gcc $(FLAGS) -T ./src/linker.ld -o ./bin/kernel.bin -ffreestanding -O0 -nostdlib ./build/kernelfull.o
 
@@ -111,6 +112,12 @@ $(DIRECTORIES):
 ./build/task/process.o: ./src/task/process.c
 	i686-elf-gcc $(INCLUDES) -I ./src/task $(FLAGS) -std=gnu99 -c ./src/task/process.c -o ./build/task/process.o
 
-clean:
+clean: user_programs_clean
 	if [ -d "./bin" ]; then rm -rf ./bin; fi
 	if [ -d "./build" ]; then rm -rf ./build; fi
+
+user_programs:
+	cd ./programs/blank && make all
+
+user_programs_clean:
+	cd ./programs/blank && make clean

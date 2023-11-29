@@ -13,6 +13,9 @@
 #include "gdt/gdt.h"
 #include "config.h"
 #include "task/tss.h"
+#include "task/task.h"
+#include "task/process.h"
+#include "status.h"
 
 struct tss tss;
 static struct paging_4gb_chunk *kernel_chunk = 0;
@@ -199,4 +202,15 @@ void kernel_main()
     enable_interrupts();
 
     print("Kernel initialized\n");
+
+    struct process *process = NULL;
+    int res = process_load("0:/blank.bin", &process);
+    if (res < 0)
+    {
+        kernel_panic("Failed to load process\n");
+    }
+
+    task_run_first_ever_task();
+
+    // Never reached
 }
