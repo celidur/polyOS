@@ -3,6 +3,7 @@
 #include "status.h"
 #include "memory/heap/kheap.h"
 #include "memory/memory.h"
+#include "idt/idt.h"
 
 struct task *current_task = NULL;
 
@@ -127,7 +128,7 @@ int task_switch(struct task *task)
     }
 
     current_task = task;
-    paging_switch(task->page_directory->page_directory);
+    paging_switch(task->page_directory);
     return 0;
 }
 
@@ -146,4 +147,32 @@ int task_page()
 {
     user_registers();
     return task_switch(current_task);
+}
+
+void task_save_state(struct task *task, struct interrupt_frame *frame)
+{
+    task->regs.edi = frame->edi;
+    task->regs.esi = frame->esi;
+    task->regs.ebp = frame->ebp;
+    task->regs.ebx = frame->ebx;
+    task->regs.edx = frame->edx;
+    task->regs.ecx = frame->ecx;
+    task->regs.eax = frame->eax;
+
+    task->regs.ip = frame->ip;
+    task->regs.cs = frame->cs;
+    task->regs.flags = frame->flags;
+    task->regs.esp = frame->esp;
+    task->regs.ss = frame->ss;
+}
+
+void task_current_save_state(struct interrupt_frame *frame)
+{
+    if (!current_task)
+    {
+        kernel_panic("task_current_save_state: No current task to save! \n");
+    }
+
+    struct task *task = task_current();
+    task_save_state(task, frame);
 }

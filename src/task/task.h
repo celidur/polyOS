@@ -45,4 +45,7 @@ struct task *task_current();
 struct task *task_get_next();
 int task_free(struct task *task);
 
+struct interrupt_frame;
+void task_current_save_state(struct interrupt_frame *frame);
+
 #endif

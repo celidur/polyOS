@@ -16,6 +16,7 @@
 #include "task/task.h"
 #include "task/process.h"
 #include "status.h"
+#include "int80h/int80.h"
 
 struct tss tss;
 static struct paging_4gb_chunk *kernel_chunk = 0;
@@ -33,6 +34,12 @@ struct gdt_struct gdt_struct[TOTAL_GDT_SEGMENTS] = {
 uint16_t *vga_buffer = 0;
 uint16_t terminal_row = 0;
 uint16_t terminal_col = 0;
+
+void kernel_page()
+{
+    kernel_registers();
+    paging_switch(kernel_chunk);
+}
 
 enum color
 {
@@ -186,6 +193,7 @@ void kernel_main()
 
     // Initialize IDT
     idt_init();
+    enable_interrupts();
 
     // Initialize TSS
     memset(&tss, 0, sizeof(tss));
@@ -196,10 +204,11 @@ void kernel_main()
 
     // Initialize paging
     kernel_chunk = paging_new_4gb(PAGING_IS_WRITABLE | PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL);
-    paging_switch(paging_4gb_chunk_get_directory(kernel_chunk));
+    paging_switch(kernel_chunk);
     enable_paging();
 
-    enable_interrupts();
+    // initialize interrupts 80h
+    int80h_register_commands();
 
     print("Kernel initialized\n");
 

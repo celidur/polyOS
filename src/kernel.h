@@ -16,4 +16,7 @@ void print_int(int value);
 
 void kernel_panic(const char *msg);
 
+void kernel_page();
+void kernel_registers();
+
 #endif // KERNEL_H

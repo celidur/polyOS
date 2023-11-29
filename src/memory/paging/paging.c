@@ -26,15 +26,10 @@ struct paging_4gb_chunk *paging_new_4gb(uint8_t flags)
     return chunk;
 }
 
-void paging_switch(uint32_t *directory)
+void paging_switch(struct paging_4gb_chunk *directory)
 {
-    paging_load_directory(directory);
-    current_directory = directory;
-}
-
-uint32_t *paging_4gb_chunk_get_directory(struct paging_4gb_chunk *chunk)
-{
-    return chunk->page_directory;
+    paging_load_directory(directory->page_directory);
+    current_directory = directory->page_directory;
 }
 
 bool paging_is_aligned(void *addr)
@@ -98,14 +93,14 @@ void *paging_align_address(void *addr)
     return addr;
 }
 
-int paging_map(uint32_t *directory, void *virt, void *phys, uint8_t flags)
+int paging_map(struct paging_4gb_chunk *directory, void *virt, void *phys, uint8_t flags)
 {
     if (!paging_is_aligned(virt) || !paging_is_aligned(phys))
         return -EINVARG;
-    return paging_set(directory, virt, (uint32_t)phys | flags);
+    return paging_set(directory->page_directory, virt, (uint32_t)phys | flags);
 }
 
-int paging_map_range(uint32_t *directory, void *virt, void *phys, int count, uint8_t flags)
+int paging_map_range(struct paging_4gb_chunk *directory, void *virt, void *phys, int count, uint8_t flags)
 {
     for (int i = 0; i < count; i++)
     {
@@ -117,7 +112,7 @@ int paging_map_range(uint32_t *directory, void *virt, void *phys, int count, uin
     return ALL_OK;
 }
 
-int paging_map_to(uint32_t *directory, void *virt, void *phys, void *phys_end, uint8_t flags)
+int paging_map_to(struct paging_4gb_chunk *directory, void *virt, void *phys, void *phys_end, uint8_t flags)
 {
     if (!paging_is_aligned(virt))
         return -EINVARG;
