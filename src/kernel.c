@@ -174,19 +174,17 @@ void kernel_main()
     if (fd)
     {
         print("File opened successfully!\n");
+        struct file_stat stat;
+        if (fstat(fd, &stat) == 0)
+        {
+            print("File size: ");
+            print_int(stat.size);
+        }
+        else
+        {
+            print("Failed to get file size!\n");
+        }
     }
-    else
-    {
-        print("File could not be opened!\n");
-    }
-
-    int fd2 = fopen("0:/hello2.txt", "r");
-    if (fd2)
-    {
-        print("File opened successfully!\n");
-    }
-    else
-    {
-        print("File could not be opened!\n");
-    }
+    fclose(fd);
+    print("File closed!\n");
 }

@@ -2,6 +2,7 @@
 #define FILE_H
 
 #include "pparser.h"
+#include <stdint.h>
 
 typedef unsigned int FILE_SEEK_MODE;
 enum
@@ -20,15 +21,38 @@ enum
     FILE_MODE_INVALID
 };
 
+enum
+{
+    FILE_STAT_READ_ONLY = 0b00000001,
+};
+
+typedef unsigned int FILE_STAT_FLAGS;
+
+struct file_stat
+{
+    uint32_t size;
+    FILE_STAT_FLAGS flags;
+};
+
 struct disk;
 
 typedef void *(*FS_OPEN_FUNCTION)(struct disk *disk, struct path_part *path, FILE_MODE mode);
 typedef int (*FS_RESOLVE_FUNCTION)(struct disk *disk);
+typedef int (*FS_READ_FUNCTION)(struct disk *disk, void *private, uint32_t size, uint32_t nmemb, void *out);
+typedef int (*FS_SEEK_FUNCTION)(void *private, uint32_t offset, FILE_SEEK_MODE mode);
+typedef int (*FS_STAT_FUNCTION)(struct disk *disk, void *private, struct file_stat *stat);
+typedef int (*FS_CLOSE_FUNCTION)(void *private);
 
 struct filesystem
 {
     FS_OPEN_FUNCTION open;
     FS_RESOLVE_FUNCTION resolve;
+    FS_READ_FUNCTION read;
+    FS_SEEK_FUNCTION seek;
+
+    FS_STAT_FUNCTION stat;
+    FS_CLOSE_FUNCTION close;
+
     char name[20];
 };
 
@@ -42,6 +66,10 @@ struct file_descriptor
 
 void fs_init();
 int fopen(const char *filename, const char *str);
+int fread(void *ptr, uint32_t size, uint32_t nmemb, int index);
+int fseek(int fd, uint32_t offset, FILE_SEEK_MODE mode);
+int fstat(int fd, struct file_stat *stat);
+int fclose(int fd);
 void fs_insert_filesytem(struct filesystem *fs);
 struct filesystem *fs_resolve(struct disk *disk);
 

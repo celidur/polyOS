@@ -166,3 +166,52 @@ out:
         res = 0;
     return res;
 }
+
+int fread(void *ptr, uint32_t size, uint32_t nmemb, int fd)
+{
+    if (size == 0 || nmemb == 0 || fd < 1)
+        return -EINVARG;
+
+    struct file_descriptor *desc = file_get_descriptor(fd);
+    if (!desc)
+        return -EINVARG;
+
+    return desc->fs->read(desc->disk, desc->private, size, nmemb, (char *)ptr);
+}
+
+int fseek(int fd, uint32_t offset, FILE_SEEK_MODE mode)
+{
+    struct file_descriptor *desc = file_get_descriptor(fd);
+    if (!desc)
+        return -EIO;
+
+    return desc->fs->seek(desc->private, offset, mode);
+}
+
+int fstat(int fd, struct file_stat *stat)
+{
+    struct file_descriptor *desc = file_get_descriptor(fd);
+    if (!desc)
+        return -EIO;
+
+    return desc->fs->stat(desc->disk, desc->private, stat);
+}
+
+static void file_free_descriptor(struct file_descriptor *desc)
+{
+    file_descriptors[desc->index - 1] = NULL;
+    kfree(desc);
+}
+
+int fclose(int fd)
+{
+    struct file_descriptor *desc = file_get_descriptor(fd);
+    if (!desc)
+        return -EIO;
+
+    int res = desc->fs->close(desc->private);
+    if (res == ALL_OK)
+        file_free_descriptor(desc);
+
+    return res;
+}
