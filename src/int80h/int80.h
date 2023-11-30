@@ -3,7 +3,8 @@
 
 enum SystemCommands
 {
-    SYSTEM_COMMANDO_SUM,
+    SYSTEM_COMMAND0_SUM,
+    SYSTEM_COMMAND1_PRINT,
 };
 
 void int80h_register_commands();

@@ -72,26 +72,14 @@ out:
 
 static int process_load_data(const char *filename, struct process *process)
 {
-    int res;
-    res = process_load_binary(filename, process);
-    if (res != ALL_OK)
-    {
-        return res;
-    }
-
-    paging_map_to(process->task->page_directory, (void *)USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END, process->stack, paging_align_address(process->stack + USER_PROGRAM_STACK_SIZE), PAGING_IS_PRESENT | PAGING_IS_WRITABLE | PAGING_ACCESS_FROM_ALL);
-    return ALL_OK;
+    return process_load_binary(filename, process);
 }
 
 int process_map_binary(struct process *process)
 {
     paging_map_to(process->task->page_directory, (void *)PROGRAM_VIRTUAL_ADDRESS, process->ptr, paging_align_address(process->ptr + process->size), PAGING_IS_PRESENT | PAGING_IS_WRITABLE | PAGING_ACCESS_FROM_ALL);
+    paging_map_to(process->task->page_directory, (void *)USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END, process->stack, paging_align_address(process->stack + USER_PROGRAM_STACK_SIZE), PAGING_IS_PRESENT | PAGING_IS_WRITABLE | PAGING_ACCESS_FROM_ALL);
     return 0;
-}
-
-int process_map_nenroy(struct process *process)
-{
-    return process_map_binary(process);
 }
 
 int process_load_for_slot(const char *filename, struct process **process, int process_slot)

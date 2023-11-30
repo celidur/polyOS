@@ -169,7 +169,6 @@ void print_int(int value)
     char buffer[32];
     itoa(value, buffer);
     print(buffer);
-    print("\n");
 }
 
 void kernel_main()
