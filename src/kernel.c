@@ -74,6 +74,24 @@ void terminal_put_char(char c, char color, int x, int y)
     vga_buffer[x + y * VGA_WIDTH] = terminal_make_char(c, color);
 }
 
+void terminal_backspace()
+{
+    if (terminal_row == 0 && terminal_col == 0)
+    {
+        return;
+    }
+
+    if (terminal_col == 0)
+    {
+        terminal_row--;
+        terminal_col = VGA_WIDTH;
+    }
+
+    terminal_col--;
+    terminal_writechar(' ', WHITE);
+    terminal_col--;
+}
+
 void terminal_writechar(char c, char color)
 {
     if (c == '\n')
@@ -82,6 +100,12 @@ void terminal_writechar(char c, char color)
         terminal_row++;
         return;
     }
+    if (c == '\b')
+    {
+        terminal_backspace();
+        return;
+    }
+
     terminal_put_char(c, color, terminal_col, terminal_row);
     terminal_col++;
     if (terminal_col >= VGA_WIDTH)
@@ -220,7 +244,7 @@ void kernel_main()
     keyboard_init();
 
     struct process *process = NULL;
-    int res = process_load("0:/blank.bin", &process);
+    int res = process_load_switch("0:/blank.bin", &process);
     if (res < 0)
     {
         kernel_panic("Failed to load process\n");

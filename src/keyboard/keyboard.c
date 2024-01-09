@@ -52,6 +52,9 @@ void keyboard_push(char c)
     {
         return;
     }
+    if (c == 0){
+        return;
+    }
     int index = keyboard_get_tail_index(process);
     process->keyboard.buffer[index] = c;
     process->keyboard.tail++;

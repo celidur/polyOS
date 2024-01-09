@@ -188,3 +188,19 @@ void *task_get_stack_item(struct task *task, int item)
     kernel_page();
     return result;
 }
+
+int process_switch(struct process *process)
+{
+    current_process = process;
+    return 0;
+}
+
+int process_load_switch(const char *filename, struct process **process)
+{
+    int res = process_load(filename, process);
+    if (res == ALL_OK)
+    {
+        process_switch(*process);
+    }
+    return res;
+}

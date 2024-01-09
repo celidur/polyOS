@@ -13,7 +13,7 @@ extern void* interrupt_pointer_table[TOTAL_INTERRUPTS];
 
 static INTERRUPT_CALLBACK_FUNC interrupt_callbacks[TOTAL_INTERRUPTS];
 
-static ISR80H_COMMAND int80h_commands[MAX_INT80H_COMMANDS];
+static INT80H_COMMAND int80h_commands[MAX_INT80H_COMMANDS];
 
 extern void idt_load(struct idtr_desc* ptr);
 extern void int80h_wrapper();
@@ -64,7 +64,7 @@ void *int80h_handle_command(struct interrupt_frame *frame)
     if (command < 0 || command >= MAX_INT80H_COMMANDS)
         return NULL;
 
-    ISR80H_COMMAND handler = int80h_commands[command];
+    INT80H_COMMAND handler = int80h_commands[command];
     if (!handler)
         return NULL;
     return handler(frame);
@@ -80,7 +80,7 @@ void *int80h_handler(struct interrupt_frame *frame)
     return res;
 }
 
-void int80h_register_command(int command_id, ISR80H_COMMAND handler)
+void int80h_register_command(int command_id, INT80H_COMMAND handler)
 {
     if (command_id < 0 || command_id >= MAX_INT80H_COMMANDS)
     {
