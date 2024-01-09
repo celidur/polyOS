@@ -17,6 +17,7 @@
 #include "task/process.h"
 #include "status.h"
 #include "int80h/int80.h"
+#include "keyboard/keyboard.h"
 
 struct tss tss;
 static struct paging_4gb_chunk *kernel_chunk = 0;
@@ -60,6 +61,8 @@ enum color
     LIGHT_BROWN = 14,
     WHITE = 15
 };
+
+typedef uint8_t color_t;
 
 uint16_t terminal_make_char(char c, char color)
 {
@@ -116,14 +119,19 @@ void print(const char *str)
     }
 }
 
+void print_c(const char *str, color_t color)
+{
+    size_t len = strlen(str);
+    for (size_t i = 0; i < len; i++)
+    {
+        terminal_writechar(str[i], color);
+    }
+}
+
 void kernel_panic(const char *msg)
 {
     disable_interrupts();
-    size_t len = strlen(msg);
-    for (size_t i = 0; i < len; i++)
-    {
-        terminal_writechar(msg[i], RED);
-    }
+    print_c(msg, RED);
     while (1)
         ;
 }
@@ -192,7 +200,6 @@ void kernel_main()
 
     // Initialize IDT
     idt_init();
-    enable_interrupts();
 
     // Initialize TSS
     memset(&tss, 0, sizeof(tss));
@@ -208,6 +215,9 @@ void kernel_main()
 
     // initialize interrupts 80h
     int80h_register_commands();
+
+    // Initialize keyboard
+    keyboard_init();
 
     struct process *process = NULL;
     int res = process_load("0:/blank.bin", &process);

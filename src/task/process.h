@@ -8,6 +8,13 @@ struct process
 {
     uint16_t pid;
     char filename[MAX_PATH];
+    struct keyboard_buffer
+    {
+        char buffer[KEYBOARD_BUFFER_SIZE];
+        int head;
+        int tail;
+    } keyboard;
+
     struct task *task;
 
     void *allocations[MAX_PROGRAM_ALLOCATIONS];
@@ -19,5 +26,7 @@ struct process
 int process_load(const char *filename, struct process **process);
 void *task_get_stack_item(struct task *task, int item);
 int task_page_task(struct task *task);
+struct process *process_current();
+struct process *process_get(int process_id);
 
 #endif

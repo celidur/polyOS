@@ -3,25 +3,50 @@
 #include "kernel.h"
 #include "memory/memory.h"
 #include "task/task.h"
-
+#include "status.h"
 #include "io/io.h"
 
 struct idt_desc idt_descriptors[TOTAL_INTERRUPTS];
 struct idtr_desc idtr_descriptor;
+
+extern void* interrupt_pointer_table[TOTAL_INTERRUPTS];
+
+static INTERRUPT_CALLBACK_FUNC interrupt_callbacks[TOTAL_INTERRUPTS];
+
 static ISR80H_COMMAND int80h_commands[MAX_INT80H_COMMANDS];
 
-extern void idt_load(struct idtr_desc *ptr);
-extern void int21h();
-extern void no_interrupt();
+extern void idt_load(struct idtr_desc* ptr);
 extern void int80h_wrapper();
 
-void idt_zero()
+
+int idt_register_interrupt_callback(int interrupt, INTERRUPT_CALLBACK_FUNC callback)
 {
-    print("Divide by zero error\n");
-    while (1)
+    if (interrupt < 0 || interrupt >= TOTAL_INTERRUPTS)
     {
+        return -EINVARG;
     }
+    interrupt_callbacks[interrupt] = callback;
+    return ALL_OK;
 }
+
+void idt_clock()
+{
+    print("Timer interrupt\n");
+}
+
+void interrupt_handler(int interrupt, struct interrupt_frame* frame)
+{
+    kernel_page();
+    if (interrupt_callbacks[interrupt] != 0)
+    {
+        task_current_save_state(frame);
+        interrupt_callbacks[interrupt](frame);
+    }
+
+    task_page();
+    outb(0x20, 0x20);
+}
+
 
 void idt_set(int interrupt_no, void *address)
 {
@@ -33,19 +58,9 @@ void idt_set(int interrupt_no, void *address)
     desc->type_attr = 0xEE;
 }
 
-void int21h_handler()
+void *int80h_handle_command(struct interrupt_frame *frame)
 {
-    print("Keyboard pressed!\n");
-    outb(0x20, 0x20);
-}
-
-void no_interrupt_handler()
-{
-    outb(0x20, 0x20);
-}
-
-void *int80h_handle_command(int command, struct interrupt_frame *frame)
-{
+    int command = frame->eax;
     if (command < 0 || command >= MAX_INT80H_COMMANDS)
         return NULL;
 
@@ -55,12 +70,12 @@ void *int80h_handle_command(int command, struct interrupt_frame *frame)
     return handler(frame);
 }
 
-void *int80h_handler(int command, struct interrupt_frame *frame)
+void *int80h_handler(struct interrupt_frame *frame)
 {
     void *res = NULL;
     kernel_page();
     task_current_save_state(frame);
-    res = int80h_handle_command(command, frame);
+    res = int80h_handle_command(frame);
     task_page();
     return res;
 }
@@ -88,14 +103,13 @@ void idt_init()
 
     for (int i = 0; i < TOTAL_INTERRUPTS; i++)
     {
-        idt_set(i, no_interrupt);
+        idt_set(i, interrupt_pointer_table[i]);
     }
-
-    idt_set(0, idt_zero);
-
-    idt_set(0x21, int21h);
 
     idt_set(0x80, int80h_wrapper);
 
+    // idt_register_interrupt_callback(0x20, idt_clock);
+
     idt_load(&idtr_descriptor);
 }
+

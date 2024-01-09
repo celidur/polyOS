@@ -43,6 +43,7 @@ void disable_interrupts();
 
 struct interrupt_frame;
 typedef void *(*ISR80H_COMMAND)(struct interrupt_frame *frame);
+typedef void(*INTERRUPT_CALLBACK_FUNC)(struct interrupt_frame *frame);
 void int80h_register_command(int command_id, ISR80H_COMMAND handler);
 
 #endif
