@@ -3,7 +3,12 @@
 #include <stdint.h>
 #include "task.h"
 #include "config.h"
+#include "loader/formats/elfloader.h"
 
+#define PROCESS_FILETYPE_ELF 0
+#define PROCESS_FILETYPE_BINARY 1
+
+typedef unsigned char PROCESS_FILETYPE;
 struct process
 {
     uint16_t pid;
@@ -18,7 +23,13 @@ struct process
     struct task *task;
 
     void *allocations[MAX_PROGRAM_ALLOCATIONS];
-    void *ptr;     // physical address of the process
+    PROCESS_FILETYPE filetype;
+    union 
+    {
+       void *ptr;     // physical address of the process
+        struct elf_file *elf_file;
+    };
+    
     void *stack;   // physical address of the stack
     uint32_t size; // size of the data pointed to by "ptr"
 };

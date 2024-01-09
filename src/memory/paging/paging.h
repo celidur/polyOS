@@ -30,5 +30,6 @@ void paging_free_4gb(struct paging_4gb_chunk *chunk);
 int paging_set(uint32_t *directory, void *virtual_addr, uint32_t value);
 bool paging_is_aligned(void *addr);
 uint32_t paging_get(uint32_t *directory, void *virtual_addr);
+void* paging_align_to_lower_page(void* addr);
 
 #endif

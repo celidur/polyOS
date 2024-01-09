@@ -62,6 +62,7 @@ static int process_load_binary(const char *filename, struct process *process)
         goto out;
     }
 
+    process->filetype = PROCESS_FILETYPE_BINARY;
     process->ptr = program_data_ptr;
     process->size = stat.size;
 
@@ -70,16 +71,77 @@ out:
     return res;
 }
 
-static int process_load_data(const char *filename, struct process *process)
-{
-    return process_load_binary(filename, process);
+static int process_load_elf(const char *filename, struct process *process){
+    struct elf_file *elf_file = NULL;
+    int res = eft_load(filename, &elf_file);
+    if (res != ALL_OK){
+        return res;
+    }
+
+    process->filetype = PROCESS_FILETYPE_ELF;
+    process->elf_file = elf_file;
+    return ALL_OK;
 }
 
-int process_map_binary(struct process *process)
+
+static int process_load_data(const char *filename, struct process *process)
+{
+    int res = 0;
+    res = process_load_elf(filename, process);
+    if (res == -EINFORMAT){
+        return process_load_binary(filename, process);
+    }
+    return res;
+}
+
+static int process_map_elf(struct process* process){
+    struct elf_file* elf_file = process->elf_file;
+    struct elf_header* header = elf_header(elf_file);
+    struct elf32_phdr* phdrs = elf_pheader(header);
+    for (int i = 0; i < header->e_phnum; i++){
+        struct elf32_phdr* phdr = &phdrs[i];
+        void* phdr_phys_adress = elf_phdr_phys_address(elf_file, phdr);
+        int flags = PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL;
+        if (phdr->p_flags & PF_W){
+            flags |= PAGING_IS_WRITABLE;
+        }
+        int res = paging_map_to(process->task->page_directory, paging_align_to_lower_page((void*) phdr->p_vaddr), paging_align_to_lower_page(phdr_phys_adress), paging_align_address(phdr_phys_adress + phdr->p_filesz), flags);
+        if (res < 0){
+            return res;
+        }
+    }
+    return ALL_OK;
+}
+
+static int process_map_binary(struct process *process)
 {
     paging_map_to(process->task->page_directory, (void *)PROGRAM_VIRTUAL_ADDRESS, process->ptr, paging_align_address(process->ptr + process->size), PAGING_IS_PRESENT | PAGING_IS_WRITABLE | PAGING_ACCESS_FROM_ALL);
-    paging_map_to(process->task->page_directory, (void *)USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END, process->stack, paging_align_address(process->stack + USER_PROGRAM_STACK_SIZE), PAGING_IS_PRESENT | PAGING_IS_WRITABLE | PAGING_ACCESS_FROM_ALL);
     return 0;
+}
+int process_map_memory(struct process* process)
+{
+    int res = 0;
+
+    switch(process->filetype)
+    {
+        case PROCESS_FILETYPE_ELF:
+            res = process_map_elf(process);
+        break;
+
+        case PROCESS_FILETYPE_BINARY:
+            res = process_map_binary(process);
+        break;
+
+        default:
+            kernel_panic("process_map_memory: Invalid filetype\n");
+    }
+
+    if (res < 0)
+    {
+       return res;
+    }
+    paging_map_to(process->task->page_directory, (void *)USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END, process->stack, paging_align_address(process->stack + USER_PROGRAM_STACK_SIZE), PAGING_IS_PRESENT | PAGING_IS_WRITABLE | PAGING_ACCESS_FROM_ALL);
+    return res;
 }
 
 int process_load_for_slot(const char *filename, struct process **process, int process_slot)
@@ -129,7 +191,7 @@ int process_load_for_slot(const char *filename, struct process **process, int pr
     }
 
     _process->task = task;
-    res = process_map_binary(_process);
+    res = process_map_memory(_process);
     if (res != ALL_OK)
     {
         goto out;

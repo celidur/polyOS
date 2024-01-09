@@ -244,7 +244,7 @@ void kernel_main()
     keyboard_init();
 
     struct process *process = NULL;
-    int res = process_load_switch("0:/blank.bin", &process);
+    int res = process_load_switch("0:/blank.elf", &process);
     if (res < 0)
     {
         kernel_panic("Failed to load process\n");
