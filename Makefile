@@ -1,4 +1,4 @@
-FILES = ./build/kernel.asm.o ./build/kernel.o ./build/idt/idt.asm.o ./build/idt/idt.o ./build/memory/memory.o ./build/io/io.o ./build/memory/heap/heap.o ./build/memory/heap/kheap.o ./build/memory/paging/paging.o ./build/memory/paging/paging.asm.o ./build/disk/disk.o ./build/string/string.o ./build/fs/pparser.o ./build/disk/streamer.o ./build/fs/file.o ./build/fs/fat/fat16.o ./build/gdt/gdt.o ./build/gdt/gdt.asm.o ./build/task/tss.asm.o ./build/task/task.o ./build/task/task.asm.o ./build/task/process.o ./build/int80h/int80.o ./build/int80h/misc.o ./build/int80h/io.o ./build/keyboard/keyboard.o ./build/keyboard/classic.o ./build/loader/formats/elf.o ./build/loader/formats/elfloader.o
+FILES = ./build/kernel.asm.o ./build/kernel.o ./build/idt/idt.asm.o ./build/idt/idt.o ./build/memory/memory.o ./build/io/io.o ./build/memory/heap/heap.o ./build/memory/heap/kheap.o ./build/memory/paging/paging.o ./build/memory/paging/paging.asm.o ./build/disk/disk.o ./build/string/string.o ./build/fs/pparser.o ./build/disk/streamer.o ./build/fs/file.o ./build/fs/fat/fat16.o ./build/gdt/gdt.o ./build/gdt/gdt.asm.o ./build/task/tss.asm.o ./build/task/task.o ./build/task/task.asm.o ./build/task/process.o ./build/int80h/int80.o ./build/int80h/misc.o ./build/int80h/io.o ./build/keyboard/keyboard.o ./build/keyboard/classic.o ./build/loader/formats/elf.o ./build/loader/formats/elfloader.o ./build/int80h/heap.o
 INCLUDES = -I./src
 FLAGS = -g -ffreestanding -falign-jumps -falign-functions -falign-labels -falign-loops -fstrength-reduce -fomit-frame-pointer -finline-functions -Wno-unused-function -fno-builtin -Werror -Wno-unused-label -Wno-cpp -Wno-unused-parameter -nostdlib -nostartfiles -nodefaultlibs -Wall -O0 -Iinc
 
@@ -133,12 +133,17 @@ $(DIRECTORIES):
 ./build/loader/formats/elfloader.o: ./src/loader/formats/elfloader.c
 	i686-elf-gcc $(INCLUDES) -I ./src/loader/formats $(FLAGS) -std=gnu99 -c ./src/loader/formats/elfloader.c -o ./build/loader/formats/elfloader.o
 
+./build/int80h/heap.o: ./src/int80h/heap.c
+	i686-elf-gcc $(INCLUDES) -I ./src/int80h $(FLAGS) -std=gnu99 -c ./src/int80h/heap.c -o ./build/int80h/heap.o
+
 clean: user_programs_clean
 	if [ -d "./bin" ]; then rm -rf ./bin; fi
 	if [ -d "./build" ]; then rm -rf ./build; fi
 
 user_programs:
+	cd ./programs/stdlib && make all
 	cd ./programs/blank && make all
 
 user_programs_clean:
+	cd ./programs/stdlib && make clean
 	cd ./programs/blank && make clean

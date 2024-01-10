@@ -7,6 +7,8 @@ enum SystemCommands
     SYSTEM_COMMAND1_PRINT,
     SYSTEM_COMMAND2_GETKEY,
     SYSTEM_COMMAND3_PUTCHAR,
+    SYSTEM_COMMAND4_MALLOC,
+    SYSTEM_COMMAND5_FREE,
 };
 
 void int80h_register_commands();

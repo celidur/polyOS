@@ -105,7 +105,7 @@ static int process_map_elf(struct process* process){
         if (phdr->p_flags & PF_W){
             flags |= PAGING_IS_WRITABLE;
         }
-        int res = paging_map_to(process->task->page_directory, paging_align_to_lower_page((void*) phdr->p_vaddr), paging_align_to_lower_page(phdr_phys_adress), paging_align_address(phdr_phys_adress + phdr->p_filesz), flags);
+        int res = paging_map_to(process->task->page_directory, paging_align_to_lower_page((void*) phdr->p_vaddr), paging_align_to_lower_page(phdr_phys_adress), paging_align_address(phdr_phys_adress + phdr->p_memsz), flags);
         if (res < 0){
             return res;
         }
@@ -265,4 +265,56 @@ int process_load_switch(const char *filename, struct process **process)
         process_switch(*process);
     }
     return res;
+}
+
+static int process_find_free_allocation_index(struct process *process)
+{
+    for (int i = 0; i < MAX_PROGRAM_ALLOCATIONS; i++)
+    {
+        if (!process->allocations[i])
+        {
+            return i;
+        }
+    }
+    return -ENOMEM;
+}
+
+void* process_malloc(struct process* process, size_t size){
+    int index = process_find_free_allocation_index(process);
+    if (index < 0){
+        return NULL;
+    }
+
+    void* ptr = kzalloc(size);
+    if (!ptr){
+        return NULL;
+    }
+
+    process->allocations[index] = ptr;
+    return ptr;
+}
+
+static bool process_is_process_pointer(struct process* process, void* ptr){
+    for (int i = 0; i < MAX_PROGRAM_ALLOCATIONS; i++){
+        if (process->allocations[i] == ptr){
+            return true;
+        }
+    }
+    return false;
+}
+
+static void process_allocation_unjoin(struct process* process, void* ptr){
+    for (int i = 0; i < MAX_PROGRAM_ALLOCATIONS; i++){
+        if (process->allocations[i] == ptr){
+            process->allocations[i] = NULL;
+        }
+    }
+}
+
+void process_free(struct process* process, void* ptr){
+    if (!process_is_process_pointer(process, ptr)){
+        return;
+    }
+    process_allocation_unjoin(process, ptr);
+    kfree(ptr);
 }
