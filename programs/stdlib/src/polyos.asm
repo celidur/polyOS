@@ -7,6 +7,7 @@ global polyos_getkey:function
 global polyos_putchar:function
 global polyos_malloc:function
 global polyos_free:function
+global polyos_process_load_start:function
 
 ; void print(char *str)
 print:
@@ -56,6 +57,17 @@ polyos_free:
     mov ebp, esp
     mov eax, 5 ; Command free
     push dword [ebp+8] ; ptr
+    int 0x80
+    add esp, 4
+    pop ebp
+    ret
+
+; void polyos_process_load_start(const char *filename)
+polyos_process_load_start:
+    push ebp
+    mov ebp, esp
+    mov eax, 6 ; Command process_load_start
+    push dword [ebp+8] ; filename
     int 0x80
     add esp, 4
     pop ebp

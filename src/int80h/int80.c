@@ -3,6 +3,7 @@
 #include "misc.h"
 #include "io.h"
 #include "heap.h"
+#include "process.h"
 
 void int80h_register_commands()
 {
@@ -12,4 +13,5 @@ void int80h_register_commands()
     int80h_register_command(SYSTEM_COMMAND3_PUTCHAR, int80h_command3_putchar);
     int80h_register_command(SYSTEM_COMMAND4_MALLOC, int80_command4_malloc);
     int80h_register_command(SYSTEM_COMMAND5_FREE, int80_command5_free);
+    int80h_register_command(SYSTEM_COMMAND6_process_load_start, int80_command6_process_load_start);
 }

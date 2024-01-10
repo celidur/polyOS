@@ -9,6 +9,7 @@ enum SystemCommands
     SYSTEM_COMMAND3_PUTCHAR,
     SYSTEM_COMMAND4_MALLOC,
     SYSTEM_COMMAND5_FREE,
+    SYSTEM_COMMAND6_process_load_start,
 };
 
 void int80h_register_commands();

@@ -11,5 +11,6 @@ void polyos_terminal_readline(char* out, int max, bool output_while_typing);
 void* polyos_malloc(size_t size);
 void polyos_free(void* ptr);
 void polyos_putchar(char c);
+void polyos_process_load_start(const char *filename);
 
 #endif
