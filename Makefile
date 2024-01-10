@@ -27,6 +27,7 @@ endif
 	# Copy FILES
 	sudo cp ./hello.txt ./mnt/d
 	sudo cp ./programs/blank/blank.elf ./mnt/d
+	sudo cp ./programs/shell/shell.elf ./mnt/d
 
 	sudo umount ./mnt/d
 ifeq ($(OS), Darwin)
@@ -143,7 +144,9 @@ clean: user_programs_clean
 user_programs:
 	cd ./programs/stdlib && make all
 	cd ./programs/blank && make all
+	cd ./programs/shell && make all
 
 user_programs_clean:
 	cd ./programs/stdlib && make clean
 	cd ./programs/blank && make clean
+	cd ./programs/shell && make clean

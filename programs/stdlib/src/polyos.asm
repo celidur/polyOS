@@ -3,7 +3,8 @@
 section .asm
 
 global print:function
-global getkey:function
+global polyos_getkey:function
+global polyos_putchar:function
 global polyos_malloc:function
 global polyos_free:function
 
@@ -18,12 +19,23 @@ print:
     pop ebp
     ret
 
-; int getkey()
-getkey:
+; int polyos_getkey()
+polyos_getkey:
     push ebp
     mov ebp, esp
     mov eax, 2 ; Command getkey
     int 0x80
+    pop ebp
+    ret
+
+; void polyos_putchar(char c)
+polyos_putchar:
+    push ebp
+    mov ebp, esp
+    mov eax, 3 ; Command putchar
+    push dword [ebp+8] ; c
+    int 0x80
+    add esp, 4
     pop ebp
     ret
 

@@ -1,5 +1,5 @@
-#ifndef STDLIB_H
-#define STDLIB_H
+#ifndef POLYOS_STDLIB_H
+#define POLYOS_STDLIB_H
 
 #include <stddef.h>
 
