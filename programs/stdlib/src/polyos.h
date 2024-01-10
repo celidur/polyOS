@@ -11,6 +11,11 @@ struct command_argument {
 
 struct command_argument* polyos_parse_command(char *command, int max);
 
+struct process_arguments {
+    int argc;
+    char **argv;
+};
+
 void print(char *str);
 int polyos_getkey();
 int polyos_getkeyblock();
@@ -19,5 +24,9 @@ void* polyos_malloc(size_t size);
 void polyos_free(void* ptr);
 void polyos_putchar(char c);
 void polyos_process_load_start(const char *filename);
+void polyos_process_get_args(struct process_arguments *args);
+int polyos_system(struct command_argument *args);
+int polyos_system_run(const char *command);
+void polyos_exit();
 
 #endif

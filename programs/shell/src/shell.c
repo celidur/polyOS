@@ -10,12 +10,9 @@ int main(int argc, char **argv)
         printf("> ");
         char buffer[1024];
         polyos_terminal_readline(buffer,sizeof(buffer), true);
-
-
         printf("\n");
-
-        polyos_process_load_start(buffer);
-
+        polyos_system_run(buffer);
+        printf("\n");
     }
     
     return 0;

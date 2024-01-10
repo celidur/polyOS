@@ -11,7 +11,7 @@
 
 struct process *current_process = NULL;
 
-static struct process *process[MAX_PROCESS] = {NULL};
+static struct process *processes[MAX_PROCESS] = {NULL};
 
 static void process_init(struct process *process)
 {
@@ -29,7 +29,7 @@ struct process *process_get(int process_id)
     {
         return NULL;
     }
-    return process[process_id];
+    return processes[process_id];
 }
 
 static int process_load_binary(const char *filename, struct process *process)
@@ -73,7 +73,7 @@ out:
 
 static int process_load_elf(const char *filename, struct process *process){
     struct elf_file *elf_file = NULL;
-    int res = eft_load(filename, &elf_file);
+    int res = elf_load(filename, &elf_file);
     if (res != ALL_OK){
         return res;
     }
@@ -198,7 +198,7 @@ int process_load_for_slot(const char *filename, struct process **process, int pr
     }
 
     *process = _process;
-    process[process_slot] = _process;
+    processes[process_slot] = _process;
 
 out:
     if (ISERR(res))
@@ -217,7 +217,7 @@ int process_get_free_slot()
 {
     for (int i = 0; i < MAX_PROCESS; i++)
     {
-        if (!process[i])
+        if (!processes[i])
         {
             return i;
         }
@@ -342,3 +342,108 @@ void process_free(struct process* process, void* ptr){
     kfree(ptr);
 }
 
+void process_get_arguments(struct process* process, int* argc, char*** argv){
+    *argc = process->arguments.argc;
+    *argv = process->arguments.argv;
+}
+
+int process_count_command_arguments(struct command_argument* root_command){
+    int count = 0;
+    struct command_argument* current = root_command;
+    while(current){
+        count++;
+        current = current->next;
+    }
+    return count;
+}
+
+
+int process_inject_arguments(struct process* process, struct command_argument* root_command){
+    struct command_argument* current = root_command;
+    int i = 0;
+    int argc = process_count_command_arguments(root_command);
+    if (argc == 0){
+        return -EIO;
+    }
+
+    char** argv = process_malloc(process, sizeof(char*) * argc);
+    if (!argv){
+        return -ENOMEM;
+    }
+
+    while (current){
+        char* arguement_str = process_malloc(process, sizeof(current->argument));
+        if (!arguement_str){
+            return -ENOMEM;
+        }
+        strncpy(arguement_str, current->argument, sizeof(current->argument));
+        argv[i] = arguement_str;
+        i++;
+        current = current->next;
+    }
+    process->arguments.argc = argc;
+    process->arguments.argv = argv;
+    return ALL_OK;
+}
+
+int process_terminate_allocations(struct process* process){
+    for (int i = 0; i < MAX_PROGRAM_ALLOCATIONS; i++){
+        process_free(process, process->allocations[i].ptr);
+    }
+    return ALL_OK;
+}
+
+int process_free_binary_data(struct process* process){
+    kfree(process->ptr);
+    return ALL_OK;
+}
+
+int process_free_elf_data(struct process* process){
+    elf_close(process->elf_file);
+    return ALL_OK;
+}
+
+int process_free_program_data(struct process* process){
+    switch(process->filetype){
+        case PROCESS_FILETYPE_ELF:
+            return process_free_elf_data(process);
+        case PROCESS_FILETYPE_BINARY:
+            return process_free_binary_data(process);
+        default:
+            return -EINFORMAT;
+    }
+}
+
+void process_switch_to_any(){
+    for (int i = 0; i < MAX_PROCESS; i++){
+        if (processes[i]){
+            process_switch(processes[i]);
+            return;
+        }
+    }
+    kernel_panic("No processes to switch too\n");
+}
+
+static void process_unlink(struct process* process){
+    processes[process->pid] = NULL;
+    if (current_process == process){
+        process_switch_to_any();
+    }
+}
+
+int process_terminate(struct process* process){
+    int res = process_terminate_allocations(process);
+    if (res < 0){
+        return res;
+    }
+    res = process_free_program_data(process);
+    if (res < 0){
+        return res;
+    }
+
+    kfree(process);
+    task_free(process->task);
+    process_unlink(process);
+
+    return ALL_OK;
+}

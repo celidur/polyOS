@@ -28,8 +28,8 @@ struct elf_file {
     void* physical_end_address;
 };
 
-void eld_close(struct elf_file* elf_file);
-int eft_load(const char* filename, struct elf_file** file_out);
+void elf_close(struct elf_file* elf_file);
+int elf_load(const char* filename, struct elf_file** file_out);
 
 void* elf_virtual_base(struct elf_file* file);
 void* elf_virtual_end(struct elf_file* file);

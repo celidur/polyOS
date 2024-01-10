@@ -139,7 +139,7 @@ int elf_process_loaded(struct elf_file* elf_file){
     return ALL_OK;
 }
 
-int eft_load(const char* filename, struct elf_file** file_out){
+int elf_load(const char* filename, struct elf_file** file_out){
     struct elf_file* elf_file = kzalloc(sizeof(struct elf_file));
     int fd = 0;
     int res = fopen(filename, "r");
@@ -172,7 +172,7 @@ out:
     return res;
 }
 
-void eld_close(struct elf_file* elf_file){
+void elf_close(struct elf_file* elf_file){
     if (elf_file == NULL){
         return;
     }

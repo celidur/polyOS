@@ -5,6 +5,7 @@
 #include "task/task.h"
 #include "status.h"
 #include "io/io.h"
+#include "task/process.h"
 
 struct idt_desc idt_descriptors[TOTAL_INTERRUPTS];
 struct idtr_desc idtr_descriptor;
@@ -32,6 +33,11 @@ int idt_register_interrupt_callback(int interrupt, INTERRUPT_CALLBACK_FUNC callb
 void idt_clock()
 {
     print("Timer interrupt\n");
+}
+
+void idt_handle_exception(){
+    process_terminate(task_current()->process);
+    task_next();
 }
 
 void interrupt_handler(int interrupt, struct interrupt_frame* frame)
@@ -107,6 +113,11 @@ void idt_init()
     }
 
     idt_set(0x80, int80h_wrapper);
+
+    for (int i = 0; i < 0x20; i++)
+    {
+        idt_register_interrupt_callback(i, idt_handle_exception);
+    }
 
     // idt_register_interrupt_callback(0x20, idt_clock);
 

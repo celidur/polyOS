@@ -211,3 +211,16 @@ int copy_string_from_task(struct task *task, void *virt, void *phys, int max)
     kfree(buffer);
     return 0;
 }
+
+void* task_virtual_address_to_physical(struct task* task, void* virtual_address){
+    return paging_get_physical_address(task->page_directory->page_directory, virtual_address);
+}
+
+void task_next(){
+    struct task* next = task_get_next();
+    if (!next){
+        kernel_panic("task_next: No next task to switch to! \n");
+    }
+    task_switch(next);
+    task_return(&next->regs);
+}

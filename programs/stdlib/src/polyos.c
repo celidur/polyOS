@@ -40,7 +40,7 @@ void polyos_terminal_readline(char* out, int max, bool output_while_typing)
 
 struct command_argument* polyos_parse_command(char *command, int max){
     struct command_argument* root_command = NULL;
-    char scommand[1024];
+    char scommand[1025];
     if (max >= (int) sizeof(scommand)){
         return NULL;
     }
@@ -74,4 +74,14 @@ struct command_argument* polyos_parse_command(char *command, int max){
     }
 
     return root_command;
+}
+
+int polyos_system_run(const char *command){
+    char buff[1024];
+    strncpy(buff, command, sizeof(buff));
+    struct command_argument* root_command = polyos_parse_command(buff, sizeof(buff));
+    if (!root_command){
+        return -1;
+    }
+    return polyos_system(root_command);
 }
