@@ -149,3 +149,9 @@ uint32_t paging_get(uint32_t *directory, void *virtual_addr)
 void* paging_align_to_lower_page(void* addr){
     return (void*) ((uint32_t) addr & 0xFFFFF000);
 }
+
+void* paging_get_physical_address(uint32_t* directory, void* virtual_address){
+    void* virt_addr_new = (void*) paging_align_to_lower_page(virtual_address);
+    void* difference = (void*) ((uint32_t) virtual_address - (uint32_t) virt_addr_new);
+    return (void*) ((paging_get(directory, virt_addr_new) & 0xFFFFF000) + (uint32_t) difference);
+}

@@ -1,4 +1,5 @@
 #include "polyos.h"
+#include "string.h"
 
 int polyos_getkeyblock(){
     int val = 0;
@@ -35,4 +36,42 @@ void polyos_terminal_readline(char* out, int max, bool output_while_typing)
     }
     // Null terminate
     out[i] = '\0';
+}
+
+struct command_argument* polyos_parse_command(char *command, int max){
+    struct command_argument* root_command = NULL;
+    char scommand[1024];
+    if (max >= (int) sizeof(scommand)){
+        return NULL;
+    }
+
+    strncpy(scommand, command, sizeof(scommand));
+    char* token = strtok(scommand, " ");
+    if (!token){
+        return NULL;
+    }
+
+    root_command = polyos_malloc(sizeof(struct command_argument));
+    if (!root_command){
+        return NULL;
+    }
+
+    strncpy(root_command->argument, token, sizeof(root_command->argument));
+    root_command->next = NULL;
+
+    struct command_argument* current_command = root_command;
+    token = strtok(NULL, " ");
+    while(token){
+        struct command_argument* next_command = polyos_malloc(sizeof(struct command_argument));
+        if (!next_command){
+            return root_command;
+        }
+        strncpy(next_command->argument, token, sizeof(next_command->argument));
+        next_command->next = NULL;
+        current_command->next = next_command;
+        current_command = next_command;
+        token = strtok(NULL, " ");
+    }
+
+    return root_command;
 }

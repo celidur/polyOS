@@ -31,5 +31,5 @@ int paging_set(uint32_t *directory, void *virtual_addr, uint32_t value);
 bool paging_is_aligned(void *addr);
 uint32_t paging_get(uint32_t *directory, void *virtual_addr);
 void* paging_align_to_lower_page(void* addr);
-
+void* paging_get_physical_address(uint32_t* directory, void* virtual_address);
 #endif

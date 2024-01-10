@@ -4,6 +4,13 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+struct command_argument {
+    char argument[512];
+    struct command_argument *next;
+};
+
+struct command_argument* polyos_parse_command(char *command, int max);
+
 void print(char *str);
 int polyos_getkey();
 int polyos_getkeyblock();

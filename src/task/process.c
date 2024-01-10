@@ -271,7 +271,7 @@ static int process_find_free_allocation_index(struct process *process)
 {
     for (int i = 0; i < MAX_PROGRAM_ALLOCATIONS; i++)
     {
-        if (!process->allocations[i])
+        if (!process->allocations[i].ptr)
         {
             return i;
         }
@@ -290,13 +290,20 @@ void* process_malloc(struct process* process, size_t size){
         return NULL;
     }
 
-    process->allocations[index] = ptr;
+    int res = paging_map_to(process->task->page_directory, ptr, ptr, paging_align_address(ptr + size), PAGING_IS_PRESENT | PAGING_IS_WRITABLE | PAGING_ACCESS_FROM_ALL);
+    if (res < 0){
+        kfree(ptr);
+        return NULL;
+    }
+
+    process->allocations[index].ptr = ptr;
+    process->allocations[index].size = size;
     return ptr;
 }
 
 static bool process_is_process_pointer(struct process* process, void* ptr){
     for (int i = 0; i < MAX_PROGRAM_ALLOCATIONS; i++){
-        if (process->allocations[i] == ptr){
+        if (process->allocations[i].ptr == ptr){
             return true;
         }
     }
@@ -305,16 +312,33 @@ static bool process_is_process_pointer(struct process* process, void* ptr){
 
 static void process_allocation_unjoin(struct process* process, void* ptr){
     for (int i = 0; i < MAX_PROGRAM_ALLOCATIONS; i++){
-        if (process->allocations[i] == ptr){
-            process->allocations[i] = NULL;
+        if (process->allocations[i].ptr == ptr){
+            process->allocations[i].ptr = NULL;
+            process->allocations[i].size = 0;
         }
     }
 }
 
+static struct process_allocation* process_get_allocation_by_addr(struct process* process, void* ptr){
+    for (int i = 0; i < MAX_PROGRAM_ALLOCATIONS; i++){
+        if (process->allocations[i].ptr == ptr){
+            return &process->allocations[i];
+        }
+    }
+    return NULL;
+}
+
 void process_free(struct process* process, void* ptr){
-    if (!process_is_process_pointer(process, ptr)){
+    struct process_allocation* allocation = process_get_allocation_by_addr(process, ptr);
+    if (!allocation){
         return;
     }
+    int res = paging_map_to(process->task->page_directory, allocation->ptr, allocation->ptr, paging_align_address(allocation->ptr + allocation->size), 0x00);
+    if (res < 0){
+        return;
+    }
+
     process_allocation_unjoin(process, ptr);
     kfree(ptr);
 }
+
