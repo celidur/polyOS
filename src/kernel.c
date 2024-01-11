@@ -250,6 +250,25 @@ void kernel_main()
         kernel_panic("Failed to load process\n");
     }
 
+    // int res = process_load_switch("0:/blank.elf", &process);
+    // if (res < 0)
+    // {
+    //     kernel_panic("Failed to load process\n");
+    // }
+
+    // struct command_argument arg;
+    // strcpy(arg.argument, "TEST");
+    // arg.next = NULL;
+    // process_inject_arguments(process, &arg);
+
+    // res = process_load_switch("0:/blank.elf", &process);
+    // if (res < 0)
+    // {
+    //     kernel_panic("Failed to load process\n");
+    // }
+    // strcpy(arg.argument, "TEST2");
+    // process_inject_arguments(process, &arg);
+
     task_run_first_ever_task();
 
     // Never reached

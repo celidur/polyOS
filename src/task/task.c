@@ -83,8 +83,9 @@ int task_free(struct task *task)
     {
         return -EINVARG;
     }
-    paging_free_4gb(task->page_directory);
+
     task_list_remove(task);
+    paging_free_4gb(task->page_directory);
 
     kfree(task);
     return 0;

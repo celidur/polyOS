@@ -12,6 +12,7 @@ void kernel_main();
 
 void print(const char *str);
 void terminal_writechar(char c, char color);
+void print_int(int value);
 
 void print_int(int value);
 
