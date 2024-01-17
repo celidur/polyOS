@@ -8,13 +8,12 @@
 #include "io/io.h"
 #include "task/process.h"
 
-struct idt_desc idt_descriptors[TOTAL_INTERRUPTS];
-struct idtr_desc idtr_descriptor;
+static struct idt_desc idt_descriptors[TOTAL_INTERRUPTS];
+static struct idtr_desc idtr_descriptor;
 
 extern void* interrupt_pointer_table[TOTAL_INTERRUPTS];
 
 static INTERRUPT_CALLBACK_FUNC interrupt_callbacks[TOTAL_INTERRUPTS];
-
 static INT80H_COMMAND int80h_commands[MAX_INT80H_COMMANDS];
 
 extern void idt_load(struct idtr_desc* ptr);
@@ -31,13 +30,13 @@ int idt_register_interrupt_callback(int interrupt, INTERRUPT_CALLBACK_FUNC callb
     return ALL_OK;
 }
 
-void idt_clock(struct interrupt_frame* frame)
+static void idt_clock(struct interrupt_frame* frame)
 {
     outb(0x20, 0x20);
     task_next();
 }
 
-void idt_page_fault(struct interrupt_frame* frame)
+static void idt_page_fault(struct interrupt_frame* frame)
 {
     uint32_t faulting_address = get_cr2();
 
@@ -94,7 +93,7 @@ void idt_page_fault(struct interrupt_frame* frame)
     kernel_panic("Page fault");
 }
 
-void idt_handle_exception(){
+static void idt_handle_exception(){
     process_terminate(task_current()->process);
     task_next();
 }
@@ -113,7 +112,7 @@ void interrupt_handler(int interrupt, struct interrupt_frame* frame)
 }
 
 
-void idt_set(int interrupt_no, void *address)
+static void idt_set(int interrupt_no, void *address)
 {
     struct idt_desc *desc = &idt_descriptors[interrupt_no];
     desc->offset_1 = (uint16_t)((uint32_t)address & 0xFFFF);
@@ -123,7 +122,7 @@ void idt_set(int interrupt_no, void *address)
     desc->type_attr = 0xEE;
 }
 
-void *int80h_handle_command(struct interrupt_frame *frame)
+static void *int80h_handle_command(struct interrupt_frame *frame)
 {
     int command = frame->eax;
     if (command < 0 || command >= MAX_INT80H_COMMANDS)

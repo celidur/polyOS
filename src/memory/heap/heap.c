@@ -70,7 +70,7 @@ static int heap_get_entry_type(HEAP_BLOCK_TABLE_ENTRY entry)
 }
 
 // function to find a contiguous block of memory
-int heap_get_start_block(struct heap *heap, uint32_t total_block)
+static int heap_get_start_block(struct heap *heap, uint32_t total_block)
 {
     struct heap_table *table = heap->table;
     int bc = 0;
@@ -97,12 +97,12 @@ int heap_get_start_block(struct heap *heap, uint32_t total_block)
     return -ENOMEM;
 }
 
-void *heap_block_to_address(struct heap *heap, int block)
+static void *heap_block_to_address(struct heap *heap, int block)
 {
     return heap->saddr + (block * HEAP_SIZE_BLOCKS);
 }
 
-void heap_mark_block_taken(struct heap *heap, int start_block, int total_block)
+static void heap_mark_block_taken(struct heap *heap, int start_block, int total_block)
 {
     int end_block = start_block + total_block - 1;
     HEAP_BLOCK_TABLE_ENTRY entry = HEAP_BLOCK_TABLE_ENTRY_TAKEN | HEAP_BLOCK_IS_FIRST;
@@ -142,10 +142,15 @@ out:
 void heap_mark_block_free(struct heap *heap, int start_block)
 {
     struct heap_table *table = heap->table;
+    HEAP_BLOCK_TABLE_ENTRY start = table->entries[start_block];
+    if (!(start & HEAP_BLOCK_IS_FIRST))
+    {
+        return;
+    }
     for (int i = start_block; i <= (int)table->total; i++)
     {
         HEAP_BLOCK_TABLE_ENTRY entry = table->entries[i];
-        heap->table->entries[i] = entry;
+        heap->table->entries[i] = HEAP_BLOCK_TABLE_ENTRY_FREE;
         if (!(entry & HEAP_BLOCK_HAS_NEXT))
         {
             break;
@@ -172,4 +177,17 @@ void heap_free(struct heap *heap, void *ptr)
         return;
     }
     heap_mark_block_free(heap, heap_address_to_block(heap, ptr));
+}
+
+int get_number_free_block(struct heap *heap)
+{
+    int free = 0;
+    for (size_t i = 0; i < heap->table->total; i++)
+    {
+        if (heap->table->entries[i] == HEAP_BLOCK_TABLE_ENTRY_FREE)
+        {
+            free++;
+        }
+    }
+    return free;
 }

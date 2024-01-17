@@ -8,8 +8,8 @@
 #include "string/string.h"
 #include "disk/disk.h"
 
-struct filesystem *filesystems[MAX_FILESYSTEMS];
-struct file_descriptor *file_descriptors[MAX_FILE_DESCRIPTORS];
+static struct filesystem *filesystems[MAX_FILESYSTEMS];
+static struct file_descriptor *file_descriptors[MAX_FILE_DESCRIPTORS];
 
 static struct filesystem **fs_get_free_filesystem()
 {
@@ -23,7 +23,7 @@ static struct filesystem **fs_get_free_filesystem()
     return NULL;
 }
 
-void fs_insert_filesystem(struct filesystem *filesystem)
+static void fs_insert_filesystem(struct filesystem *filesystem)
 {
     struct filesystem **fs = fs_get_free_filesystem();
     if (!fs)
@@ -33,15 +33,10 @@ void fs_insert_filesystem(struct filesystem *filesystem)
     *fs = filesystem;
 }
 
-static void fs_static_load()
-{
-    fs_insert_filesystem(fat16_init());
-}
-
-void fs_load()
+static void fs_load()
 {
     memset(filesystems, 0, sizeof(filesystems));
-    fs_static_load();
+    fs_insert_filesystem(fat16_init());
 }
 
 void fs_init()
@@ -73,8 +68,7 @@ static struct file_descriptor *file_get_descriptor(int fd)
     {
         return NULL;
     }
-    int index = fd - 1;
-    return file_descriptors[index];
+    return file_descriptors[fd - 1];
 }
 
 struct filesystem *fs_resolve(struct disk *disk)
@@ -82,7 +76,7 @@ struct filesystem *fs_resolve(struct disk *disk)
 
     for (int i = 0; i < MAX_FILESYSTEMS; i++)
     {
-        if (filesystems[i] != 0 && filesystems[i]->resolve(disk) == 0)
+        if (filesystems[i] && !filesystems[i]->resolve(disk))
         {
             return filesystems[i];
         }
@@ -90,7 +84,7 @@ struct filesystem *fs_resolve(struct disk *disk)
     return NULL;
 }
 
-FILE_MODE file_get_mode_by_string(const char *str)
+static FILE_MODE file_get_mode_by_string(const char *str)
 {
     FILE_MODE mode = FILE_MODE_INVALID;
     if (!strncmp(str, "r", 1))

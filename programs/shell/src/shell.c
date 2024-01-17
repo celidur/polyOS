@@ -2,6 +2,7 @@
 #include "stdio.h"
 #include "stdlib.h"
 #include "polyos.h"
+#include "string.h"
 
 int main(int argc, char **argv)
 {
@@ -11,9 +12,26 @@ int main(int argc, char **argv)
         char buffer[1024];
         polyos_terminal_readline(buffer,sizeof(buffer), true);
         printf("\n");
-        if (polyos_system_run(buffer) < 0){
+        if (buffer[0] == '\0'){
+            continue;
+        }
+        if (strncmp(buffer, "memory", 7) == 0){
+            print_memory();
+        }else if (strncmp(buffer, "exit", 5) == 0){
+            break;
+        }else if (strncmp(buffer, "malloc", 7) == 0){
+            char *ptr = malloc(4096*4096);
+            printf("malloc: %p\n", ptr);
+        }
+        
+        else if (polyos_system_run(buffer) < 0){
             printf("Command not found\n");
         }
+    }
+    
+    while (1)
+    {
+        /* code */
     }
     
     return 0;

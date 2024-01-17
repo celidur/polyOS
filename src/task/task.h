@@ -27,7 +27,6 @@ struct task
 {
     struct paging_4gb_chunk *page_directory;
     struct registers regs;
-    uint32_t id;
 
     struct process *process;
 
@@ -36,7 +35,6 @@ struct task
 };
 
 void task_return(struct registers *regs);
-void restore_general_registers(struct registers *regs);
 void user_registers();
 int task_page();
 void task_run_first_ever_task();

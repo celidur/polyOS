@@ -80,13 +80,18 @@ void kernel_main()
 
     // Initialize keyboard
     keyboard_init();
-
+    
     struct process *process = NULL;
     int res = process_load_switch("0:/shell.elf", &process);
     if (res < 0)
     {
         kernel_panic("Failed to load process\n");
     }
+
+    set_color(BLACK, LIGHT_GREEN);
+    print_memory();
+
+    set_color(BLACK, WHITE);
 
     // int res = process_load_switch("0:/blank.elf", &process);
     // if (res < 0)

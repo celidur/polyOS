@@ -2,7 +2,6 @@
 #include "keyboard.h"
 #include "io/io.h"
 #include <stdint.h>
-#include <stddef.h>
 #include "kernel.h"
 #include "idt/idt.h"
 #include "task/task.h"
@@ -82,7 +81,7 @@ int classic_keyboard_init() {
     return 0;
 }
 
-uint8_t classic_keyboard_scancode_to_char(uint8_t scancode) {
+static uint8_t classic_keyboard_scancode_to_char(uint8_t scancode) {
     size_t size_get_one = sizeof(keyboard_scan_set_one) / sizeof(uint8_t);
     if (scancode > size_get_one) {
         return 0;

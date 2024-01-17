@@ -17,4 +17,5 @@ void int80h_register_commands()
     int80h_register_command(SYSTEM_COMMAND7_INVOKE_SYSTEM_COMMAND, int80h_command7_invoke_system_command);
     int80h_register_command(SYSTEM_COMMAND8_GET_PROCESS_ARGUMENTS, int80h_command8_get_program_arguments);
     int80h_register_command(SYSTEM_COMMAND9_EXIT, int80h_command9_exit);
+    int80h_register_command(SYSTEM_COMMAND10_PRINT_MEMORY, int80h_command10_print_memory);
 }

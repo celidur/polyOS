@@ -15,7 +15,7 @@ static color_t current_color = 0;
 
 static uint16_t* buffer = 0;
 
-bool ascii_is_printable(uint8_t c)
+static bool ascii_is_printable(uint8_t c)
 {
     return (c >= 0x20 && c <= 0x7E) || c == '\n';
 }
@@ -24,12 +24,12 @@ void set_color(color_t background, color_t foreground){
     current_color = background << 4 | foreground;
 }
 
-uint16_t terminal_make_char(uint8_t c, color_t color)
+static uint16_t terminal_make_char(uint8_t c, color_t color)
 {
     return (color << 8) | c;
 }
 
-void clear_row(uint16_t row)
+static void clear_row(uint16_t row)
 {
     uint16_t blank = terminal_make_char(' ', current_color);
     for (int x = 0; x < VGA_WIDTH; x++)
@@ -38,7 +38,7 @@ void clear_row(uint16_t row)
     }
 }
 
-void clear_screen()
+static void clear_screen()
 {
     for (int y = 0; y < VGA_HEIGHT; y++)
     {
@@ -55,7 +55,7 @@ void terminal_initialize()
     clear_screen();
 }
 
-void new_line(){
+static void new_line(){
     if (row_position < VGA_HEIGHT - 1)
     {
         row_position++;
@@ -74,7 +74,7 @@ void new_line(){
     column_position = 0;
 }
 
-void write_byte(uint8_t byte, uint8_t color)
+static void write_byte(uint8_t byte, uint8_t color)
 {
     if (byte == '\n')
     {
@@ -125,7 +125,7 @@ void print(const char *str)
     print_c(str, current_color);
 }
 
-char* itoa(int i){
+static char* itoa(int i){
     static char str[12];
     int loc = 11;
     str[loc] = '\0';
@@ -149,7 +149,7 @@ char* itoa(int i){
     return &str[loc];
 }
 
-char* hex(int i){
+static char* hex(int i){
     static char str[12];
     int loc = 11;
     str[loc] = '\0';

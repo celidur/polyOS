@@ -9,12 +9,10 @@
 #include "loader/formats/elfloader.h"
 #include "terminal/terminal.h"
 
-struct task *current_task = NULL;
+static struct task *current_task = NULL;
 
-struct task *task_tail = NULL;
-struct task *task_head = NULL;
-
-static uint32_t index = 1;
+static struct task *task_tail = NULL;
+static struct task *task_head = NULL;
 
 int task_init(struct task *task, struct process *process);
 
@@ -102,7 +100,6 @@ int task_init(struct task *task, struct process *process)
     {
         return -EIO;
     }
-    task->id = index++;
 
     task->regs.cs = USER_CODE_SEGMENT;
     task->regs.ip = PROGRAM_VIRTUAL_ADDRESS;

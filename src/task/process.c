@@ -119,7 +119,7 @@ static int process_map_binary(struct process *process)
     paging_map_to(process->task->page_directory, (void *)PROGRAM_VIRTUAL_ADDRESS, process->ptr, paging_align_address(process->ptr + process->size), PAGING_IS_PRESENT | PAGING_IS_WRITABLE | PAGING_ACCESS_FROM_ALL);
     return 0;
 }
-int process_map_memory(struct process* process)
+static int process_map_memory(struct process* process)
 {
     int res = 0;
 
@@ -387,24 +387,24 @@ int process_inject_arguments(struct process* process, struct command_argument* r
     return ALL_OK;
 }
 
-int process_terminate_allocations(struct process* process){
+static int process_terminate_allocations(struct process* process){
     for (int i = 0; i < MAX_PROGRAM_ALLOCATIONS; i++){
         process_free(process, process->allocations[i].ptr);
     }
     return ALL_OK;
 }
 
-int process_free_binary_data(struct process* process){
+static int process_free_binary_data(struct process* process){
     kfree(process->ptr);
     return ALL_OK;
 }
 
-int process_free_elf_data(struct process* process){
+static int process_free_elf_data(struct process* process){
     elf_close(process->elf_file);
     return ALL_OK;
 }
 
-int process_free_program_data(struct process* process){
+static int process_free_program_data(struct process* process){
     switch(process->filetype){
         case PROCESS_FILETYPE_ELF:
             return process_free_elf_data(process);
@@ -433,7 +433,6 @@ static void process_unlink(struct process* process){
 }
 
 int process_terminate(struct process* process){
-    printf("task: %d terminated\n", process->task->id);
     int res = process_terminate_allocations(process);
     if (res < 0){
         return res;

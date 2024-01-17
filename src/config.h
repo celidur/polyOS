@@ -1,6 +1,8 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#define NULL ((void *)0)
+
 #define KERNEL_CODE_SELECTOR 0x08
 #define KERNEL_DATA_SELECTOR 0x10
 
@@ -10,6 +12,9 @@
 #define HEAP_SIZE_BLOCKS 4096
 #define HEAP_ADDRESS 0x01000000
 #define HEAP_TABLE_ADDRESS 0x00007E00
+
+#define PAGING_PAGE_SIZE 4096
+#define PAGING_PAGE_TABLE_SIZE 1024
 
 #define SECTOR_SIZE 512
 
@@ -34,5 +39,7 @@
 #define MAX_INT80H_COMMANDS 1024
 
 #define KEYBOARD_BUFFER_SIZE 1024
+
+#define MAX_DISKS 4
 
 #endif

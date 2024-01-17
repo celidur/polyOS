@@ -1,6 +1,7 @@
 #include "paging.h"
 #include "memory/heap/kheap.h"
 #include "status.h"
+#include "kernel.h"
 
 // asm function in src/memory/paging/paging.asm
 void paging_load_directory(uint32_t *directory);
@@ -9,10 +10,18 @@ static uint32_t *current_directory = 0;
 struct paging_4gb_chunk *paging_new_4gb(uint8_t flags)
 {
     uint32_t *directory = kzalloc(sizeof(uint32_t) * PAGING_PAGE_TABLE_SIZE);
+    if (!directory)
+    {
+        kernel_panic("Failed to allocate page directory");
+    }
     uint32_t offset = 0;
     for (int i = 0; i < PAGING_PAGE_TABLE_SIZE; i++)
     {
         uint32_t *entry = kzalloc(sizeof(uint32_t) * PAGING_PAGE_TABLE_SIZE);
+        if (!entry)
+        {
+            kernel_panic("Failed to allocate page table");
+        }
         for (int b = 0; b < PAGING_PAGE_TABLE_SIZE; b++)
         {
             entry[b] = (offset + (b * PAGING_PAGE_SIZE)) | flags;
@@ -22,6 +31,10 @@ struct paging_4gb_chunk *paging_new_4gb(uint8_t flags)
     }
 
     struct paging_4gb_chunk *chunk = kzalloc(sizeof(struct paging_4gb_chunk));
+    if (!chunk)
+    {
+        kernel_panic("Failed to allocate 4gb chunk");
+    }
     chunk->page_directory = directory;
     return chunk;
 }
@@ -37,7 +50,7 @@ bool paging_is_aligned(void *addr)
     return ((uint32_t)addr % PAGING_PAGE_SIZE) == 0;
 }
 
-int paging_get_index(void *virtual_addr, uint32_t *directory_index_out, uint32_t *table_index_out)
+static int paging_get_index(void *virtual_addr, uint32_t *directory_index_out, uint32_t *table_index_out)
 {
     if (!paging_is_aligned(virtual_addr))
     {
