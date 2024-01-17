@@ -11,8 +11,9 @@ int main(int argc, char **argv)
         char buffer[1024];
         polyos_terminal_readline(buffer,sizeof(buffer), true);
         printf("\n");
-        polyos_system_run(buffer);
+        // polyos_system_run(buffer);
         printf("\n");
+        // 3febb0
     }
     
     return 0;

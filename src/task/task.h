@@ -20,13 +20,14 @@ struct registers
     uint32_t flags;
     uint32_t esp;
     uint32_t ss;
-};
+}__attribute__((packed));
 
 struct process;
 struct task
 {
     struct paging_4gb_chunk *page_directory;
     struct registers regs;
+    uint32_t id;
 
     struct process *process;
 

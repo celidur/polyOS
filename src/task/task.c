@@ -7,11 +7,14 @@
 #include "memory/paging/paging.h"
 #include "string/string.h"
 #include "loader/formats/elfloader.h"
+#include "terminal/terminal.h"
 
 struct task *current_task = NULL;
 
 struct task *task_tail = NULL;
 struct task *task_head = NULL;
+
+static uint32_t index = 1;
 
 int task_init(struct task *task, struct process *process);
 
@@ -99,6 +102,7 @@ int task_init(struct task *task, struct process *process)
     {
         return -EIO;
     }
+    task->id = index++;
 
     task->regs.cs = USER_CODE_SEGMENT;
     task->regs.ip = PROGRAM_VIRTUAL_ADDRESS;
@@ -220,8 +224,9 @@ void* task_virtual_address_to_physical(struct task* task, void* virtual_address)
 void task_next(){
     struct task* next = task_get_next();
     if (!next){
-        kernel_panic("task_next: No next task to switch to! \n");
+        kernel_panic("task_next: No next task to switch too \n");
     }
+
     task_switch(next);
     task_return(&next->regs);
 }

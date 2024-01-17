@@ -9,7 +9,7 @@ static uint32_t *current_directory = 0;
 struct paging_4gb_chunk *paging_new_4gb(uint8_t flags)
 {
     uint32_t *directory = kzalloc(sizeof(uint32_t) * PAGING_PAGE_TABLE_SIZE);
-    int offset = 0;
+    uint32_t offset = 0;
     for (int i = 0; i < PAGING_PAGE_TABLE_SIZE; i++)
     {
         uint32_t *entry = kzalloc(sizeof(uint32_t) * PAGING_PAGE_TABLE_SIZE);

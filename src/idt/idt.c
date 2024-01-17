@@ -1,6 +1,7 @@
 #include "idt.h"
 #include "config.h"
 #include "kernel.h"
+#include "terminal/terminal.h"
 #include "memory/memory.h"
 #include "task/task.h"
 #include "status.h"
@@ -18,7 +19,7 @@ static INT80H_COMMAND int80h_commands[MAX_INT80H_COMMANDS];
 
 extern void idt_load(struct idtr_desc* ptr);
 extern void int80h_wrapper();
-
+extern uint32_t get_cr2();
 
 int idt_register_interrupt_callback(int interrupt, INTERRUPT_CALLBACK_FUNC callback)
 {
@@ -30,10 +31,67 @@ int idt_register_interrupt_callback(int interrupt, INTERRUPT_CALLBACK_FUNC callb
     return ALL_OK;
 }
 
-void idt_clock()
+void idt_clock(struct interrupt_frame* frame)
 {
     outb(0x20, 0x20);
-    // task_next();
+    task_next();
+}
+
+void idt_page_fault(struct interrupt_frame* frame)
+{
+    uint32_t faulting_address = get_cr2();
+
+    uint32_t error_code_ptr = ((uint32_t) (&frame->edi)) - 8 ;
+    uint32_t error_code = (*(uint32_t*) error_code_ptr);
+
+    int p = error_code & 0x1;
+    int w = (error_code >> 1) & 0x1;
+    int u = (error_code >> 2) & 0x1;
+    int r = (error_code >> 3) & 0x1;
+    int i = (error_code >> 4) & 0x1;
+    int pk = (error_code >> 5) & 0x1;
+    int ss = (error_code >> 6) & 0x1;
+    int SGX = (error_code >> 15) & 0x1;
+
+    printf("Page fault( ");
+    if (p)
+        printf("protection violation ");
+    if (w)
+        printf("write ");
+    else
+        printf("read ");
+    if (u)
+        printf("user ");
+    else
+        printf("supervisor ");
+    if (r)
+        printf("reserved ");
+    if (i)
+        printf("instruction fetch ");
+    if (pk)
+        printf("protection key violation ");
+    if (ss)
+        printf("shadow stack ");
+    if (SGX)
+        printf("SGX ");
+    printf(") at 0x%x\n", faulting_address);
+
+    struct registers* regs = &task_current()->regs;
+    printf("Registers:\n");
+    printf("edi: 0x%x\n", regs->edi);
+    printf("esi: 0x%x\n", regs->esi);
+    printf("ebp: 0x%x\n", regs->ebp);
+    printf("ebx: 0x%x\n", regs->ebx);
+    printf("edx: 0x%x\n", regs->edx);
+    printf("ecx: 0x%x\n", regs->ecx);
+    printf("eax: 0x%x\n", regs->eax);
+    printf("ip: 0x%x\n", regs->ip);
+    printf("cs: 0x%x\n", regs->cs);
+    printf("flags: 0x%x\n", regs->flags);
+    printf("esp: 0x%x\n", regs->esp);
+    printf("ss: 0x%x\n", regs->ss);
+    
+    kernel_panic("Page fault");
 }
 
 void idt_handle_exception(){
@@ -121,6 +179,8 @@ void idt_init()
     }
 
     idt_register_interrupt_callback(0x20, idt_clock);
+
+    idt_register_interrupt_callback(0xE, idt_page_fault);
 
     idt_load(&idtr_descriptor);
 }

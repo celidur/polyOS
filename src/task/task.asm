@@ -24,12 +24,11 @@ restore_general_registers:
     mov ecx, [ebx + 20]
     mov eax, [ebx + 24]
     mov ebx, [ebx + 12]
-    pop ebp
+    add esp, 4
     ret
 
 task_return:
     mov ebp, esp
-
     mov ebx, [ebp + 4]
 
     push dword [ebx + 44] ; push the data/stack selector

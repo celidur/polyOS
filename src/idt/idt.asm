@@ -10,6 +10,8 @@ global enable_interrupts
 global disable_interrupts
 global int80h_wrapper
 global interrupt_pointer_table
+global get_cr2
+
 idt_load:
     push ebp
     mov ebp, esp
@@ -65,6 +67,10 @@ enable_interrupts:
 
 disable_interrupts:
     cli
+    ret
+
+get_cr2:
+    mov eax, cr2
     ret
 
 section .data

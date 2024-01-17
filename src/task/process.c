@@ -8,6 +8,7 @@
 #include "kernel.h"
 #include "memory/paging/paging.h"
 #include "memory/heap/kheap.h"
+#include "terminal/terminal.h"
 
 struct process *current_process = NULL;
 
@@ -432,6 +433,7 @@ static void process_unlink(struct process* process){
 }
 
 int process_terminate(struct process* process){
+    printf("task: %d terminated\n", process->task->id);
     int res = process_terminate_allocations(process);
     if (res < 0){
         return res;

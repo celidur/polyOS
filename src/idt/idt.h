@@ -2,6 +2,7 @@
 #define IDT_H
 
 #include <stdint.h>
+#include "terminal/terminal.h"
 
 struct idt_desc
 {

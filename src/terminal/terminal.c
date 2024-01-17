@@ -1,0 +1,253 @@
+#include "terminal.h"
+#include "string/string.h"
+#include <stdarg.h>
+#include <stdbool.h>
+
+#define VGA_WIDTH 80
+#define VGA_HEIGHT 25
+
+#define MAX_BUFFER 1024
+
+static uint16_t row_position = 0;
+static uint16_t column_position = 0;
+
+static color_t current_color = 0;
+
+static uint16_t* buffer = 0;
+
+bool ascii_is_printable(uint8_t c)
+{
+    return (c >= 0x20 && c <= 0x7E) || c == '\n';
+}
+
+void set_color(color_t background, color_t foreground){
+    current_color = background << 4 | foreground;
+}
+
+uint16_t terminal_make_char(uint8_t c, color_t color)
+{
+    return (color << 8) | c;
+}
+
+void clear_row(uint16_t row)
+{
+    uint16_t blank = terminal_make_char(' ', current_color);
+    for (int x = 0; x < VGA_WIDTH; x++)
+    {
+        buffer[row * VGA_WIDTH + x] = blank;
+    }
+}
+
+void clear_screen()
+{
+    for (int y = 0; y < VGA_HEIGHT; y++)
+    {
+        clear_row(y);
+    }
+}
+
+void terminal_initialize()
+{
+    buffer = (uint16_t *)0xB8000;
+    row_position = 0;
+    column_position = 0;
+    set_color(BLACK, WHITE);
+    clear_screen();
+}
+
+void new_line(){
+    if (row_position < VGA_HEIGHT - 1)
+    {
+        row_position++;
+        column_position = 0;
+        return;
+    }
+    row_position = VGA_HEIGHT - 1;
+    for (size_t row = 1; row < VGA_HEIGHT; row++)
+    {
+        for (size_t col = 0; col < VGA_WIDTH; col++)
+        {
+            buffer[(row - 1) * VGA_WIDTH + col] = buffer[row * VGA_WIDTH + col];
+        }
+    }
+    clear_row(VGA_HEIGHT - 1);
+    column_position = 0;
+}
+
+void write_byte(uint8_t byte, uint8_t color)
+{
+    if (byte == '\n')
+    {
+        new_line();
+        return;
+    }
+    if (column_position >= VGA_WIDTH)
+    {
+        new_line();
+    }
+    buffer[row_position * VGA_WIDTH + column_position] = terminal_make_char(byte, color);
+    column_position++;
+}
+
+
+void terminal_backspace()
+{
+    // TODO: rewrite this
+}
+
+void terminal_writechar(uint8_t c, color_t color)
+{
+    if (c == '\n')
+    {
+        new_line();
+        return;
+    }
+    if (c == '\b')
+    {
+        terminal_backspace();
+        return;
+    }
+    write_byte(c, color);
+}
+
+
+void print_c(const char *str, color_t color)
+{
+    size_t len = strlen(str);
+    for (size_t i = 0; i < len; i++)
+    {
+        terminal_writechar(str[i], color);
+    }
+}
+
+void print(const char *str)
+{
+    print_c(str, current_color);
+}
+
+char* itoa(int i){
+    static char str[12];
+    int loc = 11;
+    str[loc] = '\0';
+    char neg = 1;
+    if (i >= 0){
+        neg = 0;
+        i = -i;
+    }
+
+    while (i){
+        str[--loc] = '0' - (i % 10);
+        i /= 10;
+    }
+
+    if (loc == 11){
+        str[--loc] = '0';
+    }
+    if (neg){
+        str[--loc] = '-';
+    }
+    return &str[loc];
+}
+
+char* hex(int i){
+    static char str[12];
+    int loc = 11;
+    str[loc] = '\0';
+    char neg = 1;
+    if (i >= 0){
+        neg = 0;
+        i = -i;
+    }
+
+    while (i){
+        int rem = i % 16;
+        if (-rem < 10){
+            str[--loc] = '0' - rem;
+        } else {
+            str[--loc] = 'a' - (rem + 10);
+        }
+        i /= 16;
+    }
+
+    if (loc == 11){
+        str[--loc] = '0';
+    }
+    if (neg){
+        str[--loc] = '-';
+    }
+    return &str[loc];
+
+}
+
+int printf(const char *fmt, ...){
+    va_list ap;
+    const char* p;
+    char* sval;
+    int ival;
+    char buff[MAX_BUFFER];
+    int i=0;
+
+    va_start(ap, fmt);
+    for (p = fmt; *p; p++){
+        if (i >= MAX_BUFFER){
+            buff[i] = '\0';
+            print(buff);
+            i = 0;
+        }
+        if (*p != '%'){
+            buff[i++] = *p;
+            continue;
+        }
+        switch (*++p){
+            case 'd':
+                ival = va_arg(ap, int);
+                sval = itoa(ival);
+                for (int j = 0; sval[j] != '\0'; j++){
+                    if (i >= MAX_BUFFER){
+                        buff[i] = '\0';
+                        print(buff);
+                        i = 0;
+                    }
+                    buff[i++] = sval[j];
+                }
+                break;
+            case 's':
+                sval = va_arg(ap, char*);
+                for (int j = 0; sval[j] != '\0'; j++){
+                    if (i >= MAX_BUFFER){
+                        buff[i] = '\0';
+                        print(buff);
+                        i = 0;
+                    }
+                    buff[i++] = sval[j];
+                }
+                break;
+            case 'c':
+                ival = va_arg(ap, int);
+                buff[i++] = ival;
+                break;
+            case 'x':
+                ival = va_arg(ap, int);
+                sval = hex(ival);
+                for (int j = 0; sval[j] != '\0'; j++){
+                    if (i >= MAX_BUFFER){
+                        buff[i] = '\0';
+                        print(buff);
+                        i = 0;
+                    }
+                    buff[i++] = sval[j];
+                }
+                break;
+            default:
+                buff[i++] = *p;
+                break;
+        }
+    }
+
+    va_end(ap);
+
+    buff[i] = '\0';
+    print(buff);
+
+    return 0;
+}

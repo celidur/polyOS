@@ -55,7 +55,6 @@ uint8_t classic_keyboard_scancode_to_char(uint8_t scancode) {
 }
 
 void classic_keyboard_handle_interrupt() {
-    kernel_page();
     uint8_t scancode = 0;
     scancode = insb(KEYBOARD_INPUT_PORT);
     insb(KEYBOARD_INPUT_PORT);
@@ -72,7 +71,6 @@ void classic_keyboard_handle_interrupt() {
     if (c != 0) {
         keyboard_push(c);
     }
-    task_page();
 }
 
 struct keyboard *classic_init() {

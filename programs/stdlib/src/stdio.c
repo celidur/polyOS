@@ -58,6 +58,18 @@ int printf(const char *fmt, ...){
                 ival = va_arg(ap, int);
                 buff[i++] = ival;
                 break;
+            case 'x':
+                ival = va_arg(ap, int);
+                sval = hex(ival);
+                for (int j = 0; sval[j] != '\0'; j++){
+                    if (i >= MAX_BUFFER){
+                        buff[i] = '\0';
+                        print(buff);
+                        i = 0;
+                    }
+                    buff[i++] = sval[j];
+                }
+                break;
             default:
                 buff[i++] = *p;
                 break;

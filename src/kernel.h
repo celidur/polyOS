@@ -5,16 +5,7 @@
 #define ERROR_I(value) (int)value
 #define ISERR(value) ((int)value < 0)
 
-#define VGA_WIDTH 80
-#define VGA_HEIGHT 20
-
 void kernel_main();
-
-void print(const char *str);
-void terminal_writechar(char c, char color);
-void print_int(int value);
-
-void print_int(int value);
 
 void kernel_panic(const char *msg);
 

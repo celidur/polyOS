@@ -1,7 +1,7 @@
 #include "io.h"
 #include "task/task.h"
-#include "kernel.h"
 #include "keyboard/keyboard.h"
+#include "terminal/terminal.h"
 
 void *int80h_command1_print(struct interrupt_frame *frame)
 {
