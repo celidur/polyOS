@@ -65,7 +65,7 @@ polyos_free:
     pop ebp
     ret
 
-; void polyos_process_load_start(const char *filename)
+; int polyos_process_load_start(const char *filename)
 polyos_process_load_start:
     push ebp
     mov ebp, esp
