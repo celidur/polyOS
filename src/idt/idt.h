@@ -45,8 +45,10 @@ void disable_interrupts();
 struct interrupt_frame;
 typedef void *(*INT80H_COMMAND)(struct interrupt_frame *frame);
 typedef void(*INTERRUPT_CALLBACK_FUNC)(struct interrupt_frame *frame);
+typedef void(*INTERRUPT_CALLBACK_FUNC_ERROR)(struct interrupt_frame *frame, uint32_t code_error);
 void int80h_register_command(int command_id, INT80H_COMMAND handler);
 int idt_register_interrupt_callback(int interrupt, INTERRUPT_CALLBACK_FUNC callback);
+int idt_register_interrupt_callback_error(int interrupt, INTERRUPT_CALLBACK_FUNC_ERROR callback);
 
 
 #endif

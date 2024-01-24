@@ -7,6 +7,10 @@
 int main(int argc, char **argv)
 {
     printf("PolyOS v1.0.0\n");
+
+    // int *ptr = (int *)0x1000;
+    // int a = *ptr;
+    // printf("a: %d\n", a);
     while (1){
         printf("> ");
         char buffer[1024];
@@ -33,6 +37,12 @@ int main(int argc, char **argv)
     {
         /* code */
     }
+
+
+
+
+
+    // solonovamax
     
     return 0;
 }

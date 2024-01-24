@@ -123,6 +123,11 @@ static int process_map_memory(struct process* process)
 {
     int res = 0;
 
+    res = paging_map_to(process->task->page_directory, (void *)USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END, process->stack, paging_align_address(process->stack + USER_PROGRAM_STACK_SIZE), PAGING_IS_PRESENT | PAGING_IS_WRITABLE | PAGING_ACCESS_FROM_ALL);
+    if (res < 0)
+    {
+        return res;
+    }
     switch(process->filetype)
     {
         case PROCESS_FILETYPE_ELF:
@@ -141,7 +146,6 @@ static int process_map_memory(struct process* process)
     {
        return res;
     }
-    paging_map_to(process->task->page_directory, (void *)USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END, process->stack, paging_align_address(process->stack + USER_PROGRAM_STACK_SIZE), PAGING_IS_PRESENT | PAGING_IS_WRITABLE | PAGING_ACCESS_FROM_ALL);
     return res;
 }
 

@@ -87,6 +87,9 @@ gdt_descriptor:
     mov ecx, 100
     mov edi, 0x0100000
     call ata_lba_read
+    ; call long_mode
+    call detection_cpuid
+    call verification_cpuid
     jmp CODE_SEG:0x0100000
 
 ata_lba_read:
@@ -147,6 +150,96 @@ ata_lba_read:
     loop .next_sector
     ; End of reading sectors into memory
     ret
+
+; Access bits
+PRESENT        equ 1 << 7
+NOT_SYS        equ 1 << 4
+EXEC           equ 1 << 3
+DC             equ 1 << 2
+RW             equ 1 << 1
+ACCESSED       equ 1 << 0
+ 
+; Flags bits
+GRAN_4K       equ 1 << 7
+SZ_32         equ 1 << 6
+LONG_MODE     equ 1 << 5
+ 
+GDT:
+    .Null: equ $ - GDT
+        dq 0
+    .Code: equ $ - GDT
+        dd 0xFFFF                                   ; Limit & Base (low, bits 0-15)
+        db 0                                        ; Base (mid, bits 16-23)
+        db PRESENT | NOT_SYS | EXEC | RW            ; Access
+        db GRAN_4K | LONG_MODE | 0xF                ; Flags & Limit (high, bits 16-19)
+        db 0                                        ; Base (high, bits 24-31)
+    .Data: equ $ - GDT
+        dd 0xFFFF                                   ; Limit & Base (low, bits 0-15)
+        db 0                                        ; Base (mid, bits 16-23)
+        db PRESENT | NOT_SYS | RW                   ; Access
+        db GRAN_4K | SZ_32 | 0xF                    ; Flags & Limit (high, bits 16-19)
+        db 0                                        ; Base (high, bits 24-31)
+    .TSS: equ $ - GDT
+        dd 0x00000068
+        dd 0x00CF8900
+    .Pointer:
+        dw $ - GDT - 1
+        dq GDT
+
+; load_long_mode:
+long_mode:
+    call detection_cpuid
+    call verification_cpuid
+
+    mov eax, cr0
+    and eax, 0x7fffffff
+    mov cr0, eax
+
+    mov eax, cr4
+    bts eax, 5
+    mov cr4, eax
+
+    mov ecx, 0xC0000080 ; EFER MSR
+    rdmsr ; Read the EFER MSR
+    bts eax, 8 ; Set the long mode bit
+    wrmsr ; Write to the EFER MSR
+
+    ret
+
+detection_cpuid:
+    pushfd
+    pop eax
+    mov ecx, eax
+    xor eax, 1 << 21
+    push eax
+    popfd
+
+    pushfd
+    pop eax
+    push ecx
+    popfd
+
+    xor eax, ecx
+    jz .no_cpuid
+    ret
+    
+.no_cpuid:
+    hlt
+
+verification_cpuid:
+    mov eax, 0x80000000
+    cpuid
+    cmp eax, 0x80000001
+    jb .no_long_mode
+
+    mov eax, 0x80000001
+    cpuid
+    test edx, 1 << 29
+    jz .no_long_mode
+    ret
+
+.no_long_mode:
+    hlt
 
 times 510-($ - $$) db 0
 dw 0xAA55

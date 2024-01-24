@@ -3,6 +3,7 @@
 section .asm
 
 extern interrupt_handler
+extern interrupt_handler_error
 extern int80h_handler
 
 global idt_load
@@ -48,8 +49,18 @@ int80h_wrapper:
         pushad
         ; Interrupt frame end
         push esp
+
         push dword %1
-        call interrupt_handler
+
+%if %1 != 8 && %1 != 10 && %1 != 11 && %1 != 12 && %1 != 13 && %1 != 14
+        call interrupt_handler   
+%else
+        mov eax, esp
+        mov eax, [eax] ; get the error code
+        push eax
+        call interrupt_handler_error
+        add esp, 4
+%endif
         add esp, 8
         popad
         iret
