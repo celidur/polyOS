@@ -24,3 +24,13 @@ void *int80h_command3_putchar(struct interrupt_frame *frame)
     terminal_writechar(c, 15);
     return 0;
 }
+
+void *int80h_command11_remove_last_char(struct interrupt_frame *frame){
+    terminal_writechar('\b', 15);
+    return 0;
+}
+
+void *int80h_command12_clear_screen(struct interrupt_frame *frame){
+    clear_screen();
+    return 0;
+}

@@ -1,4 +1,5 @@
 #include "string.h"
+#include "stdio.h"
 
 char tolower(char c){
     if (c >= 'A' && c <= 'Z'){
@@ -83,48 +84,62 @@ int tonumericdigit(char c){
     return c - '0';
 }
 
-char* sp=0;
-char* strtok(char* str, const char* delim){
-    int i=0;
-    int len = strlen(delim);
-    if (!sp && !str){
+char* sp = (char*)1;
+char* strtok(char* str, const char* delimiters)
+{
+    int i = 0;
+    int len = strlen(delimiters);
+    if (!str && !sp)
         return 0;
-    }
-    if (str && !sp){
+
+    
+    if (!sp || sp == (char*)1)
+    {
         sp = str;
     }
-    char* start = sp;
-    while(1){
-        for (i=0; i<len; i++){
-            if (*start == delim[i]){
-                start++;
+
+
+    char* p_start = sp;
+    while(1)
+    {
+        for (i = 0; i < len; i++)
+        {
+            if(*p_start == delimiters[i])
+            {
+                p_start++;
                 break;
             }
         }
 
-        if (i == len){
-            sp = start;
+        if (i == len)
+        {
+            sp = p_start;
             break;
         }
     }
 
-    if (*sp == 0){
+    if (*sp == '\0')
+    {
         sp = 0;
         return sp;
     }
 
-    // find end of substring
-    while (*sp != 0){
-        for (i=0; i<len; i++){
-            if (*sp == delim[i]){
-                *sp = 0;
+    // Find end of substring
+    while(*sp != '\0')
+    {
+        for (i = 0; i < len; i++)
+        {
+            if (*sp == delimiters[i])
+            {
+                *sp = '\0';
                 break;
             }
         }
+
         sp++;
-        if (i < len){
+        if (i < len)
             break;
-        }
     }
-    return start;
+
+    return p_start;
 }

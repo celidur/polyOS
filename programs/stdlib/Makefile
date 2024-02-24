@@ -1,6 +1,6 @@
 FILES = ./build/start.o ./build/start.asm.o ./build/polyos.asm.o ./build/polyos.o ./build/stdlib.o ./build/stdio.o ./build/memory.o ./build/string.o
 INCLUDES =-I./src
-FLAGS = -g -ffreestanding -falign-jumps -falign-functions -falign-labels -falign-loops -fstrength-reduce -fomit-frame-pointer -finline-functions -Wno-unused-function -fno-builtin -Werror -Wno-unused-label -Wno-cpp -Wno-unused-parameter -nostdlib -nostartfiles -nodefaultlibs -Wall -O0 -Iinc
+FLAGS = -g -ffreestanding -falign-jumps -falign-functions -falign-labels -falign-loops -fstrength-reduce -fomit-frame-pointer -finline-functions -Wno-unused-function -fno-builtin -Werror -Wno-unused-label -Wno-cpp -Wno-unused-parameter -nostdlib -nostartfiles -nodefaultlibs -Wall -O3 -Iinc
 BUILDER = i686-elf-gcc
 LINKER = i686-elf-ld
 

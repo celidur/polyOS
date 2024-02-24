@@ -39,8 +39,10 @@ static void clear_row(uint16_t row)
     }
 }
 
-static void clear_screen()
+void clear_screen()
 {
+    row_position = 0;
+    column_position = 0;
     for (int y = 0; y < VGA_HEIGHT; y++)
     {
         clear_row(y);
@@ -94,6 +96,11 @@ static void write_byte(uint8_t byte, uint8_t color)
 void terminal_backspace()
 {
     // TODO: rewrite this
+    if (column_position > 0)
+    {
+        column_position--;
+        buffer[row_position * VGA_WIDTH + column_position] = terminal_make_char(' ', current_color);
+    }
 }
 
 void terminal_writechar(uint8_t c, color_t color)

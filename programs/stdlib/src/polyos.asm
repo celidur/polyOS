@@ -12,6 +12,8 @@ global polyos_system:function
 global polyos_process_get_args:function
 global polyos_exit:function
 global print_memory:function
+global remove_last_char:function
+global clear_screen:function
 
 ; void print(char *str)
 print:
@@ -113,6 +115,24 @@ print_memory:
     push ebp
     mov ebp, esp
     mov eax, 10 ; Command print_memory
+    int 0x80
+    pop ebp
+    ret
+
+; void remove_last_char()
+remove_last_char:
+    push ebp
+    mov ebp, esp
+    mov eax, 11 ; Command remove_last_char
+    int 0x80
+    pop ebp
+    ret
+
+; void clear_screen()
+clear_screen:
+    push ebp
+    mov ebp, esp
+    mov eax, 12 ; Command clear_screen
     int 0x80
     pop ebp
     ret

@@ -21,7 +21,7 @@ int printf(const char *fmt, ...){
 
     va_start(ap, fmt);
     for (p = fmt; *p; p++){
-        if (i >= MAX_BUFFER){
+        if (i >= MAX_BUFFER - 1){
             buff[i] = '\0';
             print(buff);
             i = 0;
@@ -35,7 +35,7 @@ int printf(const char *fmt, ...){
                 ival = va_arg(ap, int);
                 sval = itoa(ival);
                 for (int j = 0; sval[j] != '\0'; j++){
-                    if (i >= MAX_BUFFER){
+                    if (i >= MAX_BUFFER - 1){
                         buff[i] = '\0';
                         print(buff);
                         i = 0;
@@ -46,7 +46,7 @@ int printf(const char *fmt, ...){
             case 's':
                 sval = va_arg(ap, char*);
                 for (int j = 0; sval[j] != '\0'; j++){
-                    if (i >= MAX_BUFFER){
+                    if (i >= MAX_BUFFER - 1){
                         buff[i] = '\0';
                         print(buff);
                         i = 0;
@@ -59,10 +59,10 @@ int printf(const char *fmt, ...){
                 buff[i++] = ival;
                 break;
             case 'x':
-                ival = va_arg(ap, int);
-                sval = hex(ival);
+                uint32_t xval = va_arg(ap, uint32_t);
+                sval = hex(xval);
                 for (int j = 0; sval[j] != '\0'; j++){
-                    if (i >= MAX_BUFFER){
+                    if (i >= MAX_BUFFER - 1){
                         buff[i] = '\0';
                         print(buff);
                         i = 0;

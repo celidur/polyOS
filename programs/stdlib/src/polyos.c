@@ -1,5 +1,6 @@
 #include "polyos.h"
 #include "string.h"
+#include "stdio.h"
 
 int polyos_getkeyblock(){
     int val = 0;
@@ -16,20 +17,24 @@ void polyos_terminal_readline(char* out, int max, bool output_while_typing)
     for (i = 0; i < max; i++)
     {
         char key = polyos_getkeyblock();
+        if (key == 0x08){
+            i --;
+        }
 
         // Carriage return means we're done
         if (key == 13){
             break;
         }
 
-        if (output_while_typing){
+        if (output_while_typing && key != 0x08){
             polyos_putchar(key);
         }
 
         // Backspace
-        if (key == 0x08 && i > 0){
-            out[i-1] = '\0';
-            i -= 2;
+        if (key == 0x08 && i >= 0){
+            remove_last_char();
+            out[i] = '\0';
+            i -= 1;
             continue;
         }
         out[i] = key;

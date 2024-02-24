@@ -29,5 +29,7 @@ int polyos_system(struct command_argument *args);
 int polyos_system_run(const char *command);
 void polyos_exit();
 void print_memory();
+void remove_last_char();
+void clear_screen();
 
 #endif
