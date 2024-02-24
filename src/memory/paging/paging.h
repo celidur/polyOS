@@ -11,19 +11,15 @@
 #define PAGING_IS_WRITABLE 0b00000010
 #define PAGING_IS_PRESENT 0b00000001
 
-struct paging_4gb_chunk
-{
-    uint32_t *page_directory;
-};
-
-struct paging_4gb_chunk *paging_new_4gb(uint8_t flags);
-void paging_switch(struct paging_4gb_chunk *directory);
+typedef uint32_t page_t;
+page_t *paging_new_4gb(uint8_t flags);
+void paging_switch(page_t *directory);
 void enable_paging();
-int paging_map_to(struct paging_4gb_chunk *directory, void *virt, void *phys, void *phys_end, uint8_t flags);
-int paging_map_range(struct paging_4gb_chunk *directory, void *virt, void *phys, int count, uint8_t flags);
-int paging_map(struct paging_4gb_chunk *directory, void *virt, void *phys, uint8_t flags);
+int paging_map_to(page_t *directory, void *virt, void *phys, void *phys_end, uint8_t flags);
+int paging_map_range(page_t *directory, void *virt, void *phys, int count, uint8_t flags);
+int paging_map(page_t *directory, void *virt, void *phys, uint8_t flags);
 void *paging_align_address(void *addr);
-void paging_free_4gb(struct paging_4gb_chunk *chunk);
+void paging_free_4gb(page_t *chunk);
 int paging_set(uint32_t *directory, void *virtual_addr, uint32_t value);
 bool paging_is_aligned(void *addr);
 uint32_t paging_get(uint32_t *directory, void *virtual_addr);

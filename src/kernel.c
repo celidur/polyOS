@@ -10,9 +10,10 @@
 #include "int80h/int80.h"
 #include "keyboard/keyboard.h"
 #include "terminal/terminal.h"
+#include "terminal/serial.h"
 
 struct tss tss;
-static struct paging_4gb_chunk *kernel_chunk = 0;
+static page_t *kernel_chunk = 0;
 struct gdt gdt_real[TOTAL_GDT_SEGMENTS];
 struct gdt_struct gdt_struct[TOTAL_GDT_SEGMENTS] = {
     {.base = 0x00, .limit = 0x00, .type = 0x00},                  // NULL Segment
@@ -44,6 +45,7 @@ void kernel_panic(const char *msg)
 void kernel_main()
 {
     terminal_initialize();
+    serial_configure(SERIAL_COM1_BASE, Baud_115200);
 
     memset(gdt_real, 0, sizeof(gdt_real));
     gdt_struct_to_gdt(gdt_struct, gdt_real, TOTAL_GDT_SEGMENTS);

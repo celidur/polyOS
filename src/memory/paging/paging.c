@@ -2,12 +2,13 @@
 #include "memory/heap/kheap.h"
 #include "status.h"
 #include "kernel.h"
+#include "terminal/terminal.h"
 
 // asm function in src/memory/paging/paging.asm
 void paging_load_directory(uint32_t *directory);
 
 static uint32_t *current_directory = 0;
-struct paging_4gb_chunk *paging_new_4gb(uint8_t flags)
+page_t *paging_new_4gb(uint8_t flags)
 {
     uint32_t *directory = kzalloc(sizeof(uint32_t) * PAGING_PAGE_TABLE_SIZE);
     if (!directory)
@@ -27,22 +28,16 @@ struct paging_4gb_chunk *paging_new_4gb(uint8_t flags)
             entry[b] = (offset + (b * PAGING_PAGE_SIZE)) | flags;
         }
         offset += (PAGING_PAGE_TABLE_SIZE * PAGING_PAGE_SIZE);
-        directory[i] = ((uint32_t)entry) | flags | PAGING_IS_WRITABLE;
+        directory[i] = ((uint32_t)entry) | flags | PAGING_IS_WRITABLE | PAGING_ACCESS_FROM_ALL;
     }
 
-    struct paging_4gb_chunk *chunk = kzalloc(sizeof(struct paging_4gb_chunk));
-    if (!chunk)
-    {
-        kernel_panic("Failed to allocate 4gb chunk");
-    }
-    chunk->page_directory = directory;
-    return chunk;
+    return directory;
 }
 
-void paging_switch(struct paging_4gb_chunk *directory)
+void paging_switch(page_t *directory)
 {
-    paging_load_directory(directory->page_directory);
-    current_directory = directory->page_directory;
+    paging_load_directory(directory);
+    current_directory = directory;
 }
 
 bool paging_is_aligned(void *addr)
@@ -85,15 +80,14 @@ int paging_set(uint32_t *directory, void *virtual_addr, uint32_t value)
     return 0;
 }
 
-void paging_free_4gb(struct paging_4gb_chunk *chunk)
+void paging_free_4gb(page_t *chunk)
 {
     for (int i = 0; i < PAGING_PAGE_TABLE_SIZE; i++)
     {
-        uint32_t entry = chunk->page_directory[i];
+        uint32_t entry = chunk[i];
         uint32_t *table = (uint32_t *)(entry & 0xFFFFF000);
         kfree(table);
     }
-    kfree(chunk->page_directory);
     kfree(chunk);
 }
 
@@ -106,14 +100,14 @@ void *paging_align_address(void *addr)
     return addr;
 }
 
-int paging_map(struct paging_4gb_chunk *directory, void *virt, void *phys, uint8_t flags)
+int paging_map(page_t *directory, void *virt, void *phys, uint8_t flags)
 {
     if (!paging_is_aligned(virt) || !paging_is_aligned(phys))
         return -EINVARG;
-    return paging_set(directory->page_directory, virt, (uint32_t)phys | flags);
+    return paging_set(directory, virt, (uint32_t)phys | flags);
 }
 
-int paging_map_range(struct paging_4gb_chunk *directory, void *virt, void *phys, int count, uint8_t flags)
+int paging_map_range(page_t *directory, void *virt, void *phys, int count, uint8_t flags)
 {
     for (int i = 0; i < count; i++)
     {
@@ -125,7 +119,7 @@ int paging_map_range(struct paging_4gb_chunk *directory, void *virt, void *phys,
     return ALL_OK;
 }
 
-int paging_map_to(struct paging_4gb_chunk *directory, void *virt, void *phys, void *phys_end, uint8_t flags)
+int paging_map_to(page_t *directory, void *virt, void *phys, void *phys_end, uint8_t flags)
 {
     if (!paging_is_aligned(virt))
         return -EINVARG;

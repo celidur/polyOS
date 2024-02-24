@@ -25,7 +25,7 @@ struct registers
 struct process;
 struct task
 {
-    struct paging_4gb_chunk *page_directory;
+    page_t *page_directory;
     struct registers regs;
 
     struct process *process;

@@ -95,7 +95,7 @@ int task_free(struct task *task)
 int task_init(struct task *task, struct process *process)
 {
     memset(task, 0, sizeof(struct task));
-    task->page_directory = paging_new_4gb(PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL);
+    task->page_directory = paging_new_4gb(PAGING_IS_PRESENT);
     if (!task->page_directory)
     {
         return -EIO;
@@ -195,7 +195,7 @@ int copy_string_from_task(struct task *task, void *virt, void *phys, int max)
     if (!buffer)
         return -ENOMEM;
 
-    uint32_t *directory = task->page_directory->page_directory;
+    uint32_t *directory = task->page_directory;
     uint32_t old_entry = paging_get(directory, buffer);
 
     paging_map(task->page_directory, buffer, buffer, PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL | PAGING_IS_WRITABLE);
@@ -215,7 +215,7 @@ int copy_string_from_task(struct task *task, void *virt, void *phys, int max)
 }
 
 void* task_virtual_address_to_physical(struct task* task, void* virtual_address){
-    return paging_get_physical_address(task->page_directory->page_directory, virtual_address);
+    return paging_get_physical_address(task->page_directory, virtual_address);
 }
 
 void task_next(){

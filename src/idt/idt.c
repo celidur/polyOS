@@ -101,6 +101,35 @@ static void idt_page_fault(struct interrupt_frame* frame, uint32_t code_error)
     kernel_panic("Page fault");
 }
 
+static void idt_general_protection_fault(struct interrupt_frame* frame, uint32_t code_error)
+{
+    printf("General protection fault\n");
+    int e = code_error & 0x1;
+    if (e){
+        printf("the exception originated externally to the processor\n");
+    }else{
+        int Tbl = (code_error >> 1) & 0x3;
+        int index = (code_error >> 3) & 0x1FFF;
+        switch (Tbl)
+        {
+        case 0:
+            printf("GDT");
+            break;
+        case 1:
+        case 3:
+            printf("IDT");
+            break;
+        case 2:
+            printf("LDT");
+            break;
+        default:
+            break;
+        }
+        printf(" index: 0x%x\n", index);
+    }
+    kernel_panic("General protection fault");
+}
+
 static void idt_handle_exception(){
     process_terminate(task_current()->process);
     task_next();
@@ -124,10 +153,10 @@ void interrupt_handler_error(uint32_t error_code, int interrupt,struct interrupt
     kernel_page();
     if (interrupt_callbacks_error[interrupt] != 0)
     {
+
         task_current_save_state(frame);
         interrupt_callbacks_error[interrupt](frame, error_code);
     }
-
     task_page();
     outb(0x20, 0x20);
 }
@@ -196,11 +225,13 @@ void idt_init()
     for (int i = 0; i < 0x20; i++)
     {
         idt_register_interrupt_callback(i, idt_handle_exception);
+        idt_register_interrupt_callback_error(i, idt_handle_exception);
     }
 
     idt_register_interrupt_callback(0x20, idt_clock);
 
     idt_register_interrupt_callback_error(0xE, idt_page_fault);
+    idt_register_interrupt_callback_error(0xD, idt_general_protection_fault);
 
     idt_load(&idtr_descriptor);
 }
