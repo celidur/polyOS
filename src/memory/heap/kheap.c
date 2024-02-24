@@ -5,8 +5,8 @@
 #include "memory/memory.h"
 #include "terminal/terminal.h"
 
-struct heap kernel_heap;
-struct heap_table kernel_heap_table;
+static struct heap kernel_heap;
+static struct heap_table kernel_heap_table;
 
 void kheap_init()
 {

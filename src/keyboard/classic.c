@@ -23,7 +23,7 @@ static const uint8_t keyboard_scan_set_one[] = {
      'q',  'w',  'e',  'r',     /* 0x10 */
      't',  'y',  'u',  'i',     /* 0x14 */
      'o',  'p',  '[',  ']',     /* 0x18 */
-    ENTER, 0x00,  'a',  's',     /* 0x1C */
+    ENTER, 0x00,  'a',  's',    /* 0x1C */
      'd',  'f',  'g',  'h',     /* 0x20 */
      'j',  'k',  'l',  ';',     /* 0x24 */
     '\'',  '`', 0x00, '\\',     /* 0x28 */
@@ -50,7 +50,7 @@ static const uint8_t keyboard_scan_set_two[] = {
      'Q',  'W',  'E',  'R',     /* 0x10 */
      'T',  'Y',  'U',  'I',     /* 0x14 */
      'O',  'P',  '{',  '}',     /* 0x18 */
-    ENTER, 0x00,  'A',  'S',     /* 0x1C */
+    ENTER, 0x00,  'A',  'S',    /* 0x1C */
      'D',  'F',  'G',  'H',     /* 0x20 */
      'J',  'K',  'L',  ':',     /* 0x24 */
      '"',  '~', 0x00,  '|',     /* 0x28 */

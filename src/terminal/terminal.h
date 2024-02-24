@@ -33,5 +33,6 @@ void print(const char *str);
 void terminal_initialize();
 void terminal_writechar(uint8_t c, color_t color);
 int printf(const char *fmt, ...);
+void serial_printf(const char *fmt, ...);
 
 #endif
