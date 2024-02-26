@@ -208,7 +208,7 @@ void print_paging_info(uint32_t* directory){
                 start = (i * PAGING_PAGE_SIZE * PAGING_PAGE_TABLE_SIZE) + (b * PAGING_PAGE_SIZE);
                 flag = flag2;
             } 
-            end = (i * PAGING_PAGE_SIZE * PAGING_PAGE_TABLE_SIZE) + (b * PAGING_PAGE_SIZE);
+            end = (i * PAGING_PAGE_SIZE * PAGING_PAGE_TABLE_SIZE) + (b * PAGING_PAGE_SIZE) + 0xFFF;
         }
     }
     if (start != -1){
