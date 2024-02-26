@@ -95,6 +95,8 @@ void kernel_main()
 
     set_color(BLACK, WHITE);
 
+    print_paging_info(process->task->page_directory);
+
     // int res = process_load_switch("0:/blank.elf", &process);
     // if (res < 0)
     // {

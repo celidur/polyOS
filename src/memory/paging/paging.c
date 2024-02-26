@@ -3,6 +3,7 @@
 #include "status.h"
 #include "kernel.h"
 #include "terminal/terminal.h"
+#include "terminal/serial.h"
 
 // asm function in src/memory/paging/paging.asm
 void paging_load_directory(uint32_t *directory);
@@ -173,4 +174,60 @@ void* paging_get_physical_address(uint32_t* directory, void* virtual_address){
     void* virt_addr_new = (void*) paging_align_to_lower_page(virtual_address);
     void* difference = (void*) ((uint32_t) virtual_address - (uint32_t) virt_addr_new);
     return (void*) ((paging_get(directory, virt_addr_new) & 0xFFFFF000) + (uint32_t) difference);
+}
+
+void print_paging_info(uint32_t* directory){
+    serial_printf("Paging info: \n");
+    uint32_t flag = 0;
+    uint32_t start = -1;
+    uint32_t end = -1;
+    for(int i = 0; i < PAGING_PAGE_TABLE_SIZE; i++){
+        uint32_t* entry = (uint32_t*) ((uint32_t)directory[i] & 0xFFFFF000);
+        for(int b = 0; b < PAGING_PAGE_TABLE_SIZE; b++){
+            uint32_t flag2 = entry[b] & 31;
+            if (flag2 != flag){
+                if (start != -1){
+                    serial_printf("0x%x - 0x%x: ", start, end);
+                    if (flag & PAGING_IS_PRESENT){
+                        serial_printf("PRESENT ");
+                    }
+                    if (flag & PAGING_IS_WRITABLE){
+                        serial_printf("WRITABLE ");
+                    }
+                    if (flag & PAGING_ACCESS_FROM_ALL){
+                        serial_printf("ACCESS_FROM_ALL ");
+                    }
+                    if (flag & PAGING_WRITE_THROUGH){
+                        serial_printf("WRITE_THROUGH ");
+                    }
+                    if (flag & PAGING_CACHE_DISABLED){
+                        serial_printf("CACHE_DISABLED ");
+                    }
+                    serial_printf("\n");
+                }
+                start = (i * PAGING_PAGE_SIZE * PAGING_PAGE_TABLE_SIZE) + (b * PAGING_PAGE_SIZE);
+                flag = flag2;
+            } 
+            end = (i * PAGING_PAGE_SIZE * PAGING_PAGE_TABLE_SIZE) + (b * PAGING_PAGE_SIZE);
+        }
+    }
+    if (start != -1){
+        serial_printf("0x%x - 0x%x: ", start, end);
+        if (flag & PAGING_IS_PRESENT){
+            serial_printf("PRESENT ");
+        }
+        if (flag & PAGING_IS_WRITABLE){
+            serial_printf("WRITABLE ");
+        }
+        if (flag & PAGING_ACCESS_FROM_ALL){
+            serial_printf("ACCESS_FROM_ALL ");
+        }
+        if (flag & PAGING_WRITE_THROUGH){
+            serial_printf("WRITE_THROUGH ");
+        }
+        if (flag & PAGING_CACHE_DISABLED){
+            serial_printf("CACHE_DISABLED ");
+        }
+        serial_printf("\n");
+    }
 }

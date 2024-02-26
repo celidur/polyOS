@@ -131,7 +131,7 @@ void print_c(const char *str, color_t color)
 void print(const char *str)
 {
     print_c(str, current_color);
-    serial_write(str);
+    // serial_write(str);
 }
 
 static char* itoa(int i){
