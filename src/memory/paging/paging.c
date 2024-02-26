@@ -8,6 +8,15 @@
 void paging_load_directory(uint32_t *directory);
 
 static uint32_t *current_directory = 0;
+
+static int32_t paging_get_highest_flag(uint32_t* entry){
+    uint32_t flags = 0;
+    uint32_t* e = (uint32_t*) ((uint32_t)entry & 0xFFFFF000);
+    for(int i = 0; i < PAGING_PAGE_TABLE_SIZE; i++){
+        flags |= e[i] & 7;
+    }
+    return flags;
+}
 page_t *paging_new_4gb(uint8_t flags)
 {
     uint32_t *directory = kzalloc(sizeof(uint32_t) * PAGING_PAGE_TABLE_SIZE);
@@ -28,7 +37,7 @@ page_t *paging_new_4gb(uint8_t flags)
             entry[b] = (offset + (b * PAGING_PAGE_SIZE)) | flags;
         }
         offset += (PAGING_PAGE_TABLE_SIZE * PAGING_PAGE_SIZE);
-        directory[i] = ((uint32_t)entry) | flags | PAGING_IS_WRITABLE | PAGING_ACCESS_FROM_ALL;
+        directory[i] = ((uint32_t)entry) | flags;
     }
 
     return directory;
@@ -76,6 +85,9 @@ int paging_set(uint32_t *directory, void *virtual_addr, uint32_t value)
     uint32_t entry = directory[directory_index];
     uint32_t *table = (uint32_t *)(entry & 0xFFFFF000);
     table[table_index] = value;
+
+    uint32_t flags = paging_get_highest_flag(table);
+    directory[directory_index] = ((uint32_t)table) | flags;
 
     return 0;
 }
