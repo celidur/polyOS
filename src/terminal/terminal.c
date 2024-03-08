@@ -3,6 +3,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include "serial.h"
+#include "io/io.h"
 
 #define VGA_WIDTH 80
 #define VGA_HEIGHT 25
@@ -31,11 +32,10 @@ void set_color(color_t background, color_t foreground){
 }
 
 static void set_cursor(int offset) {
-    offset >>= 1;
-    port_byte_out(VGA_CTRL_REGISTER, VGA_OFFSET_HIGH);
-    port_byte_out(VGA_DATA_REGISTER, (unsigned char) (offset >> 8));
-    port_byte_out(VGA_CTRL_REGISTER, VGA_OFFSET_LOW);
-    port_byte_out(VGA_DATA_REGISTER, (unsigned char) (offset & 0xff));
+    outb(VGA_CTRL_REGISTER, VGA_OFFSET_HIGH);
+    outb(VGA_DATA_REGISTER, (unsigned char) (offset >> 8));
+    outb(VGA_CTRL_REGISTER, VGA_OFFSET_LOW);
+    outb(VGA_DATA_REGISTER, (unsigned char) (offset & 0xff));
 }
 
 static uint16_t terminal_make_char(uint8_t c, color_t color)

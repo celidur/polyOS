@@ -15,15 +15,19 @@ all: $(DIRECTORIES) ./bin/boot.bin ./bin/kernel.bin
 	dd if=/dev/zero bs=1048576 count=16 >> ./bin/os.bin
 
 	# run mount-disk
-	rm -rf ./mnt
+	if [ -d "./mnt" ]; then rm -rf ./mnt; fi
 	mkdir -p ./mnt/d
 ifeq ($(OS), Darwin)
 	@echo "Mounting disk image..."
-	$(eval DISK := $(shell hdiutil attach -imagekey diskimage-class=CRawDiskImage -nomount ./bin/os.bin))
-	sudo mount -t msdos $(DISK) ./mnt/d
+	docker run --rm -v "$(PWD):/workspace" --privileged debian /bin/sh -c '\
+        mkdir /mnt/d && \
+        mount -t vfat /workspace/bin/os.bin /mnt/d &&\
+        cp /workspace/hello.txt /mnt/d && \
+        cp /workspace/programs/blank/blank.elf /mnt/d && \
+        cp /workspace/programs/shell/shell.elf /mnt/d && \
+        umount /mnt/d'
 else
 	sudo mount -t vfat ./bin/os.bin ./mnt/d
-endif
 
 	# Copy FILES
 	sudo cp ./hello.txt ./mnt/d
@@ -31,8 +35,6 @@ endif
 	sudo cp ./programs/shell/shell.elf ./mnt/d
 
 	sudo umount ./mnt/d
-ifeq ($(OS), Darwin)
-	hdiutil detach  $(DISK)
 endif
 	rm -rf ./mnt
 
