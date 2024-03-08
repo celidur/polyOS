@@ -9,6 +9,11 @@
 
 #define MAX_BUFFER 1024
 
+#define VGA_CTRL_REGISTER 0x3d4
+#define VGA_DATA_REGISTER 0x3d5
+#define VGA_OFFSET_LOW 0x0f
+#define VGA_OFFSET_HIGH 0x0e
+
 static uint16_t row_position = 0;
 static uint16_t column_position = 0;
 
@@ -23,6 +28,14 @@ static bool ascii_is_printable(uint8_t c)
 
 void set_color(color_t background, color_t foreground){
     current_color = background << 4 | foreground;
+}
+
+static void set_cursor(int offset) {
+    offset >>= 1;
+    port_byte_out(VGA_CTRL_REGISTER, VGA_OFFSET_HIGH);
+    port_byte_out(VGA_DATA_REGISTER, (unsigned char) (offset >> 8));
+    port_byte_out(VGA_CTRL_REGISTER, VGA_OFFSET_LOW);
+    port_byte_out(VGA_DATA_REGISTER, (unsigned char) (offset & 0xff));
 }
 
 static uint16_t terminal_make_char(uint8_t c, color_t color)
@@ -43,6 +56,7 @@ void clear_screen()
 {
     row_position = 0;
     column_position = 0;
+    set_cursor(0);
     for (int y = 0; y < VGA_HEIGHT; y++)
     {
         clear_row(y);
@@ -52,8 +66,6 @@ void clear_screen()
 void terminal_initialize()
 {
     buffer = (uint16_t *)0xB8000;
-    row_position = 0;
-    column_position = 0;
     set_color(BLACK, WHITE);
     clear_screen();
 }
@@ -90,6 +102,7 @@ static void write_byte(uint8_t byte, uint8_t color)
     }
     buffer[row_position * VGA_WIDTH + column_position] = terminal_make_char(byte, color);
     column_position++;
+    set_cursor(row_position * VGA_WIDTH + column_position);
 }
 
 
