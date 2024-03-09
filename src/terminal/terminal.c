@@ -191,7 +191,7 @@ static char* hex(uint32_t i){
         if (rem < 10){
             str[--loc] = '0' + rem;
         } else {
-            str[--loc] = 'a' + (rem - 10);
+            str[--loc] = 'A' + (rem - 10);
         }
         i /= 16;
     }

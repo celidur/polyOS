@@ -46,6 +46,7 @@ void kernel_panic(const char *msg)
 
 void kernel_main()
 {
+    demo_graphics();
     set_text_mode(VGA_90x60_TEXT);
 
     terminal_initialize();
@@ -97,8 +98,6 @@ void kernel_main()
     {
         kernel_panic("Failed to load process\n");
     }
-
-    // demo_graphics();
 
     set_color(BLACK, LIGHT_GREEN);
     print_memory();
