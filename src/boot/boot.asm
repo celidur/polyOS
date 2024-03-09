@@ -12,7 +12,7 @@ _start:
 OEMIdentifier     db "PolyOS  "
 BytesPerSector    dw 0x200
 SectorsPerCluster db 0x80
-ReservedSectors   dw 200
+ReservedSectors   dw 255
 FATCopies         db 0x02
 RootDirEntries    dw 0x40
 NumSectors        dw 0x00
@@ -84,7 +84,7 @@ gdt_descriptor:
  [BITS 32]
  load32:
     mov eax, 1
-    mov ecx, 100
+    mov ecx, 160
     mov edi, 0x0100000
     call ata_lba_read
     ; call long_mode
