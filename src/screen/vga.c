@@ -1143,6 +1143,52 @@ static void write_font(uint8_t *buf, uint32_t font_height)
 	outb(VGA_GC_DATA, gc6);
 }
 
+void fill_rect(uint32_t x, uint32_t y, uint32_t wd, uint32_t ht)
+{
+	uint32_t x2, y2;
+
+/* clip */
+	if(x < 0)
+	{
+		if(wd + x < 0)
+			return;
+		wd += x;
+		x = 0;
+	}
+	if(x + wd >= g_wd)
+	{
+		if(x >= g_wd)
+			return;
+		wd = g_wd - x;
+	}
+	if(y < 0)
+	{
+		if(ht + y < 0)
+			return;
+		ht += y;
+		y = 0;
+	}
+	if(y + ht >= g_ht)
+	{
+		if(y >= g_ht)
+			return;
+		ht = g_ht - y;
+	}
+	for(y2 = y; y2 < y + ht; y2++)
+		for(x2 = x; x2 < x + wd; x2++)
+			g_write_pixel(x2, y2, 0x00002F);
+}
+
+void hline(uint32_t x, uint32_t y, uint32_t wd)
+{
+	fill_rect(x, y, wd, 1);
+}
+
+void vline(uint32_t x, uint32_t y, uint32_t ht)
+{
+	fill_rect(x, y, 1, ht);
+}
+
 
 /*****************************************************************************
 *****************************************************************************/
@@ -1160,8 +1206,15 @@ static void draw_x(void)
 		g_write_pixel((g_wd - g_ht) / 2 + y, y, 1);
 		g_write_pixel((g_ht + g_wd) / 2 - y, y, 3);
 	}
+
+
+	fill_rect(0, 0, 100, 100);
+
+	vline(180, 0, 100);
+
+	hline(0, 180, 100);
 	
-	for (size_t i = 0; i < 900000000; i++)
+	for (size_t i = 0; i < 100000000; i++)
     {
         asm volatile("nop");
     }
