@@ -3,6 +3,8 @@
 #include "stdlib.h"
 #include "polyos.h"
 #include "string.h"
+#include <stddef.h>
+#include <stdint.h>
 
 int main(int argc, char **argv)
 {
@@ -21,7 +23,7 @@ int main(int argc, char **argv)
             break;
         }else if (strncmp(buffer, "malloc", 7) == 0){
             char *ptr = malloc(4096*4096);
-            printf("malloc: %p\n", ptr);
+            printf("malloc: %x\n", (uint32_t)ptr);
         } else if (strncmp(buffer, "clear", 6) == 0){
             clear_screen();
         }

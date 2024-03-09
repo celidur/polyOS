@@ -1,4 +1,4 @@
-FILES = ./build/kernel.asm.o ./build/kernel.o ./build/idt/idt.asm.o ./build/idt/idt.o ./build/memory/memory.o ./build/io/io.o ./build/memory/heap/heap.o ./build/memory/heap/kheap.o ./build/memory/paging/paging.o ./build/memory/paging/paging.asm.o ./build/disk/disk.o ./build/string/string.o ./build/fs/pparser.o ./build/disk/streamer.o ./build/fs/file.o ./build/fs/fat/fat16.o ./build/gdt/gdt.o ./build/gdt/gdt.asm.o ./build/task/tss.asm.o ./build/task/task.o ./build/task/task.asm.o ./build/task/process.o ./build/int80h/int80.o ./build/int80h/misc.o ./build/int80h/io.o ./build/keyboard/keyboard.o ./build/keyboard/classic.o ./build/loader/formats/elf.o ./build/loader/formats/elfloader.o ./build/int80h/heap.o ./build/int80h/process.o ./build/terminal/terminal.o ./build/terminal/serial.o
+FILES = ./build/kernel.asm.o ./build/kernel.o ./build/idt/idt.asm.o ./build/idt/idt.o ./build/memory/memory.o ./build/io/io.o ./build/memory/heap/heap.o ./build/memory/heap/kheap.o ./build/memory/paging/paging.o ./build/memory/paging/paging.asm.o ./build/disk/disk.o ./build/string/string.o ./build/fs/pparser.o ./build/disk/streamer.o ./build/fs/file.o ./build/fs/fat/fat16.o ./build/gdt/gdt.o ./build/gdt/gdt.asm.o ./build/task/tss.asm.o ./build/task/task.o ./build/task/task.asm.o ./build/task/process.o ./build/int80h/int80.o ./build/int80h/misc.o ./build/int80h/io.o ./build/keyboard/keyboard.o ./build/keyboard/classic.o ./build/loader/formats/elf.o ./build/loader/formats/elfloader.o ./build/int80h/heap.o ./build/int80h/process.o ./build/terminal/terminal.o ./build/terminal/serial.o ./build/screen/vga.o ./build/screen/screen.o ./build/screen/font.o
 INCLUDES = -I./src
 FLAGS = -g -ffreestanding -falign-jumps -falign-functions -falign-labels -falign-loops -fstrength-reduce -fomit-frame-pointer -finline-functions -Wno-unused-function -fno-builtin -Werror -Wno-unused-label -Wno-cpp -Wno-unused-parameter -nostdlib -nostartfiles -nodefaultlibs -Wall -O0 -Iinc
 BUILDER = i686-elf-gcc
@@ -148,6 +148,15 @@ $(DIRECTORIES):
 
 ./build/terminal/serial.o: ./src/terminal/serial.c
 	$(BUILDER) $(INCLUDES) -I ./src/terminal $(FLAGS) -std=gnu99 -c ./src/terminal/serial.c -o ./build/terminal/serial.o
+
+./build/screen/vga.o: ./src/screen/vga.c
+	$(BUILDER) $(INCLUDES) -I ./src/screen $(FLAGS) -std=gnu99 -c ./src/screen/vga.c -o ./build/screen/vga.o
+
+./build/screen/screen.o: ./src/screen/screen.c
+	$(BUILDER) $(INCLUDES) -I ./src/screen $(FLAGS) -std=gnu99 -c ./src/screen/screen.c -o ./build/screen/screen.o
+
+./build/screen/font.o: ./src/screen/font.c
+	$(BUILDER) $(INCLUDES) -I ./src/screen $(FLAGS) -std=gnu99 -c ./src/screen/font.c -o ./build/screen/font.o
 
 clean: user_programs_clean
 	if [ -d "./bin" ]; then rm -rf ./bin; fi

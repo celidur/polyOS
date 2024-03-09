@@ -11,6 +11,7 @@
 #include "keyboard/keyboard.h"
 #include "terminal/terminal.h"
 #include "terminal/serial.h"
+#include "screen/screen.h"
 
 struct tss tss;
 static page_t *kernel_chunk = 0;
@@ -38,6 +39,7 @@ void kernel_panic(const char *msg)
     print("\nKERNEL PANIC: ");
     set_color(BLACK, RED);
     printf(msg);
+    disable_cursor();
     while (1)
         ;
 }
@@ -46,6 +48,8 @@ void kernel_main()
 {
     terminal_initialize();
     serial_configure(SERIAL_COM1_BASE, Baud_115200);
+
+    // dump_state();
 
     memset(gdt_real, 0, sizeof(gdt_real));
     gdt_struct_to_gdt(gdt_struct, gdt_real, TOTAL_GDT_SEGMENTS);
@@ -71,7 +75,6 @@ void kernel_main()
     tss.ss0 = KERNEL_DATA_SELECTOR;
 
     tss_load(0x28);
-
     // Initialize paging
     kernel_chunk = paging_new_4gb(PAGING_IS_WRITABLE | PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL);
     paging_switch(kernel_chunk);
@@ -82,6 +85,7 @@ void kernel_main()
 
     // Initialize keyboard
     keyboard_init();
+
     
     struct process *process = NULL;
     int res = process_load_switch("0:/shell.elf", &process);

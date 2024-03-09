@@ -35,5 +35,6 @@ void terminal_writechar(uint8_t c, color_t color);
 int printf(const char *fmt, ...);
 void serial_printf(const char *fmt, ...);
 void clear_screen();
+void disable_cursor();
 
 #endif

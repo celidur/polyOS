@@ -31,9 +31,15 @@ void set_color(color_t background, color_t foreground){
     current_color = background << 4 | foreground;
 }
 
+void disable_cursor()
+{
+	outb(VGA_CTRL_REGISTER, 0x0A);
+	outb(VGA_DATA_REGISTER, 0x20);
+}
+
 static void set_cursor(int offset) {
     outb(VGA_CTRL_REGISTER, VGA_OFFSET_HIGH);
-    outb(VGA_DATA_REGISTER, (unsigned char) (offset >> 8));
+    outb(VGA_DATA_REGISTER, (unsigned char) ((offset >> 8) & 0xff));
     outb(VGA_CTRL_REGISTER, VGA_OFFSET_LOW);
     outb(VGA_DATA_REGISTER, (unsigned char) (offset & 0xff));
 }
@@ -114,6 +120,7 @@ void terminal_backspace()
         column_position--;
         buffer[row_position * VGA_WIDTH + column_position] = terminal_make_char(' ', current_color);
     }
+    set_cursor(row_position * VGA_WIDTH + column_position);
 }
 
 void terminal_writechar(uint8_t c, color_t color)
