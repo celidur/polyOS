@@ -14,12 +14,9 @@ all: $(DIRECTORIES) ./bin/boot.bin ./bin/kernel.bin
 	dd if=./bin/kernel.bin >> ./bin/os.bin
 	dd if=/dev/zero bs=1048576 count=16 >> ./bin/os.bin
 
-	# run mount-disk
-	if [ -d "./mnt" ]; then rm -rf ./mnt; fi
-	mkdir -p ./mnt/d
-ifeq ($(OS), Darwin)
 	@echo "Mounting disk image..."
-	docker run --rm -v "$(PWD):/workspace" --privileged debian /bin/sh -c '\
+ifeq ($(OS), Darwin)
+	docker run --rm -v "$(PWD):/workspace" --privileged alpine /bin/sh -c '\
         mkdir /mnt/d && \
         mount -t vfat /workspace/bin/os.bin /mnt/d &&\
         cp /workspace/hello.txt /mnt/d && \
@@ -27,6 +24,9 @@ ifeq ($(OS), Darwin)
         cp /workspace/programs/shell/shell.elf /mnt/d && \
         umount /mnt/d'
 else
+	# run mount-disk
+	if [ -d "./mnt" ]; then rm -rf ./mnt; fi
+	mkdir -p ./mnt/d
 	sudo mount -t vfat ./bin/os.bin ./mnt/d
 
 	# Copy FILES
@@ -35,8 +35,8 @@ else
 	sudo cp ./programs/shell/shell.elf ./mnt/d
 
 	sudo umount ./mnt/d
-endif
 	rm -rf ./mnt
+endif
 
 
 
