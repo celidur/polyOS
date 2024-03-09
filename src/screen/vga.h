@@ -1,3 +1,6 @@
+#ifndef VGA_H
+#define VGA_H
+
 enum screen_mode {
     VGA_40x25_TEXT,
     VGA_40x50_TEXT,
@@ -13,4 +16,10 @@ enum screen_mode {
     VGA_320x200x256_MODEX,
 };
 
-uint8_t* get_screen_registers(enum screen_mode mode);
+void dump_state(void);
+void set_text_mode(enum screen_mode mode);
+
+void demo_graphics(void);
+
+
+#endif

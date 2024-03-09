@@ -11,7 +11,7 @@
 #include "keyboard/keyboard.h"
 #include "terminal/terminal.h"
 #include "terminal/serial.h"
-#include "screen/screen.h"
+#include "screen/vga.h"
 
 struct tss tss;
 static page_t *kernel_chunk = 0;
@@ -46,10 +46,14 @@ void kernel_panic(const char *msg)
 
 void kernel_main()
 {
+    set_text_mode(VGA_90x60_TEXT);
+
     terminal_initialize();
     serial_configure(SERIAL_COM1_BASE, Baud_115200);
 
-    // dump_state();
+
+    dump_state();
+
 
     memset(gdt_real, 0, sizeof(gdt_real));
     gdt_struct_to_gdt(gdt_struct, gdt_real, TOTAL_GDT_SEGMENTS);
@@ -94,12 +98,15 @@ void kernel_main()
         kernel_panic("Failed to load process\n");
     }
 
+    // demo_graphics();
+
     set_color(BLACK, LIGHT_GREEN);
     print_memory();
 
     set_color(BLACK, WHITE);
 
     print_paging_info(process->task->page_directory);
+
 
     // int res = process_load_switch("0:/blank.elf", &process);
     // if (res < 0)

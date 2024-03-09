@@ -5,8 +5,8 @@
 #include "serial.h"
 #include "io/io.h"
 
-#define VGA_WIDTH 80
-#define VGA_HEIGHT 25
+#define VGA_WIDTH 90
+#define VGA_HEIGHT 60
 
 #define MAX_BUFFER 1024
 
@@ -118,6 +118,10 @@ void terminal_backspace()
     if (column_position > 0)
     {
         column_position--;
+        buffer[row_position * VGA_WIDTH + column_position] = terminal_make_char(' ', current_color);
+    } else if (row_position > 0){
+        row_position--;
+        column_position = VGA_WIDTH - 1;
         buffer[row_position * VGA_WIDTH + column_position] = terminal_make_char(' ', current_color);
     }
     set_cursor(row_position * VGA_WIDTH + column_position);
