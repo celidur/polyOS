@@ -35,5 +35,5 @@ all: ./build $(FILES)
 	$(BUILDER) $(FLAGS) $(INCLUDES) -std=gnu99 -c ./src/string.c -o ./build/string.o
 
 clean:
-	rm -rf ./build/
-	rm -rf ./stdlib.elf
+	if [ -d "./build" ]; then rm -rf ./build; fi
+	if [ -f "./stdlib.elf" ]; then rm -rf ./stdlib.elf; fi

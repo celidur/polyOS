@@ -14,5 +14,5 @@ all: ./build $(FILES)
 	$(BUILDER) $(FLAGS) -c ./src/shell.c -o ./build/shell.o $(INCLUDES)
 
 clean:
-	rm -rf ./build/
-	rm -rf ./shell.elf
+	if [ -d "./build" ]; then rm -rf ./build; fi
+	if [ -f "./shell.elf" ]; then rm -rf ./shell.elf; fi

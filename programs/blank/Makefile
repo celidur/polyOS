@@ -14,5 +14,5 @@ all: ./build $(FILES)
 	$(BUILDER) $(INCLUDES) -I./ $(FLAGS) -std=gnu99 -c ./blank.c -o ./build/blank.o
 
 clean:
-	rm -rf ./build/
-	rm -rf ./blank.elf
+	if [ -d "./build" ]; then rm -rf ./build; fi
+	if [ -f "./blank.elf" ]; then rm -rf ./blank.elf; fi
