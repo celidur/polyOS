@@ -1,4 +1,4 @@
-FILES = ./build/kernel.asm.o ./build/kernel.o ./build/idt/idt.asm.o ./build/idt/idt.o ./build/memory/memory.o ./build/io/io.o ./build/memory/heap/heap.o ./build/memory/heap/kheap.o ./build/memory/paging/paging.o ./build/memory/paging/paging.asm.o ./build/disk/disk.o ./build/string/string.o ./build/fs/pparser.o ./build/disk/streamer.o ./build/fs/file.o ./build/fs/fat/fat16.o ./build/gdt/gdt.o ./build/gdt/gdt.asm.o ./build/task/tss.asm.o ./build/task/task.o ./build/task/task.asm.o ./build/task/process.o ./build/int80h/int80.o ./build/int80h/misc.o ./build/int80h/io.o ./build/keyboard/keyboard.o ./build/keyboard/classic.o ./build/loader/formats/elf.o ./build/loader/formats/elfloader.o ./build/int80h/heap.o ./build/int80h/process.o ./build/terminal/terminal.o ./build/terminal/serial.o ./build/screen/vga.o ./build/screen/screen.o ./build/screen/font.o
+FILES = ./build/kernel.asm.o ./build/kernel.o ./build/idt/idt.asm.o ./build/idt/idt.o ./build/memory/memory.o ./build/io/io.o ./build/memory/heap/heap.o ./build/memory/heap/kheap.o ./build/memory/paging/paging.o ./build/memory/paging/paging.asm.o ./build/disk/disk.o ./build/string/string.o ./build/fs/pparser.o ./build/disk/streamer.o ./build/fs/file.o ./build/fs/fat/fat16.o ./build/gdt/gdt.o ./build/gdt/gdt.asm.o ./build/task/tss.asm.o ./build/task/task.o ./build/task/task.asm.o ./build/task/process.o ./build/int80h/int80.o ./build/int80h/misc.o ./build/int80h/io.o ./build/keyboard/keyboard.o ./build/keyboard/classic.o ./build/loader/formats/elf.o ./build/loader/formats/elfloader.o ./build/int80h/heap.o ./build/int80h/process.o ./build/terminal/terminal.o ./build/terminal/serial.o ./build/screen/vga.o ./build/screen/screen.o ./build/screen/font.o ./build/screen/bitmap.o
 INCLUDES = -I./src
 FLAGS = -g -ffreestanding -falign-jumps -falign-functions -falign-labels -falign-loops -fstrength-reduce -fomit-frame-pointer -finline-functions -Wno-unused-function -fno-builtin -Werror -Wno-unused-label -Wno-cpp -Wno-unused-parameter -nostdlib -nostartfiles -nodefaultlibs -Wall -O0 -Iinc
 BUILDER = i686-elf-gcc
@@ -22,6 +22,7 @@ ifeq ($(OS), Darwin)
         cp /workspace/hello.txt /mnt/d && \
         cp /workspace/programs/blank/blank.elf /mnt/d && \
         cp /workspace/programs/shell/shell.elf /mnt/d && \
+        cp /workspace/file/load.bmp /mnt/d && \
         umount /mnt/d'
 else
 	# run mount-disk
@@ -33,6 +34,7 @@ else
 	sudo cp ./hello.txt ./mnt/d
 	sudo cp ./programs/blank/blank.elf ./mnt/d
 	sudo cp ./programs/shell/shell.elf ./mnt/d
+	sudo cp ./file/load.bmp ./mnt/d
 
 	sudo umount ./mnt/d
 	rm -rf ./mnt
@@ -157,6 +159,9 @@ $(DIRECTORIES):
 
 ./build/screen/font.o: ./src/screen/font.c
 	$(BUILDER) $(INCLUDES) -I ./src/screen $(FLAGS) -std=gnu99 -c ./src/screen/font.c -o ./build/screen/font.o
+
+./build/screen/bitmap.o: ./src/screen/bitmap.c
+	$(BUILDER) $(INCLUDES) -I ./src/screen $(FLAGS) -std=gnu99 -c ./src/screen/bitmap.c -o ./build/screen/bitmap.o
 
 clean: user_programs_clean
 	if [ -d "./bin" ]; then rm -rf ./bin; fi

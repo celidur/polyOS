@@ -1479,6 +1479,11 @@ so attribute bit b3 is no longer used for 'intense' */
 		vpokeb((80 * 16 + 40 + i) * 2 + 1, 0x0F);
 	}
 }
+
+void set_pixel(uint32_t x, uint32_t y, uint32_t color){
+	g_write_pixel(x, y, color);
+}
+
 /*****************************************************************************
 *****************************************************************************/
 // int main(int arg_c, char *arg_v[])

@@ -12,6 +12,7 @@
 #include "terminal/terminal.h"
 #include "terminal/serial.h"
 #include "screen/vga.h"
+#include "screen/bitmap.h"
 
 struct tss tss;
 static page_t *kernel_chunk = 0;
@@ -46,7 +47,7 @@ void kernel_panic(const char *msg)
 
 void kernel_main()
 {
-    demo_graphics();
+    // demo_graphics();
     set_text_mode(VGA_90x60_TEXT);
 
     terminal_initialize();
@@ -90,6 +91,22 @@ void kernel_main()
 
     // Initialize keyboard
     keyboard_init();
+
+
+    set_graphics_mode(VGA_640x480x2);
+    // load_bitmap("0:/test.bmp");
+    bitmap_t *bitmap = bitmap_create("0:/load.bmp");
+    display_monochrome_bitmap(bitmap);
+    free_bitmap(bitmap);
+
+    for (size_t i = 0; i < 200000000; i++)
+    {
+        asm volatile("nop");
+    }
+
+
+    set_text_mode(VGA_90x60_TEXT);
+    set_text_mode(VGA_90x60_TEXT);
 
     
     struct process *process = NULL;

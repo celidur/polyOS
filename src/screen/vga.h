@@ -18,6 +18,8 @@ enum screen_mode {
 
 void dump_state(void);
 void set_text_mode(enum screen_mode mode);
+void set_graphics_mode(enum screen_mode mode);
+void set_pixel(uint32_t x, uint32_t y, uint32_t color);
 
 void demo_graphics(void);
 
