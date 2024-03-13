@@ -1,10 +1,8 @@
-#include <stdint.h>
-#include "vga.h"
-#include "terminal/terminal.h"
-#include "io/io.h"
-#include "keyboard/keyboard.h"
-// #include "font.h"
-#include "memory/memory.h"
+#include <os/vga.h>
+#include <os/types.h>
+#include <os/terminal.h>
+#include <os/io.h>
+#include <os/memory.h>
 
 #define	VGA_AC_INDEX		0x3C0
 #define	VGA_AC_WRITE		0x3C0
@@ -871,39 +869,39 @@ static void read_regs(uint8_t *regs)
 	uint32_t i;
 
 	/* read MISCELLANEOUS reg */
-	*regs = insb(VGA_MISC_READ);
+	*regs = inb(VGA_MISC_READ);
 	regs++;
 	/* read SEQUENCER regs */
 	for(i = 0; i < VGA_NUM_SEQ_REGS; i++)
 	{
 		outb(VGA_SEQ_INDEX, i);
-		*regs = insb(VGA_SEQ_DATA);
+		*regs = inb(VGA_SEQ_DATA);
 		regs++;
 	}
 	/* read CRTC regs */
 	for(i = 0; i < VGA_NUM_CRTC_REGS; i++)
 	{
 		outb(VGA_CRTC_INDEX, i);
-		*regs = insb(VGA_CRTC_DATA);
+		*regs = inb(VGA_CRTC_DATA);
 		regs++;
 	}
 	/* read GRAPHICS CONTROLLER regs */
 	for(i = 0; i < VGA_NUM_GC_REGS; i++)
 	{
 		outb(VGA_GC_INDEX, i);
-		*regs = insb(VGA_GC_DATA);
+		*regs = inb(VGA_GC_DATA);
 		regs++;
 	}
 	/* read ATTRIBUTE CONTROLLER regs */
 	for(i = 0; i < VGA_NUM_AC_REGS; i++)
 	{
-		(void)insb(VGA_INSTAT_READ);
+		(void)inb(VGA_INSTAT_READ);
 		outb(VGA_AC_INDEX, i);
-		*regs = insb(VGA_AC_READ);
+		*regs = inb(VGA_AC_READ);
 		regs++;
 	}
 	/* lock 16-color palette and unblank display */
-	(void)insb(VGA_INSTAT_READ);
+	(void)inb(VGA_INSTAT_READ);
 	outb(VGA_AC_INDEX, 0x20);
 }
 
@@ -931,9 +929,9 @@ static void write_regs(uint8_t *regs)
 	}
 	/* unlock CRTC registers */
 	outb(VGA_CRTC_INDEX, 0x03);
-	outb(VGA_CRTC_DATA, insb(VGA_CRTC_DATA) | 0x80);
+	outb(VGA_CRTC_DATA, inb(VGA_CRTC_DATA) | 0x80);
 	outb(VGA_CRTC_INDEX, 0x11);
-	outb(VGA_CRTC_DATA, insb(VGA_CRTC_DATA) & ~0x80);
+	outb(VGA_CRTC_DATA, inb(VGA_CRTC_DATA) & ~0x80);
 	/* make sure they remain unlocked */
 	regs[0x03] |= 0x80;
 	regs[0x11] &= ~0x80;
@@ -954,20 +952,20 @@ static void write_regs(uint8_t *regs)
 	/* write ATTRIBUTE CONTROLLER regs */
 	for(i = 0; i < VGA_NUM_AC_REGS; i++)
 	{
-		(void)insb(VGA_INSTAT_READ);
+		(void)inb(VGA_INSTAT_READ);
 		outb(VGA_AC_INDEX, i);
 		outb(VGA_AC_WRITE, *regs);
 		regs++;
 	}
 	/* lock 16-color palette and unblank display */
-	(void)insb(VGA_INSTAT_READ);
+	(void)inb(VGA_INSTAT_READ);
 	outb(VGA_AC_INDEX, 0x20);
 }
 
 static uint32_t get_fb_seg(void)
 {
 	outb(VGA_GC_INDEX, 6);
-	uint32_t seg = (insb(VGA_GC_DATA) >> 2) & 3;
+	uint32_t seg = (inb(VGA_GC_DATA) >> 2) & 3;
 	switch(seg)
 	{
 	case 0:
@@ -1094,24 +1092,24 @@ static void write_font(uint8_t *buf, uint32_t font_height)
 	/* save registers
 	set_plane() modifies GC 4 and SEQ 2, so save them as well */
 	outb(VGA_SEQ_INDEX, 2);
-	seq2 = insb(VGA_SEQ_DATA);
+	seq2 = inb(VGA_SEQ_DATA);
 
 	outb(VGA_SEQ_INDEX, 4);
-	seq4 = insb(VGA_SEQ_DATA);
+	seq4 = inb(VGA_SEQ_DATA);
 	/* turn off even-odd addressing (set flat addressing)
 	assume: chain-4 addressing already off */
 	outb(VGA_SEQ_DATA, seq4 | 0x04);
 
 	outb(VGA_GC_INDEX, 4);
-	gc4 = insb(VGA_GC_DATA);
+	gc4 = inb(VGA_GC_DATA);
 
 	outb(VGA_GC_INDEX, 5);
-	gc5 = insb(VGA_GC_DATA);
+	gc5 = inb(VGA_GC_DATA);
 	/* turn off even-odd addressing */
 	outb(VGA_GC_DATA, gc5 & ~0x10);
 
 	outb(VGA_GC_INDEX, 6);
-	gc6 = insb(VGA_GC_DATA);
+	gc6 = inb(VGA_GC_DATA);
 	/* turn off even-odd addressing */
 	outb(VGA_GC_DATA, gc6 & ~0x02);
 	/* write font to plane P4 */
@@ -1416,24 +1414,24 @@ static void font512(void)
 save registers
 set_plane() modifies GC 4 and SEQ 2, so save them as well */
 	outb(VGA_SEQ_INDEX, 2);
-	seq2 = insb(VGA_SEQ_DATA);
+	seq2 = inb(VGA_SEQ_DATA);
 
 	outb(VGA_SEQ_INDEX, 4);
-	seq4 = insb(VGA_SEQ_DATA);
+	seq4 = inb(VGA_SEQ_DATA);
 /* turn off even-odd addressing (set flat addressing)
 assume: chain-4 addressing already off */
 	outb(VGA_SEQ_DATA, seq4 | 0x04);
 
 	outb(VGA_GC_INDEX, 4);
-	gc4 = insb(VGA_GC_DATA);
+	gc4 = inb(VGA_GC_DATA);
 
 	outb(VGA_GC_INDEX, 5);
-	gc5 = insb(VGA_GC_DATA);
+	gc5 = inb(VGA_GC_DATA);
 /* turn off even-odd addressing */
 	outb(VGA_GC_DATA, gc5 & ~0x10);
 
 	outb(VGA_GC_INDEX, 6);
-	gc6 = insb(VGA_GC_DATA);
+	gc6 = inb(VGA_GC_DATA);
 /* turn off even-odd addressing */
 	outb(VGA_GC_DATA, gc6 & ~0x02);
 /* write font to plane P4 */

@@ -1,13 +1,12 @@
-#include "task.h"
-#include "kernel.h"
-#include "status.h"
-#include "memory/heap/kheap.h"
-#include "memory/memory.h"
-#include "idt/idt.h"
-#include "memory/paging/paging.h"
-#include "string/string.h"
-#include "loader/formats/elfloader.h"
-#include "terminal/terminal.h"
+#include <os/task.h>
+#include <os/kernel.h>
+#include <os/status.h>
+#include <os/kheap.h>
+#include <os/memory.h>
+#include <os/idt.h>
+#include <os/paging.h>
+#include <os/string.h>
+#include <os/elfloader.h>
 
 static struct task *current_task = NULL;
 

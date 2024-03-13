@@ -1,23 +1,23 @@
 #ifndef GDT_H
 #define GDT_H
 
-#include <stdint.h>
+#include <os/types.h>
 
 struct gdt
 {
-    uint16_t segment;
-    uint16_t base_first;
-    uint8_t base;
-    uint8_t access;
-    uint8_t high_flags;
-    uint8_t base_24_31_bits;
+    u16 segment;
+    u16 base_first;
+    u8 base;
+    u8 access;
+    u8 high_flags;
+    u8 base_24_31_bits;
 } __attribute__((packed));
 
 struct gdt_struct
 {
-    uint32_t base;
-    uint32_t limit;
-    uint8_t type;
+    u32 base;
+    u32 limit;
+    u8 type;
 };
 
 void gdt_load(struct gdt *gdt, int size);

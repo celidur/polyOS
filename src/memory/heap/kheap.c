@@ -1,9 +1,9 @@
-#include "kheap.h"
-#include "heap.h"
-#include "config.h"
-#include "kernel.h"
-#include "memory/memory.h"
-#include "terminal/terminal.h"
+#include <os/kheap.h>
+#include <os/heap.h>
+#include <os/config.h>
+#include <os/kernel.h>
+#include <os/memory.h>
+#include <os/terminal.h>
 
 static struct heap kernel_heap;
 static struct heap_table kernel_heap_table;

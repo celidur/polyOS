@@ -1,9 +1,7 @@
 #ifndef HEAP_H
 #define HEAP_H
-#include "config.h"
-
-#include <stdint.h>
-#include <stddef.h>
+#include <os/config.h>
+#include <os/types.h>
 
 #define HEAP_BLOCK_TABLE_ENTRY_TAKEN 1
 #define HEAP_BLOCK_TABLE_ENTRY_FREE 0

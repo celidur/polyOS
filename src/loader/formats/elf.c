@@ -1,4 +1,4 @@
-#include "elf.h"
+#include <os/elf.h>
 
 void* elf_get_entry_ptr(struct elf_header* elf_header) {
     return (void*) elf_header->e_entry;

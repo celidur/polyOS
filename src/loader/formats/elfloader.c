@@ -1,13 +1,12 @@
-#include "elfloader.h"
-#include "fs/file.h"
-#include "status.h"
-#include <stdbool.h>
-#include "memory/memory.h"
-#include "memory/heap/kheap.h"
-#include "string/string.h"
-#include "memory/paging/paging.h"
-#include "kernel.h"
-#include "config.h"
+#include <os/elfloader.h>
+#include <os/file.h>
+#include <os/status.h>
+#include <os/types.h>
+#include <os/memory.h>
+#include <os/kheap.h>
+#include <os/string.h>
+#include <os/paging.h>
+#include <os/config.h>
 
 const char elf_signature[] = { 0x7f, 'E', 'L', 'F' };
 

@@ -1,7 +1,5 @@
-#include "misc.h"
-#include "idt/idt.h"
-#include "kernel.h"
-#include "task/task.h"
+#include <os/int80/misc.h>
+#include <os/task.h>
 
 void *int80h_command0_sum(struct interrupt_frame *frame)
 {

@@ -1,14 +1,13 @@
-#include "process.h"
-#include "memory/memory.h"
-#include "config.h"
-#include "status.h"
-#include "task/task.h"
-#include "string/string.h"
-#include "fs/file.h"
-#include "kernel.h"
-#include "memory/paging/paging.h"
-#include "memory/heap/kheap.h"
-#include "terminal/terminal.h"
+#include <os/process.h>
+#include <os/memory.h>
+#include <os/config.h>
+#include <os/status.h>
+#include <os/task.h>
+#include <os/string.h>
+#include <os/file.h>
+#include <os/kernel.h>
+#include <os/paging.h>
+#include <os/kheap.h>
 
 struct process *current_process = NULL;
 

@@ -1,7 +1,7 @@
 #ifndef KEYBOARD_H
 #define KEYBOARD_H
 
-#include <stdint.h>
+#include <os/types.h>
 
 #define ESC (0x1B)
 #define BS  (0x08)
@@ -14,8 +14,8 @@ struct keyboard
 {
     KEYBOARD_INIT_FUNC init;
     char name[20];
-    uint8_t shift;
-    uint8_t ctrl;
+    u8 shift;
+    u8 ctrl;
     struct keyboard *next;
 };
 

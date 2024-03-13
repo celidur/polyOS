@@ -1,8 +1,7 @@
 #ifndef KHEAP_H
 #define KHEAP_H
 
-#include <stdint.h>
-#include <stddef.h>
+#include <os/types.h>
 
 void kheap_init();
 void *kmalloc(size_t size);

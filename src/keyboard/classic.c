@@ -1,10 +1,9 @@
-#include "classic.h"
-#include "keyboard.h"
-#include "io/io.h"
-#include <stdint.h>
-#include "kernel.h"
-#include "idt/idt.h"
-#include "task/task.h"
+#include <os/classic.h>
+#include <os/keyboard.h>
+#include <os/io.h>
+#include <os/types.h>
+#include <os/idt.h>
+#include <os/task.h>
 
 #define SHIFT_LEFT 0x2A
 #define SHIFT_RIGHT 0x36
@@ -101,8 +100,8 @@ static uint8_t classic_keyboard_scancode_to_char(uint8_t scancode) {
 
 void classic_keyboard_handle_interrupt() {
     uint8_t scancode = 0;
-    scancode = insb(KEYBOARD_INPUT_PORT);
-    insb(KEYBOARD_INPUT_PORT);
+    scancode = inb(KEYBOARD_INPUT_PORT);
+    inb(KEYBOARD_INPUT_PORT);
 
     if (scancode & CLASSIC_KEYBOARD_KEY_RELEASED) {
         if (scancode == SHIFT_LEFT) {

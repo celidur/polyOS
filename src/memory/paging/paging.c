@@ -1,34 +1,33 @@
-#include "paging.h"
-#include "memory/heap/kheap.h"
-#include "status.h"
-#include "kernel.h"
-#include "terminal/terminal.h"
-#include "terminal/serial.h"
+#include <os/paging.h>
+#include <os/kheap.h>
+#include <os/status.h>
+#include <os/kernel.h>
+#include <os/terminal.h>
 
 // asm function in src/memory/paging/paging.asm
-void paging_load_directory(uint32_t *directory);
+void paging_load_directory(u32 *directory);
 
-static uint32_t *current_directory = 0;
+static u32 *current_directory = 0;
 
-static int32_t paging_get_highest_flag(uint32_t* entry){
-    uint32_t flags = 0;
-    uint32_t* e = (uint32_t*) ((uint32_t)entry & 0xFFFFF000);
+static int32_t paging_get_highest_flag(u32* entry){
+    u32 flags = 0;
+    u32* e = (u32*) ((u32)entry & 0xFFFFF000);
     for(int i = 0; i < PAGING_PAGE_TABLE_SIZE; i++){
         flags |= e[i] & 7;
     }
     return flags;
 }
-page_t *paging_new_4gb(uint8_t flags)
+page_t *paging_new_4gb(u8 flags)
 {
-    uint32_t *directory = kzalloc(sizeof(uint32_t) * PAGING_PAGE_TABLE_SIZE);
+    u32 *directory = kzalloc(sizeof(u32) * PAGING_PAGE_TABLE_SIZE);
     if (!directory)
     {
         kernel_panic("Failed to allocate page directory");
     }
-    uint32_t offset = 0;
+    u32 offset = 0;
     for (int i = 0; i < PAGING_PAGE_TABLE_SIZE; i++)
     {
-        uint32_t *entry = kzalloc(sizeof(uint32_t) * PAGING_PAGE_TABLE_SIZE);
+        u32 *entry = kzalloc(sizeof(u32) * PAGING_PAGE_TABLE_SIZE);
         if (!entry)
         {
             kernel_panic("Failed to allocate page table");
@@ -38,7 +37,7 @@ page_t *paging_new_4gb(uint8_t flags)
             entry[b] = (offset + (b * PAGING_PAGE_SIZE)) | flags;
         }
         offset += (PAGING_PAGE_TABLE_SIZE * PAGING_PAGE_SIZE);
-        directory[i] = ((uint32_t)entry) | flags;
+        directory[i] = ((u32)entry) | flags;
     }
 
     return directory;
@@ -52,43 +51,43 @@ void paging_switch(page_t *directory)
 
 bool paging_is_aligned(void *addr)
 {
-    return ((uint32_t)addr % PAGING_PAGE_SIZE) == 0;
+    return ((u32)addr % PAGING_PAGE_SIZE) == 0;
 }
 
-static int paging_get_index(void *virtual_addr, uint32_t *directory_index_out, uint32_t *table_index_out)
+static int paging_get_index(void *virtual_addr, u32 *directory_index_out, u32 *table_index_out)
 {
     if (!paging_is_aligned(virtual_addr))
     {
         return -EINVARG;
     }
 
-    *directory_index_out = ((uint32_t)virtual_addr / (PAGING_PAGE_SIZE * PAGING_PAGE_TABLE_SIZE));
-    *table_index_out = ((uint32_t)virtual_addr % (PAGING_PAGE_SIZE * PAGING_PAGE_TABLE_SIZE) / PAGING_PAGE_SIZE);
+    *directory_index_out = ((u32)virtual_addr / (PAGING_PAGE_SIZE * PAGING_PAGE_TABLE_SIZE));
+    *table_index_out = ((u32)virtual_addr % (PAGING_PAGE_SIZE * PAGING_PAGE_TABLE_SIZE) / PAGING_PAGE_SIZE);
 
     return 0;
 }
 
-int paging_set(uint32_t *directory, void *virtual_addr, uint32_t value)
+int paging_set(u32 *directory, void *virtual_addr, u32 value)
 {
     if (!paging_is_aligned(virtual_addr))
     {
         return -EINVARG;
     }
 
-    uint32_t directory_index = 0;
-    uint32_t table_index = 0;
+    u32 directory_index = 0;
+    u32 table_index = 0;
     int res = paging_get_index(virtual_addr, &directory_index, &table_index);
     if (res < 0)
     {
         return res;
     }
 
-    uint32_t entry = directory[directory_index];
-    uint32_t *table = (uint32_t *)(entry & 0xFFFFF000);
+    u32 entry = directory[directory_index];
+    u32 *table = (u32 *)(entry & 0xFFFFF000);
     table[table_index] = value;
 
-    uint32_t flags = paging_get_highest_flag(table);
-    directory[directory_index] = ((uint32_t)table) | flags;
+    u32 flags = paging_get_highest_flag(table);
+    directory[directory_index] = ((u32)table) | flags;
 
     return 0;
 }
@@ -97,8 +96,8 @@ void paging_free_4gb(page_t *chunk)
 {
     for (int i = 0; i < PAGING_PAGE_TABLE_SIZE; i++)
     {
-        uint32_t entry = chunk[i];
-        uint32_t *table = (uint32_t *)(entry & 0xFFFFF000);
+        u32 entry = chunk[i];
+        u32 *table = (u32 *)(entry & 0xFFFFF000);
         kfree(table);
     }
     kfree(chunk);
@@ -108,19 +107,19 @@ void *paging_align_address(void *addr)
 {
     if (!paging_is_aligned(addr))
     {
-        return (void *)((uint32_t)addr & 0xFFFFF000) + PAGING_PAGE_SIZE;
+        return (void *)((u32)addr & 0xFFFFF000) + PAGING_PAGE_SIZE;
     }
     return addr;
 }
 
-int paging_map(page_t *directory, void *virt, void *phys, uint8_t flags)
+int paging_map(page_t *directory, void *virt, void *phys, u8 flags)
 {
     if (!paging_is_aligned(virt) || !paging_is_aligned(phys))
         return -EINVARG;
-    return paging_set(directory, virt, (uint32_t)phys | flags);
+    return paging_set(directory, virt, (u32)phys | flags);
 }
 
-int paging_map_range(page_t *directory, void *virt, void *phys, int count, uint8_t flags)
+int paging_map_range(page_t *directory, void *virt, void *phys, int count, u8 flags)
 {
     for (int i = 0; i < count; i++)
     {
@@ -132,7 +131,7 @@ int paging_map_range(page_t *directory, void *virt, void *phys, int count, uint8
     return ALL_OK;
 }
 
-int paging_map_to(page_t *directory, void *virt, void *phys, void *phys_end, uint8_t flags)
+int paging_map_to(page_t *directory, void *virt, void *phys, void *phys_end, u8 flags)
 {
     if (!paging_is_aligned(virt))
         return -EINVARG;
@@ -143,48 +142,48 @@ int paging_map_to(page_t *directory, void *virt, void *phys, void *phys_end, uin
     if (!paging_is_aligned(phys_end))
         return -EINVARG;
 
-    if ((uint32_t)phys_end < (uint32_t)phys)
+    if ((u32)phys_end < (u32)phys)
         return -EINVARG;
 
-    uint32_t total_bytes = phys_end - phys;
-    uint32_t total_pages = total_bytes / PAGING_PAGE_SIZE;
+    u32 total_bytes = phys_end - phys;
+    u32 total_pages = total_bytes / PAGING_PAGE_SIZE;
     return paging_map_range(directory, virt, phys, total_pages, flags);
 }
 
-uint32_t paging_get(uint32_t *directory, void *virtual_addr)
+u32 paging_get(u32 *directory, void *virtual_addr)
 {
     if (!paging_is_aligned(virtual_addr))
     {
         return -EINVARG;
     }
 
-    uint32_t directory_index = 0;
-    uint32_t table_index = 0;
+    u32 directory_index = 0;
+    u32 table_index = 0;
     paging_get_index(virtual_addr, &directory_index, &table_index);
-    uint32_t entry = directory[directory_index];
-    uint32_t *table = (uint32_t *)(entry & 0xFFFFF000);
+    u32 entry = directory[directory_index];
+    u32 *table = (u32 *)(entry & 0xFFFFF000);
     return table[table_index];
 }
 
 void* paging_align_to_lower_page(void* addr){
-    return (void*) ((uint32_t) addr & 0xFFFFF000);
+    return (void*) ((u32) addr & 0xFFFFF000);
 }
 
-void* paging_get_physical_address(uint32_t* directory, void* virtual_address){
+void* paging_get_physical_address(u32* directory, void* virtual_address){
     void* virt_addr_new = (void*) paging_align_to_lower_page(virtual_address);
-    void* difference = (void*) ((uint32_t) virtual_address - (uint32_t) virt_addr_new);
-    return (void*) ((paging_get(directory, virt_addr_new) & 0xFFFFF000) + (uint32_t) difference);
+    void* difference = (void*) ((u32) virtual_address - (u32) virt_addr_new);
+    return (void*) ((paging_get(directory, virt_addr_new) & 0xFFFFF000) + (u32) difference);
 }
 
-void print_paging_info(uint32_t* directory){
+void print_paging_info(u32* directory){
     serial_printf("Paging info: \n");
-    uint32_t flag = 0;
-    uint32_t start = -1;
-    uint32_t end = -1;
+    u32 flag = 0;
+    u32 start = -1;
+    u32 end = -1;
     for(int i = 0; i < PAGING_PAGE_TABLE_SIZE; i++){
-        uint32_t* entry = (uint32_t*) ((uint32_t)directory[i] & 0xFFFFF000);
+        u32* entry = (u32*) ((u32)directory[i] & 0xFFFFF000);
         for(int b = 0; b < PAGING_PAGE_TABLE_SIZE; b++){
-            uint32_t flag2 = entry[b] & 31;
+            u32 flag2 = entry[b] & 31;
             if (flag2 != flag){
                 if (start != -1){
                     serial_printf("0x%x - 0x%x: ", start, end);

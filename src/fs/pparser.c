@@ -1,32 +1,32 @@
-#include "pparser.h"
-#include "config.h"
-#include "memory/memory.h"
-#include "memory/heap/kheap.h"
-#include "string/string.h"
-#include "status.h"
+#include <os/pparser.h>
+#include <os/config.h>
+#include <os/memory.h>
+#include <os/kheap.h>
+#include <os/string.h>
+#include <os/status.h>
 
-static int pathparser_path_valid_format(const char *filename)
+static int path_parser_path_valid_format(const char *filename)
 {
     int len = strnlen(filename, MAX_PATH);
     // path is like "0:/path/to/file"
     return (len >= 3 && isdigit(filename[0]) && memcmp((void *)&filename[1], ":/", 2) == 0);
 }
 
-static int pathparser_get_drive_by_path(const char **path)
+static int path_parser_get_drive_by_path(const char **path)
 {
-    if (!pathparser_path_valid_format(*path))
+    if (!path_parser_path_valid_format(*path))
     {
         return -EBADPATH;
     }
 
-    int drive_no = tonumericdigit(*path[0]);
+    int drive_no = to_numeric_digit(*path[0]);
 
     // add 3 to skip "0:/" part
     *path += 3;
     return drive_no;
 }
 
-static struct path_root *pathparser_create_root(int drive_no)
+static struct path_root *path_parser_create_root(int drive_no)
 {
     struct path_root *root = kmalloc(sizeof(struct path_root));
     root->drive_no = drive_no;
@@ -34,7 +34,7 @@ static struct path_root *pathparser_create_root(int drive_no)
     return root;
 }
 
-static char *pathparser_get_path_part(const char **path)
+static char *path_parser_get_path_part(const char **path)
 {
     char *result_path_part = kmalloc(MAX_PATH);
     int i = 0;
@@ -55,9 +55,9 @@ static char *pathparser_get_path_part(const char **path)
     return result_path_part;
 }
 
-struct path_part *pathparser_parse_path_part(struct path_part *last_part, const char **path)
+struct path_part *path_parser_parse_path_part(struct path_part *last_part, const char **path)
 {
-    const char *path_part_str = pathparser_get_path_part(path);
+    const char *path_part_str = path_parser_get_path_part(path);
     if (!path_part_str)
     {
         return NULL;
@@ -75,7 +75,7 @@ struct path_part *pathparser_parse_path_part(struct path_part *last_part, const 
     return part;
 }
 
-void pathparser_free(struct path_root *root)
+void path_parser_free(struct path_root *root)
 {
     struct path_part *part = root->first;
     while (part)
@@ -88,35 +88,35 @@ void pathparser_free(struct path_root *root)
     kfree(root);
 }
 
-struct path_root *pathparser_parse(const char *path, const char *cwd)
+struct path_root *path_parser_parse(const char *path, const char *cwd)
 {
     const char *tmp_path = path;
     if (strlen(path) > MAX_PATH)
     {
         return NULL;
     }
-    int res = pathparser_get_drive_by_path(&tmp_path);
+    int res = path_parser_get_drive_by_path(&tmp_path);
     if (res < 0)
     {
         return NULL;
     }
 
-    struct path_root *root = pathparser_create_root(res);
+    struct path_root *root = path_parser_create_root(res);
     if (!root)
     {
         return NULL;
     }
 
-    struct path_part *first_part = pathparser_parse_path_part(NULL, &tmp_path);
+    struct path_part *first_part = path_parser_parse_path_part(NULL, &tmp_path);
     if (!first_part)
     {
         return NULL;
     }
     root->first = first_part;
-    struct path_part *part = pathparser_parse_path_part(first_part, &tmp_path);
+    struct path_part *part = path_parser_parse_path_part(first_part, &tmp_path);
     while (part)
     {
-        part = pathparser_parse_path_part(part, &tmp_path);
+        part = path_parser_parse_path_part(part, &tmp_path);
     }
     return root;
 }

@@ -1,18 +1,18 @@
-#include "kernel.h"
-#include "idt/idt.h"
-#include "memory/heap/kheap.h"
-#include "memory/paging/paging.h"
-#include "disk/disk.h"
-#include "memory/memory.h"
-#include "gdt/gdt.h"
-#include "task/tss.h"
-#include "task/process.h"
-#include "int80h/int80.h"
-#include "keyboard/keyboard.h"
-#include "terminal/terminal.h"
-#include "terminal/serial.h"
-#include "screen/vga.h"
-#include "screen/bitmap.h"
+#include <os/kernel.h>
+#include <os/idt.h>
+#include <os/kheap.h>
+#include <os/paging.h>
+#include <os/disk.h>
+#include <os/memory.h>
+#include <os/gdt.h>
+#include <os/tss.h>
+#include <os/process.h>
+#include <os/int80h/int80.h>
+#include <os/keyboard.h>
+#include <os/terminal.h>
+#include <os/serial.h>
+#include <os/vga.h>
+#include <os/bitmap.h>
 
 struct tss tss;
 static page_t *kernel_chunk = 0;

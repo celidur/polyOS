@@ -1,11 +1,8 @@
-#ifndef ELFLOADER_H
-#define ELFLOADER_H
+#ifndef ELF_LOADER_H
+#define ELF_LOADER_H
 
-#include <stdint.h>
-#include <stddef.h>
-
-#include "elf.h"
-#include "config.h"
+#include <os/elf.h>
+#include <os/config.h>
 
 struct elf_file {
     char filename[MAX_PATH];

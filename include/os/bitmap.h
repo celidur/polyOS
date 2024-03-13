@@ -1,9 +1,7 @@
 #ifndef BITMAP_H
 #define BITMAP_H
-#include "memory/heap/kheap.h"
-#include "terminal/terminal.h"
-#include "fs/file.h"
-#include "vga.h"
+
+#include <os/types.h>
 
 typedef struct tagBITMAPFILEHEADER {
     unsigned short bfType;

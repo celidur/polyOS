@@ -1,9 +1,10 @@
-#include "terminal.h"
-#include "string/string.h"
+#include <os/terminal.h>
+#include <os/string.h>
+#include <os/types.h>
+#include <os/serial.h>
+#include <os/io.h>
+
 #include <stdarg.h>
-#include <stdbool.h>
-#include "serial.h"
-#include "io/io.h"
 
 #define VGA_WIDTH 90
 #define VGA_HEIGHT 60

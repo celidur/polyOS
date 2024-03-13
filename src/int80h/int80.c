@@ -1,9 +1,9 @@
-#include "int80.h"
-#include "idt/idt.h"
-#include "misc.h"
-#include "io.h"
-#include "heap.h"
-#include "process.h"
+#include <os/int80/int80.h>
+#include <os/idt.h>
+#include <os/int80/misc.h>
+#include <os/int80/io.h>
+#include <os/int80/heap.h>
+#include <os/int80/process.h>
 
 void int80h_register_commands()
 {

@@ -1,4 +1,8 @@
-#include "bitmap.h"
+#include <os/bitmap.h>
+#include <os/terminal.h>
+#include <os/file.h>
+#include <os/vga.h>
+#include <os/kheap.h>
 
 bitmap_t * bitmap_create(char * filename) {
     bitmap_t * ret = kmalloc(sizeof(bitmap_t));

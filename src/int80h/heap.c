@@ -1,11 +1,11 @@
-#include "heap.h"
-#include "memory/heap/kheap.h"
-#include "task/task.h"
-#include "task/process.h"
-#include <stddef.h>
+#include <os/int80/heap.h>
+#include <os/kheap.h>
+#include <os/task.h>
+#include <os/process.h>
+#include <os/types.h>
 
 void* int80h_command4_malloc(struct interrupt_frame *frame){
-    size_t size = (size_t)task_get_stack_item(task_current(), 0);
+    u32 size = (u32)task_get_stack_item(task_current(), 0);
     return process_malloc(task_current()->process, size);
 }
 

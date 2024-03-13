@@ -1,10 +1,10 @@
-#include "streamer.h"
-#include <stdbool.h>
-#include "memory/heap/kheap.h"
-#include "memory/memory.h"
-#include "config.h"
+#include <os/streamer.h>
+#include <os/types.h>
+#include <os/kheap.h>
+#include <os/memory.h>
+#include <os/config.h>
 
-struct disk_stream *diskstreamer_new(int disk_id)
+struct disk_stream *disk_streamer_new(int disk_id)
 {
     struct disk *disk = disk_get(disk_id);
     if (!disk)
@@ -18,13 +18,13 @@ struct disk_stream *diskstreamer_new(int disk_id)
     return streamer;
 }
 
-int diskstreamer_seek(struct disk_stream *streamer, int pos)
+int disk_streamer_seek(struct disk_stream *streamer, int pos)
 {
     streamer->pos = pos;
     return 0;
 }
 
-int diskstreamer_read(struct disk_stream *streamer, void *out, int total)
+int disk_streamer_read(struct disk_stream *streamer, void *out, int total)
 {
     int sector = streamer->pos / SECTOR_SIZE;
     int offset = streamer->pos % SECTOR_SIZE;
@@ -51,12 +51,12 @@ int diskstreamer_read(struct disk_stream *streamer, void *out, int total)
     streamer->pos += total_to_read;
     if (overflow)
     {
-        return diskstreamer_read(streamer, out, total - total_to_read);
+        return disk_streamer_read(streamer, out, total - total_to_read);
     }
     return 0;
 }
 
-void diskstreamer_close(struct disk_stream *streamer)
+void disk_streamer_close(struct disk_stream *streamer)
 {
     kfree(streamer);
 }

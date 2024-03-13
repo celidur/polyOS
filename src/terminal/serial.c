@@ -1,7 +1,7 @@
-#include "serial.h"
-#include "io/io.h"
-#include "string/string.h"
-#include <stddef.h>
+#include <os/serial.h>
+#include <os/io.h>
+#include <os/string.h>
+#include <os/types.h>
 
 
 #define SERIAL_DATA_PORT(base) (base)
@@ -46,7 +46,7 @@ void serial_configure_modem(unsigned short com)
 int serial_is_transmit_fifo_empty()
 {
 	/* 0x20 = 0010 0000 */
-    return insb(SERIAL_LINE_STATUS_PORT(serial_port)) & 0x20;
+    return inb(SERIAL_LINE_STATUS_PORT(serial_port)) & 0x20;
 }
     
     

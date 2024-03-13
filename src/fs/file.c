@@ -1,12 +1,12 @@
-#include "file.h"
-#include "config.h"
-#include "memory/memory.h"
-#include "memory/heap/kheap.h"
-#include "status.h"
-#include "kernel.h"
-#include "fat/fat16.h"
-#include "string/string.h"
-#include "disk/disk.h"
+#include <os/file.h>
+#include <os/config.h>
+#include <os/memory.h>
+#include <os/kheap.h>
+#include <os/status.h>
+#include <os/fat16.h>
+#include <os/string.h>
+#include <os/disk.h>
+#include <os/kernel.h>
 
 static struct filesystem *filesystems[MAX_FILESYSTEMS];
 static struct file_descriptor *file_descriptors[MAX_FILE_DESCRIPTORS];
@@ -105,7 +105,7 @@ static FILE_MODE file_get_mode_by_string(const char *str)
 int fopen(const char *filename, const char *str)
 {
     int res = 0;
-    struct path_root *root = pathparser_parse(filename, NULL);
+    struct path_root *root = path_parser_parse(filename, NULL);
     if (!root)
     {
         res = -EINVARG;
@@ -161,7 +161,7 @@ out:
     return res;
 }
 
-int fread(void *ptr, uint32_t size, uint32_t nmemb, int fd)
+int fread(void *ptr, u32 size, u32 nmemb, int fd)
 {
     if (size == 0 || nmemb == 0 || fd < 1)
         return -EINVARG;
@@ -173,7 +173,7 @@ int fread(void *ptr, uint32_t size, uint32_t nmemb, int fd)
     return desc->fs->read(desc->disk, desc->private, size, nmemb, (char *)ptr);
 }
 
-int fseek(int fd, uint32_t offset, FILE_SEEK_MODE mode)
+int fseek(int fd, u32 offset, FILE_SEEK_MODE mode)
 {
     struct file_descriptor *desc = file_get_descriptor(fd);
     if (!desc)

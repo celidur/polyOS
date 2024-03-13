@@ -1,4 +1,4 @@
-#include "string.h"
+#include <os/string.h>
 
 int strlen(const char *str)
 {
@@ -25,7 +25,7 @@ bool isdigit(char c)
     return c >= '0' && c <= '9';
 }
 
-int tonumericdigit(char c)
+int to_numeric_digit(char c)
 {
     return c - '0';
 }

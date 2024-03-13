@@ -1,12 +1,12 @@
-#include "idt.h"
-#include "config.h"
-#include "kernel.h"
-#include "terminal/terminal.h"
-#include "memory/memory.h"
-#include "task/task.h"
-#include "status.h"
-#include "io/io.h"
-#include "task/process.h"
+#include <os/idt.h>
+#include <os/config.h>
+#include <os/kernel.h>
+#include <os/terminal.h>
+#include <os/memory.h>
+#include <os/task.h>
+#include <os/status.h>
+#include <os/io.h>
+#include <os/process.h>
 
 static struct idt_desc idt_descriptors[TOTAL_INTERRUPTS];
 static struct idtr_desc idtr_descriptor;
@@ -19,7 +19,7 @@ static INT80H_COMMAND int80h_commands[MAX_INT80H_COMMANDS];
 
 extern void idt_load(struct idtr_desc* ptr);
 extern void int80h_wrapper();
-extern uint32_t get_cr2();
+extern u32 get_cr2();
 
 int idt_register_interrupt_callback(int interrupt, INTERRUPT_CALLBACK_FUNC callback)
 {
@@ -47,9 +47,9 @@ static void idt_clock(struct interrupt_frame* frame)
     task_next();
 }
 
-static void idt_page_fault(struct interrupt_frame* frame, uint32_t code_error)
+static void idt_page_fault(struct interrupt_frame* frame, u32 code_error)
 {
-    uint32_t faulting_address = get_cr2();
+    u32 faulting_address = get_cr2();
 
     int p = code_error & 0x1;
     int w = (code_error >> 1) & 0x1;
@@ -101,7 +101,7 @@ static void idt_page_fault(struct interrupt_frame* frame, uint32_t code_error)
     kernel_panic("Page fault");
 }
 
-static void idt_general_protection_fault(struct interrupt_frame* frame, uint32_t code_error)
+static void idt_general_protection_fault(struct interrupt_frame* frame, u32 code_error)
 {
     printf("General protection fault\n");
     int e = code_error & 0x1;
@@ -148,7 +148,7 @@ void interrupt_handler(int interrupt,struct interrupt_frame* frame)
     outb(0x20, 0x20);
 }
 
-void interrupt_handler_error(uint32_t error_code, int interrupt,struct interrupt_frame* frame)
+void interrupt_handler_error(u32 error_code, int interrupt,struct interrupt_frame* frame)
 {
     kernel_page();
     if (interrupt_callbacks_error[interrupt] != 0)
@@ -165,8 +165,8 @@ void interrupt_handler_error(uint32_t error_code, int interrupt,struct interrupt
 static void idt_set(int interrupt_no, void *address)
 {
     struct idt_desc *desc = &idt_descriptors[interrupt_no];
-    desc->offset_1 = (uint16_t)((uint32_t)address & 0xFFFF);
-    desc->offset_2 = (uint16_t)(((uint32_t)address >> 16) & 0xFFFF);
+    desc->offset_1 = (u16)((u32)address & 0xFFFF);
+    desc->offset_2 = (u16)(((u32)address >> 16) & 0xFFFF);
     desc->selector = KERNEL_CODE_SELECTOR;
     desc->zero = 0x00;
     desc->type_attr = 0xEE;
@@ -213,7 +213,7 @@ void idt_init()
 
     idtr_descriptor.limit = sizeof(idt_descriptors) - 1;
 
-    idtr_descriptor.base = (uint32_t)idt_descriptors;
+    idtr_descriptor.base = (u32)idt_descriptors;
 
     for (int i = 0; i < TOTAL_INTERRUPTS; i++)
     {

@@ -1,7 +1,8 @@
-#include "gdt.h"
-#include "kernel.h"
+#include <os/gdt.h>
+#include <os/types.h>
+#include <os/kernel.h>
 
-void encode_gdt_entry(uint8_t *target, struct gdt_struct source)
+void encode_gdt_entry(u8 *target, struct gdt_struct source)
 {
     if ((source.limit > 65536) && ((source.limit & 0xFFF) != 0xFFF))
     {
@@ -31,6 +32,6 @@ void gdt_struct_to_gdt(struct gdt_struct *gdt_struct, struct gdt *gdt, int total
 {
     for (int i = 0; i < total_entries; i++)
     {
-        encode_gdt_entry((uint8_t *)&gdt[i], gdt_struct[i]);
+        encode_gdt_entry((u8 *)&gdt[i], gdt_struct[i]);
     }
 }

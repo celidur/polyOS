@@ -13,7 +13,7 @@ struct path_part
     struct path_part *next;
 };
 
-struct path_root *pathparser_parse(const char *path, const char *cwd);
-void pathparser_free(struct path_root *root);
+struct path_root *path_parser_parse(const char *path, const char *cwd);
+void path_parser_free(struct path_root *root);
 
 #endif

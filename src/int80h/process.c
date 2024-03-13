@@ -1,9 +1,9 @@
-#include "process.h"
-#include "task/process.h"
-#include "task/task.h"
-#include "string/string.h"
-#include "status.h"
-#include "config.h"
+#include <os/int80/process.h>
+#include <os/process.h>
+#include <os/task.h>
+#include <os/string.h>
+#include <os/status.h>
+#include <os/config.h>
 
 void* int80h_command6_process_load_start(struct interrupt_frame *frame){
     void * file_user_ptr = (void*)task_get_stack_item(task_current(), 0);

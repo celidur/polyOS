@@ -1,15 +1,14 @@
 #ifndef PROCESS_H
 #define PROCESS_H
-#include <stdint.h>
-#include <stdbool.h>
-#include "task.h"
-#include "config.h"
-#include "loader/formats/elfloader.h"
+#include <os/config.h>
+#include <os/types.h>
+#include <os/task.h>
+#include <os/elfloader.h>
 
 #define PROCESS_FILETYPE_ELF 0
 #define PROCESS_FILETYPE_BINARY 1
 
-typedef unsigned char PROCESS_FILETYPE;
+typedef u8 PROCESS_FILETYPE;
 
 struct process_allocation{
     void* ptr;
@@ -28,7 +27,7 @@ struct process_argument{
 
 struct process
 {
-    uint16_t pid;
+    u16 pid;
     char filename[MAX_PATH];
     struct keyboard_buffer
     {
@@ -50,7 +49,7 @@ struct process
     };
     
     void *stack;   // physical address of the stack
-    uint32_t size; // size of the data pointed to by "ptr"
+    u32 size; // size of the data pointed to by "ptr"
 };
 
 int process_load(const char *filename, struct process **process);

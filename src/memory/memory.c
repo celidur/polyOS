@@ -1,5 +1,5 @@
-#include "memory.h"
-#include "heap/kheap.h"
+#include <os/memory.h>
+#include <os/kheap.h>
 
 void *memset(void *ptr, int c, size_t size)
 {

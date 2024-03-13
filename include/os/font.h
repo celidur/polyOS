@@ -1,7 +1,7 @@
 #ifndef FONT_H
 #define FONT_H
 
-#include <stdint.h>
+#include <os/types.h>
 
 
 enum vga_font{

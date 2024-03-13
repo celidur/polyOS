@@ -1,9 +1,9 @@
-#include "disk.h"
-#include "config.h"
-#include "memory/memory.h"
-#include "status.h"
-#include "io/io.h"
-#include <stdbool.h>
+#include <os/disk.h>
+#include <os/config.h>
+#include <os/memory.h>
+#include <os/status.h>
+#include <os/io.h>
+#include <os/types.h>
 
 static struct disk disks[MAX_DISKS];
 
@@ -19,15 +19,15 @@ static int disk_read_sector(int lba, int total, void *buf)
     unsigned short *ptr = (unsigned short *)buf;
     for (int b = 0; b < total; b++)
     {
-        char c = insb(0x1F7);
+        char c = inb(0x1F7);
         while (!(c & 0x08))
         {
-            c = insb(0x1F7);
+            c = inb(0x1F7);
         }
 
         for (int i = 0; i < 256; i++)
         {
-            *ptr = insw(0x1F0);
+            *ptr = inw(0x1F0);
             ptr++;
         }
     }

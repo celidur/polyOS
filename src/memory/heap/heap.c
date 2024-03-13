@@ -1,9 +1,7 @@
-#include "heap.h"
-#include "kernel.h"
-#include "status.h"
-#include "memory/memory.h"
-#include <stdbool.h>
-#include <stdint.h>
+#include <os/heap.h>
+#include <os/status.h>
+#include <os/memory.h>
+#include <os/types.h>
 
 static int heap_validate(void *ptr, void *end, struct heap_table *table)
 {
