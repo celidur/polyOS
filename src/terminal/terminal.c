@@ -210,7 +210,7 @@ int printf(const char *fmt, ...){
     const char* p;
     char* sval;
     int ival;
-    char buff[MAX_BUFFER];
+    char buff[MAX_BUFFER + 1];
     int i=0;
     
     va_start(ap, fmt);
@@ -283,7 +283,7 @@ void serial_printf(const char *fmt, ...){
     const char* p;
     char* sval;
     int ival;
-    char buff[MAX_BUFFER];
+    char buff[MAX_BUFFER + 1];
     int i=0;
 
     va_start(ap, fmt);

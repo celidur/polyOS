@@ -178,14 +178,14 @@ void* paging_get_physical_address(u32* directory, void* virtual_address){
 void print_paging_info(u32* directory){
     serial_printf("Paging info: \n");
     u32 flag = 0;
-    u32 start = -1;
-    u32 end = -1;
-    for(int i = 0; i < PAGING_PAGE_TABLE_SIZE; i++){
+    u32 start = 0xFFFFFFFF;
+    u32 end = 0;
+    for(u32 i = 0; i < PAGING_PAGE_TABLE_SIZE; i++){
         u32* entry = (u32*) ((u32)directory[i] & 0xFFFFF000);
-        for(int b = 0; b < PAGING_PAGE_TABLE_SIZE; b++){
+        for(u32 b = 0; b < PAGING_PAGE_TABLE_SIZE; b++){
             u32 flag2 = entry[b] & 31;
             if (flag2 != flag){
-                if (start != -1){
+                if (start != 0xFFFFFFFF){
                     serial_printf("0x%x - 0x%x: ", start, end);
                     if (flag & PAGING_IS_PRESENT){
                         serial_printf("PRESENT ");
@@ -210,7 +210,7 @@ void print_paging_info(u32* directory){
             end = (i * PAGING_PAGE_SIZE * PAGING_PAGE_TABLE_SIZE) + (b * PAGING_PAGE_SIZE) + 0xFFF;
         }
     }
-    if (start != -1){
+    if (start != 0xFFFFFFFF){
         serial_printf("0x%x - 0x%x: ", start, end);
         if (flag & PAGING_IS_PRESENT){
             serial_printf("PRESENT ");

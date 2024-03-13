@@ -1281,13 +1281,13 @@ void set_text_mode(enum screen_mode mode)
 	// (void)rows;
 	
 	/* tell the BIOS what we've done, so BIOS text output works OK */
-	*(uint16_t*)((0x40 << 4) + 0x4A) = cols; /* columns on screen */
-	*(uint16_t*)((0x40 << 4) + 0x4C) = cols * rows * 2; /* framebuffer size */
-	*(uint16_t*)((0x40 << 4) + 0x50) = 0; /* cursor pos'n */
-	*(uint8_t*)((0x40 << 4) + 0x60) = ht - 1; /* cursor shape */
-	*(uint8_t*)((0x40 << 4) + 0x61) = ht - 2;
-	*(uint8_t*)((0x40 << 4) + 0x84) = rows - 1; /* rows on screen - 1 */
-	*(uint8_t*)((0x40 << 4) + 0x85) = ht; /* char height */	
+	// *(uint16_t*)((0x40 << 4) + 0x4A) = cols; /* columns on screen */
+	// *(uint16_t*)((0x40 << 4) + 0x4C) = cols * rows * 2; /* framebuffer size */
+	// *(uint16_t*)((0x40 << 4) + 0x50) = 0; /* cursor pos'n */
+	// *(uint8_t*)((0x40 << 4) + 0x60) = ht - 1; /* cursor shape */
+	// *(uint8_t*)((0x40 << 4) + 0x61) = ht - 2;
+	// *(uint8_t*)((0x40 << 4) + 0x84) = rows - 1; /* rows on screen - 1 */
+	// *(uint8_t*)((0x40 << 4) + 0x85) = ht; /* char height */	
 	/* set white-on-black attributes for all text */
 
 	g_seg = get_fb_seg();

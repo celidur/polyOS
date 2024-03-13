@@ -7,7 +7,7 @@
 #include <os/gdt.h>
 #include <os/tss.h>
 #include <os/process.h>
-#include <os/int80h/int80.h>
+#include <os/int80/int80.h>
 #include <os/keyboard.h>
 #include <os/terminal.h>
 #include <os/serial.h>
@@ -110,7 +110,7 @@ void kernel_main()
 
     
     struct process *process = NULL;
-    int res = process_load_switch("0:/shell.elf", &process);
+    int res = process_load_switch("0:/bin/shell.elf", &process);
     if (res < 0)
     {
         kernel_panic("Failed to load process\n");
@@ -124,7 +124,7 @@ void kernel_main()
     print_paging_info(process->task->page_directory);
 
 
-    // int res = process_load_switch("0:/blank.elf", &process);
+    // int res = process_load_switch("0:/bin/blank.elf", &process);
     // if (res < 0)
     // {
     //     kernel_panic("Failed to load process\n");
@@ -135,7 +135,7 @@ void kernel_main()
     // arg.next = NULL;
     // process_inject_arguments(process, &arg);
 
-    // res = process_load_switch("0:/blank.elf", &process);
+    // res = process_load_switch("0:/bin/blank.elf", &process);
     // if (res < 0)
     // {
     //     kernel_panic("Failed to load process\n");

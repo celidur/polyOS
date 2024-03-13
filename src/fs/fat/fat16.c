@@ -6,6 +6,7 @@
 #include <os/kheap.h>
 #include <os/types.h>
 #include <os/memory.h>
+#include <os/config.h>
 
 
 #define FAT16_SIGNATURE 0x29
