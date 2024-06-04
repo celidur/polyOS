@@ -72,6 +72,9 @@ void kernel_main()
     // Initialize disks
     disk_search_and_init();
 
+    tree(0);
+
+
     // Initialize IDT
     idt_init();
 

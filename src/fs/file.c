@@ -161,16 +161,16 @@ out:
     return res;
 }
 
-int fread(void *ptr, u32 size, u32 nmemb, int fd)
+int fread(void *ptr, u32 size, int fd)
 {
-    if (size == 0 || nmemb == 0 || fd < 1)
+    if (size == 0 || fd < 1)
         return -EINVARG;
 
     struct file_descriptor *desc = file_get_descriptor(fd);
     if (!desc)
         return -EINVARG;
 
-    return desc->fs->read(desc->disk, desc->private, size, nmemb, (char *)ptr);
+    return desc->fs->read(desc->disk, desc->private, size, (char *)ptr);
 }
 
 int fseek(int fd, u32 offset, FILE_SEEK_MODE mode)
@@ -208,4 +208,18 @@ int fclose(int fd)
         file_free_descriptor(desc);
 
     return res;
+}
+
+void tree(int index)
+{
+    struct disk *disk = disk_get(index);
+    if (!disk)
+    {
+        return;
+    }
+    if (!disk->fs)
+    {
+        return;
+    }
+    disk->fs->tree(disk);
 }
