@@ -14,6 +14,7 @@ OBJ_FILES = $(BUILD_DIR)/kernel.asm.o \
 INCLUDES = -I./include
 FLAGS = -g -ffreestanding -falign-jumps -falign-functions -falign-labels -falign-loops -fstrength-reduce -fomit-frame-pointer -finline-functions -Wno-unused-function -fno-builtin -Werror -Wno-unused-label -Wno-cpp -Wno-unused-parameter -nostdlib -nostartfiles -nodefaultlibs -Wall -O0 -Iinc
 NASMFLAGS = -f elf -g
+# crosstoolng
 BUILDER = i686-elf-gcc
 LINKER = i686-elf-ld
 NASM = nasm
@@ -31,6 +32,7 @@ ifeq ($(OS), Darwin)
         mkdir /mnt/d && \
         mount -t vfat /workspace/bin/os.bin /mnt/d &&\
         cp -r /workspace/file/* /mnt/d && \
+		mv /mnt/d/hellofuuheuhduhfgnrjgnfuuheuhduffufuuheuhduhfgnrjgnjrngjnrguheuhduhfgnrjgnjrngjnrguuheuhduhfgnrjgnjrngjnrghfgnrjgnjrngjnrgfuuheuhduhfgnrjgnjrngjnhufeuhufuhduhfgnrjgnjrngjnrgfuuheuhduhfgnrjgnjrngjnrrgfuuheuhduhfgnrjgnjrngjnrgjrjnrjngekjgnkjrngudsdfdgdg.txt /mnt/d/hello.txt && \
         umount /mnt/d'
 else
 	# run mount-disk
@@ -72,8 +74,11 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 
 clean: user_programs_clean
 	rm -rf $(BIN_DIR) $(BUILD_DIR)
+	rm -rf ./file/bin/*.elf
 
 user_programs:
+	@mkdir -p ./file/bin
+
 	cd ./programs/stdlib && make all
 	cp ./programs/stdlib/stdlib.elf ./file/bin/stdlib.elf
 
