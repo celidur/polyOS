@@ -278,7 +278,7 @@ int printf(const char *fmt, ...){
     return 0;
 }
 
-void serial_printf(const char *fmt, ...){
+int serial_printf(const char *fmt, ...){
     va_list ap;
     const char* p;
     char* sval;
@@ -346,5 +346,5 @@ void serial_printf(const char *fmt, ...){
     va_end(ap);
 
     buff[i] = '\0';
-    serial_write(buff);
+    return serial_write(buff);
 }

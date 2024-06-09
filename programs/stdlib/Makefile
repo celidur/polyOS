@@ -1,39 +1,32 @@
-FILES = ./build/start.o ./build/start.asm.o ./build/polyos.asm.o ./build/polyos.o ./build/stdlib.o ./build/stdio.o ./build/memory.o ./build/string.o
-INCLUDES =-I./src
+SRC_DIR = ./src
+BUILD_DIR = ./build
+TARGET = ./stdlib.elf
+INCLUDES = -I./include
 FLAGS = -g -ffreestanding -falign-jumps -falign-functions -falign-labels -falign-loops -fstrength-reduce -fomit-frame-pointer -finline-functions -Wno-unused-function -fno-builtin -Werror -Wno-unused-label -Wno-cpp -Wno-unused-parameter -nostdlib -nostartfiles -nodefaultlibs -Wall -O3 -Iinc
 BUILDER = i686-elf-gcc
 LINKER = i686-elf-ld
+NASM = nasm
 
-all: ./build $(FILES) 
-	$(LINKER) -m elf_i386 -relocatable $(FILES) -o ./stdlib.elf
+C_SOURCES = $(wildcard $(SRC_DIR)/*.c)
+ASM_SOURCES = $(wildcard $(SRC_DIR)/*.asm)
+C_OBJS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES))
+ASM_OBJS = $(patsubst $(SRC_DIR)/%.asm, $(BUILD_DIR)/%.asm.o, $(ASM_SOURCES))
+OBJS = $(C_OBJS) $(ASM_OBJS)
 
-./build:
-	mkdir -p ./build
+all: $(BUILD_DIR)  $(TARGET)
 
-./build/start.asm.o: ./src/start.asm
-	nasm -f elf ./src/start.asm -o ./build/start.asm.o
+$(BUILD_DIR):
+	@mkdir -p $(BUILD_DIR)
 
-./build/start.o: ./src/start.c
-	$(BUILDER) $(FLAGS) $(INCLUDES) -std=gnu99 -c ./src/start.c -o ./build/start.o
+$(TARGET): $(OBJS)
+	$(LINKER) -m elf_i386 -relocatable $(OBJS) -o $(TARGET)
 
-./build/polyos.asm.o: ./src/polyos.asm
-	nasm -f elf ./src/polyos.asm -o ./build/polyos.asm.o
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+	$(BUILDER) $(FLAGS) $(INCLUDES) -std=gnu99 -c $< -o $@
 
-./build/polyos.o: ./src/polyos.c
-	$(BUILDER) $(FLAGS) $(INCLUDES) -std=gnu99 -c ./src/polyos.c -o ./build/polyos.o
-
-./build/stdlib.o: ./src/stdlib.c
-	$(BUILDER) $(FLAGS) $(INCLUDES) -std=gnu99 -c ./src/stdlib.c -o ./build/stdlib.o
-
-./build/stdio.o: ./src/stdio.c
-	$(BUILDER) $(FLAGS) $(INCLUDES) -std=gnu99 -c ./src/stdio.c -o ./build/stdio.o
-
-./build/memory.o: ./src/memory.c
-	$(BUILDER) $(FLAGS) $(INCLUDES) -std=gnu99 -c ./src/memory.c -o ./build/memory.o
-
-./build/string.o: ./src/string.c
-	$(BUILDER) $(FLAGS) $(INCLUDES) -std=gnu99 -c ./src/string.c -o ./build/string.o
+$(BUILD_DIR)/%.asm.o: $(SRC_DIR)/%.asm
+	$(NASM) -f elf $< -o $@
 
 clean:
-	if [ -d "./build" ]; then rm -rf ./build; fi
-	if [ -f "./stdlib.elf" ]; then rm -rf ./stdlib.elf; fi
+	if [ -d "$(BUILD_DIR)" ]; then rm -rf $(BUILD_DIR); fi
+	if [ -f "$(TARGET)" ]; then rm -rf $(TARGET); fi

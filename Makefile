@@ -32,7 +32,6 @@ ifeq ($(OS), Darwin)
         mkdir /mnt/d && \
         mount -t vfat /workspace/bin/os.bin /mnt/d &&\
         cp -r /workspace/file/* /mnt/d && \
-		mv /mnt/d/hellofuuheuhduhfgnrjgnfuuheuhduffufuuheuhduhfgnrjgnjrngjnrguheuhduhfgnrjgnjrngjnrguuheuhduhfgnrjgnjrngjnrghfgnrjgnjrngjnrgfuuheuhduhfgnrjgnjrngjnhufeuhufuhduhfgnrjgnjrngjnrgfuuheuhduhfgnrjgnjrngjnrrgfuuheuhduhfgnrjgnjrngjnrgjrjnrjngekjgnkjrngudsdfdgdg.txt /mnt/d/hello.txt && \
         umount /mnt/d'
 else
 	# run mount-disk
@@ -80,7 +79,6 @@ user_programs:
 	@mkdir -p ./file/bin
 
 	cd ./programs/stdlib && make all
-	cp ./programs/stdlib/stdlib.elf ./file/bin/stdlib.elf
 
 	cd ./programs/blank && make all
 	cp ./programs/blank/blank.elf ./file/bin/blank.elf
