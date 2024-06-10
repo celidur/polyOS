@@ -59,8 +59,7 @@ int printf(const char *fmt, ...){
                 buff[i++] = ival;
                 break;
             case 'x':
-                uint32_t xval = va_arg(ap, uint32_t);
-                sval = hex(xval);
+                sval = hex(va_arg(ap, uint32_t));
                 for (int j = 0; sval[j] != '\0'; j++){
                     if (i >= MAX_BUFFER - 1){
                         buff[i] = '\0';

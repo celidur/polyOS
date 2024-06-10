@@ -253,8 +253,7 @@ int printf(const char *fmt, ...){
                 buff[i++] = ival;
                 break;
             case 'x':
-                uint32_t ival = va_arg(ap, uint32_t);
-                sval = hex(ival);
+                sval = hex(va_arg(ap, uint32_t));
                 for (int j = 0; sval[j] != '\0'; j++){
                     if (i >= MAX_BUFFER){
                         buff[i] = '\0';
@@ -326,8 +325,7 @@ void serial_printf(const char *fmt, ...){
                 buff[i++] = ival;
                 break;
             case 'x':
-                uint32_t xval = va_arg(ap, uint32_t);
-                sval = hex(xval);
+                sval = hex(va_arg(ap, uint32_t));
                 for (int j = 0; sval[j] != '\0'; j++){
                     if (i >= MAX_BUFFER){
                         buff[i] = '\0';
