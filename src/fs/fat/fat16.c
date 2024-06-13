@@ -424,7 +424,6 @@ static int fat16_load_directory_entries(struct disk *disk, struct fat_item *pare
                 current = current->next;
             }
             struct fat_item item;
-            serial_printf("Loading entry: %s\n", entry->filename);
 
             item.type = fat16_type(&entry->alias);
             if (item.type == FAT_ITEM_TYPE_SUBDIRECTORY){
@@ -854,7 +853,7 @@ static struct fat_item *fat16_get_directory_entry(struct disk *disk, struct path
     struct path_part *next_part = path->next;
     while (next_part != NULL)
     {
-        if (current_item->type != FAT_FILE_SUBDIRECTORY)
+        if (current_item->type != FAT_FILE_SUBDIRECTORY && next_part->next != NULL)
             return NULL;
 
         current_item = fat16_find_item_in_directory(current_item->directory->items, next_part->part);
@@ -1010,13 +1009,13 @@ void print_fat16_tree(struct fat_dir_root_item_t *directory,struct disk *disk,in
         if (item->type == FAT_ITEM_TYPE_FILE)
         {
             for (int i = 0; i < depth; i++)
-                serial_printf("  ");
+                serial_printf("\t");
             serial_printf("%s\n", item->item->filename);
         }
         else if (item->type == FAT_ITEM_TYPE_SUBDIRECTORY)
         {
             for (int i = 0; i < depth; i++)
-                serial_printf("  ");
+                serial_printf("\t");
             char* filename = item->directory->self.filename;
             serial_printf("%s\n", filename);
             if (filename[0] == 0x2E && filename[1] == 0x00) {
