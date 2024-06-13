@@ -3,7 +3,6 @@
 #include <os/memory.h>
 #include <os/kheap.h>
 #include <os/status.h>
-#include <os/fat16.h>
 #include <os/string.h>
 #include <os/disk.h>
 #include <os/kernel.h>

@@ -76,4 +76,9 @@ int fclose(int fd);
 void tree(int index);
 struct filesystem *fs_resolve(struct disk *disk);
 
+/*
+FILE: fat16.c
+*/
+struct filesystem *fat16_init();
+
 #endif
