@@ -20,7 +20,7 @@ bitmap_t * bitmap_create(char * filename) {
     }
 
     void * buf = kmalloc(stat.size);
-    if(fread(buf, stat.size, 1, fd) < 0) {
+    if(fread(buf, stat.size, fd) != stat.size) {
         serial_printf("Fail to read %s\n", filename);
         kfree(buf);
         fclose(fd);

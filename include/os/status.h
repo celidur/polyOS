@@ -11,6 +11,7 @@
 #define EUNIMP 7
 #define EISTKN 8
 #define EINFORMAT 9
+#define ENOSPC 10
 
 
 #define ERROR(value) (void *)value

@@ -28,15 +28,16 @@ static int path_parser_get_drive_by_path(const char **path)
 
 static struct path_root *path_parser_create_root(int drive_no)
 {
-    struct path_root *root = kmalloc(sizeof(struct path_root));
+    struct path_root *root = kzalloc(sizeof(struct path_root));
     root->drive_no = drive_no;
     root->first = NULL;
     return root;
 }
 
+// TODO: add security checks to avoid buffer overflow
 static char *path_parser_get_path_part(const char **path)
 {
-    char *result_path_part = kmalloc(MAX_PATH);
+    char *result_path_part = kzalloc(MAX_PATH);
     int i = 0;
     while (**path != '/' && **path != '\0')
     {

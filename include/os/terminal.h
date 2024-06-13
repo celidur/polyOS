@@ -32,7 +32,7 @@ void print(const char *str);
 void terminal_initialize();
 void terminal_writechar(u8 c, color_t color);
 int printf(const char *fmt, ...);
-void serial_printf(const char *fmt, ...);
+int serial_printf(const char *fmt, ...);
 void clear_screen();
 void disable_cursor();
 

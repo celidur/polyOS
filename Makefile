@@ -79,7 +79,6 @@ user_programs:
 	@mkdir -p ./file/bin
 
 	cd ./programs/stdlib && make all
-	cp ./programs/stdlib/stdlib.elf ./file/bin/stdlib.elf
 
 	cd ./programs/blank && make all
 	cp ./programs/blank/blank.elf ./file/bin/blank.elf
