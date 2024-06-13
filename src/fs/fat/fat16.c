@@ -358,41 +358,58 @@ static int fat16_type(struct fat_entry_alias *item)
     return FAT_ITEM_TYPE_FILE;
 }
 
-static int fat16_load_directory_entries(struct disk *disk, struct fat_item *parent, struct fat_item *current_directory, struct raw_data *data, u32 size)
-{
-    if (!data || !parent || !current_directory || !fat16_is_directory(current_directory) || !fat16_is_directory(parent))
+static int fat16_get_entry(struct disk *disk, struct fat_item *current_directory,int offset ,struct raw_data *entry) {
+    if (!current_directory || !entry || !fat16_is_directory(current_directory))
         return -EINVARG;
 
-    if (current_directory->type == FAT_ITEM_TYPE_ROOT_DIRECTORY)
-        serial_printf("Loading root directory entries, size: %d\n", size);
-    else
-        serial_printf("Loading directory entries, size: %d\n", size);
+    if (current_directory->type == FAT_ITEM_TYPE_ROOT_DIRECTORY) {
+        struct fat_private *fat_private = disk->fs_private;
+        struct fat_header *header = &fat_private->header.primary_header;
+        struct disk_stream *stream = fat_private->directory_stream;
+        int root_directory_sector_pos = (header->fat_copies * header->sectors_per_fat) + header->reserved_sectors;
+        if (disk_streamer_seek(stream, fat16_sector_to_absolute(disk, root_directory_sector_pos) + offset) != ALL_OK)
+            return -EIO;
+
+        if (disk_streamer_read(stream, entry, sizeof(struct raw_data)) != ALL_OK)
+            return -EIO;
+    } else {
+        int cluster = fat32_get_first_cluster(&current_directory->directory->self);
+        if (fat16_read_internal(disk, cluster, offset, entry, sizeof(struct raw_data)) != ALL_OK)
+            return -EIO;
+    }
+
+    return 0;
+}
+
+static int fat16_load_directory_entries(struct disk *disk, struct fat_item *parent, struct fat_item *current_directory)
+{
+    if (!parent || !current_directory || !fat16_is_directory(current_directory) || !fat16_is_directory(parent))
+        return -EINVARG;
     
+    int res = 0;
     struct fat_dir_item_t *start = NULL;
     struct fat_dir_item_t *current = NULL;
     struct fat_entry_t *entry = NULL;
-    int i = 0;
-    while (i < size)
+    struct raw_data data;
+    int offset = 0;
+    while (true)
     {
-        struct fat_entry_alias *dir = &data[i].alias;
+        res = fat16_get_entry(disk, current_directory, offset, &data);
+        if (res != 0)
+            break;
+        offset += sizeof(struct raw_data);
+        struct fat_entry_alias *dir = &data.alias;
         if (dir->filename[0] == 0x00)
             break;
         if (dir->filename[0] == 0xE5)
-        {
-            i++;
             continue;
-        }
         if (!entry){
             entry = kzalloc(sizeof(struct fat_entry_t));
             if (!entry)
                 return -ENOMEM;
-            struct fat_private *private = disk->fs_private;
-            if (current_directory->type == FAT_ITEM_TYPE_ROOT_DIRECTORY)
-                entry->entry_offset = i * sizeof(struct raw_data) + fat16_sector_to_absolute(disk, current_directory->root_dir->sector_pos);
-            else
-                entry->entry_offset = fat16_cluster_to_sector(private ,fat16_get_cluster_for_offset(disk, fat32_get_first_cluster(&current_directory->directory->self), i * sizeof(struct raw_data)));
+            entry->entry_offset = offset;
         }
-        int res = fat16_read_entry(&data[i], entry);
+        res = fat16_read_entry(&data, entry);
         if (res == 2){
             if (!start){
                 start = kzalloc(sizeof(struct fat_dir_item_t));
@@ -415,34 +432,24 @@ static int fat16_load_directory_entries(struct disk *disk, struct fat_item *pare
                 if (!item.directory)
                     return -ENOMEM;
                 memcpy(&item.directory->self, entry, sizeof(struct fat_entry_t));
+                // only free for directories
+                kfree(entry);
                 item.directory->items = NULL;
                 // verify if is . or ..
-                if (entry->filename[0] == 0x2E){
-                    if (entry->filename[1] == 0x00){
+                if (item.directory->self.filename[0] == 0x2E){
+                    if (item.directory->self.filename[1] == 0x00){
                         item.directory->items = current_directory->directory->items;
                         current_directory->directory->items->nb_used++;
                         goto next;
-                    } else if (entry->filename[1] == 0x2E){
+                    } else if (item.directory->self.filename[1] == 0x2E){
                         item.directory->items = parent->directory->items;
                         parent->directory->items->nb_used++;
                         goto next;
                     }
                 }
-                
-                u32 size = entry->alias.filesize;
-                serial_printf("Size: %d\n", size);
-                u32 cluster = fat32_get_first_cluster(entry);
-                struct raw_data *data = kzalloc(size);
-                if (!data)
-                    return -ENOMEM;
 
-                if (fat16_read_internal(disk, cluster, 0x00, data, size) < 0){
-                    kfree(data);
-                    return -EIO;
-                }
-
-                if (fat16_load_directory_entries(disk, current_directory, &item, data, size) < 0){
-                    kfree(data);
+            
+                if (fat16_load_directory_entries(disk, current_directory, &item) < 0) {
                     return -EIO;
                 }
 
@@ -452,10 +459,8 @@ static int fat16_load_directory_entries(struct disk *disk, struct fat_item *pare
             }
 next:
             memcpy(&current->item, &item, sizeof(struct fat_item));
-            kfree(entry);
             entry = NULL;
         }
-        i++;
     }
     if (entry)
         kfree(entry);
@@ -488,30 +493,13 @@ static int fat16_get_root_directory(struct disk *disk, struct fat_private *fat_p
     int root_directory_sector_pos = (header->fat_copies * header->sectors_per_fat) + header->reserved_sectors;
     int root_dir_entries = fat_private->header.primary_header.root_dir_entries;
     int root_dir_size = root_dir_entries * sizeof(struct raw_data);
-    int total_sectors = root_dir_size / disk->sector_size;
-    if (root_dir_size % disk->sector_size)
-        total_sectors++;
+    directory->sector_pos = root_directory_sector_pos;
+    directory->ending_sector_pos = root_directory_sector_pos + (root_dir_size / disk->sector_size);
 
-    struct raw_data *data = kzalloc(root_dir_size);
-    if (!data)
-        return -ENOMEM;
-
-    struct disk_stream *stream = fat_private->directory_stream;
-    if (disk_streamer_seek(stream, fat16_sector_to_absolute(disk, root_directory_sector_pos)) != ALL_OK)
-        return -EIO;
-
-    if (disk_streamer_read(stream, data, root_dir_size) != ALL_OK)
-        return -EIO;
-
-    serial_printf("Root directory sector pos: %d\n", root_directory_sector_pos);
-    int res = fat16_load_directory_entries(disk, root, root, data, root_dir_entries);
-    serial_printf("res: %d\n", res);
-    kfree(data);
+    int res = fat16_load_directory_entries(disk, root, root);
     if (res < 0)
         return res;
     
-    directory->sector_pos = root_directory_sector_pos;
-    directory->ending_sector_pos = root_directory_sector_pos + (root_dir_size / disk->sector_size);
     return ALL_OK;
 }
 
@@ -1018,6 +1006,7 @@ void print_fat16_tree(struct fat_dir_root_item_t *directory,struct disk *disk,in
     while (current)
     {
         struct fat_item *item = &current->item;
+        current = current->next;
         if (item->type == FAT_ITEM_TYPE_FILE)
         {
             for (int i = 0; i < depth; i++)
@@ -1028,14 +1017,15 @@ void print_fat16_tree(struct fat_dir_root_item_t *directory,struct disk *disk,in
         {
             for (int i = 0; i < depth; i++)
                 serial_printf("  ");
-            serial_printf("%s\n", item->directory->self.filename);
-            if (item->directory->self.filename[0] == 0x2E && item->directory->self.filename[1] == 0x00)
+            char* filename = item->directory->self.filename;
+            serial_printf("%s\n", filename);
+            if (filename[0] == 0x2E && filename[1] == 0x00) {
                 continue;
-            if (item->directory->self.filename[0] == 0x2E && item->directory->self.filename[1] == 0x2E && item->directory->self.filename[2] == 0x00)
+            }
+            if (filename[0] == 0x2E && filename[1] == 0x2E && filename[2] == 0x00)
                 continue;
             print_fat16_tree(item->directory->items, disk, depth + 1);
         }
-        current = current->next;
     }
 }
 
