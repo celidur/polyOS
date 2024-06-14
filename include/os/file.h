@@ -43,6 +43,7 @@ typedef int (*FS_SEEK_FUNCTION)(void *fd_private, uint32_t offset, FILE_SEEK_MOD
 typedef int (*FS_STAT_FUNCTION)(void *fd_private, struct file_stat *stat);
 typedef int (*FS_CLOSE_FUNCTION)(void *fd_private);
 typedef void (*FS_TREE_FUNCTION)(void *fs_private);
+typedef int (*FS_WRITE_FUNCTION)(void *fs_private, void *fd_private, uint32_t size, void *in);
 
 struct filesystem
 {
@@ -50,6 +51,7 @@ struct filesystem
     FS_RESOLVE_FUNCTION resolve;
     FS_READ_FUNCTION read;
     FS_SEEK_FUNCTION seek;
+    FS_WRITE_FUNCTION write;
 
     FS_STAT_FUNCTION stat;
     FS_CLOSE_FUNCTION close;
@@ -69,9 +71,10 @@ struct file_descriptor
 
 void fs_init();
 int fopen(const char *filename, const char *str);
-int fread(void *ptr, uint32_t size, int index);
+int fread(int fd, void *ptr, uint32_t size);
 int fseek(int fd, uint32_t offset, FILE_SEEK_MODE mode);
 int fstat(int fd, struct file_stat *stat);
+int fwrite(int fd, void *ptr, u32 size);
 int fclose(int fd);
 void tree(int index);
 struct filesystem *fs_resolve(struct disk *disk);

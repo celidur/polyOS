@@ -167,5 +167,6 @@ static int fat16_seek(void *fd_private, u32 offset, FILE_SEEK_MODE mode);
 static int fat16_stat(void *fd_private, struct file_stat *stat);
 static int fat16_close(void *private);
 static void fat16_tree(void *fs_private);
+static int fat16_write(void *fd_private, void *descriptor, u32 size, void *in_ptr);
 
 #endif
