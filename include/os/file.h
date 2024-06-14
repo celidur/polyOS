@@ -36,13 +36,13 @@ struct file_stat
 
 struct disk;
 
-typedef void *(*FS_OPEN_FUNCTION)(struct disk *disk, struct path_part *path, FILE_MODE mode);
+typedef void *(*FS_OPEN_FUNCTION)(void *fs_private, struct path_part *path, FILE_MODE mode);
 typedef int (*FS_RESOLVE_FUNCTION)(struct disk *disk);
-typedef int (*FS_READ_FUNCTION)(struct disk *disk, void *private, uint32_t size, void *out);
-typedef int (*FS_SEEK_FUNCTION)(void *private, uint32_t offset, FILE_SEEK_MODE mode);
-typedef int (*FS_STAT_FUNCTION)(struct disk *disk, void *private, struct file_stat *stat);
-typedef int (*FS_CLOSE_FUNCTION)(void *private);
-typedef void (*FS_TREE_FUNCTION)(struct disk *disk);
+typedef int (*FS_READ_FUNCTION)(void *fs_private, void *fd_private, uint32_t size, void *out);
+typedef int (*FS_SEEK_FUNCTION)(void *fd_private, uint32_t offset, FILE_SEEK_MODE mode);
+typedef int (*FS_STAT_FUNCTION)(void *fd_private, struct file_stat *stat);
+typedef int (*FS_CLOSE_FUNCTION)(void *fd_private);
+typedef void (*FS_TREE_FUNCTION)(void *fs_private);
 
 struct filesystem
 {

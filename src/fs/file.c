@@ -135,7 +135,7 @@ int fopen(const char *filename, const char *str)
         goto out;
     }
 
-    void *descriptor_private_data = disk->fs->open(disk, root->first, mode);
+    void *descriptor_private_data = disk->fs->open(disk->fs_private, root->first, mode);
     if (ISERR(descriptor_private_data))
     {
         res = ERROR_I(descriptor_private_data);
@@ -169,7 +169,7 @@ int fread(void *ptr, u32 size, int fd)
     if (!desc)
         return -EINVARG;
 
-    return desc->fs->read(desc->disk, desc->private, size, (char *)ptr);
+    return desc->fs->read(desc->disk->fs_private, desc->private, size, (char *)ptr);
 }
 
 int fseek(int fd, u32 offset, FILE_SEEK_MODE mode)
@@ -187,7 +187,7 @@ int fstat(int fd, struct file_stat *stat)
     if (!desc)
         return -EIO;
 
-    return desc->fs->stat(desc->disk, desc->private, stat);
+    return desc->fs->stat(desc->private, stat);
 }
 
 static void file_free_descriptor(struct file_descriptor *desc)
@@ -220,5 +220,5 @@ void tree(int index)
     {
         return;
     }
-    disk->fs->tree(disk);
+    disk->fs->tree(disk->fs_private);
 }

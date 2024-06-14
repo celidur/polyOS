@@ -152,6 +152,7 @@ struct fat_private
 {
     struct fat_h header;
     struct fat_item root_directory;
+    int sector_size;
 
     struct disk_stream *cluser_read_stream;
     struct disk_stream *fat_read_stream;
@@ -160,11 +161,11 @@ struct fat_private
 };
 
 static int fat16_resolve(struct disk *disk);
-static void *fat16_open(struct disk *disk, struct path_part *path, FILE_MODE mode);
-static int fat16_read(struct disk *disk, void *descriptor, u32 size, void *out_ptr);
-static int fat16_seek(void *private, u32 offset, FILE_SEEK_MODE mode);
-static int fat16_stat(struct disk *disk, void *private, struct file_stat *stat);
+static void *fat16_open(void *fs_private, struct path_part *path, FILE_MODE mode);
+static int fat16_read(void *fs_private, void *descriptor, u32 size, void *out_ptr);
+static int fat16_seek(void *fd_private, u32 offset, FILE_SEEK_MODE mode);
+static int fat16_stat(void *fd_private, struct file_stat *stat);
 static int fat16_close(void *private);
-static void fat16_tree(struct disk *disk);
+static void fat16_tree(void *fs_private);
 
 #endif
