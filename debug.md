@@ -3,7 +3,7 @@
 ## First :
 
 - add-symbol-file ./build/kernelfull.o 0x100000
-- target remote | qemu-system-i386 -hda ./bin/os.bin -S -gdb stdio
+- target remote | qemu-system-x86_64 -hda ./bin/os.bin -S -gdb stdio
 
 ## view assembly code
 - layout asm

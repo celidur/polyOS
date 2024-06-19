@@ -36,10 +36,12 @@ struct disk_stream *disk_streamer_new(int disk_id)
 
 int disk_streamer_flush(struct disk_stream *streamer)
 {
-    if (streamer->cache->dirty)
+    if (streamer->cache->dirty && streamer->cache->sector != -1)
     {
+        serial_printf("Flushing sector %d\n", streamer->cache->sector);
         streamer->cache->dirty = false;
         int res = disk_write_block(streamer->disk, streamer->cache->sector, 1, streamer->cache->data);
+        serial_printf("Flushed sector %d\n", streamer->cache->sector);
         if (res < 0)
             return res;
     }
@@ -106,11 +108,14 @@ int disk_streamer_write(struct disk_stream *streamer, void *buf, int total)
     bool overflow = (offset + total_to_write) >= SECTOR_SIZE;
     int remaining = total;
 
+    // serial_printf("offset: %d, total_to_write: %d, overflow: %d\n", offset, total_to_write, overflow);
+
     if (overflow)
     {
         total_to_write -= (offset + total_to_write) - SECTOR_SIZE;
     }
 
+    serial_printf("Writing %d bytes to sector %d\n", total_to_write, sector);
     int res = disk_streamer_read_sector(streamer, sector);
     if (res < 0)
     {

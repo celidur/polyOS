@@ -508,6 +508,7 @@ static int fat16_update_fat_item_data(struct fat_private *private, struct fat_en
 
     struct fat_header *header = &private->header.primary_header;
     int root_directory_sector_pos = (header->fat_copies * header->sectors_per_fat) + header->reserved_sectors;
+    int root_directory_absolute_pos = fat16_sector_to_absolute(private, root_directory_sector_pos);
 
     int filename_size = strnlen(item->filename, MAX_FILENAME);
     int nb_entries = filename_size / 13 + (filename_size % 13 == 0 ? 0 : 1) + 1;
@@ -541,16 +542,17 @@ static int fat16_update_fat_item_data(struct fat_private *private, struct fat_en
             u32 free_entry = FAT16_ENTRY_FREE;
 
             if (item->parent->type == FAT_ITEM_TYPE_ROOT_DIRECTORY) {
-                int res = disk_streamer_seek(stream, fat16_sector_to_absolute(private, root_directory_sector_pos) + offset);
+                int res = disk_streamer_seek(stream, root_directory_absolute_pos + offset);
                 if (res < 0)
                     return res;
 
-                serial_printf("address: %x\n", fat16_sector_to_absolute(private, root_directory_sector_pos) + offset);
+                serial_printf("address: %x\n", root_directory_absolute_pos + offset);
                 res = disk_streamer_write(stream, &free_entry, sizeof(free_entry));
                 if (res < 0)
                     return res;
                 serial_printf("Write free entry\n");
             } else {
+                serial_printf("Cluster: %d\n", fat32_get_first_cluster(&item->parent->directory->self));
                 int cluster = fat32_get_first_cluster(&item->parent->directory->self);
                 int res = fat16_write_internal(private, cluster, offset, &free_entry, sizeof(free_entry));
                 if (res < 0)
@@ -780,8 +782,6 @@ static int fat16_write(void *fd_private, void *descriptor, u32 size, void *in_pt
 
     desc->pos += size;
     item->alias.filesize = desc->pos;
-    memset(item->filename, 0, MAX_FILENAME);
-    memcpy(item->filename, "test.txt", 8);
     res = fat16_update_fat_item_data(fd_private, item);
 
     return res;
