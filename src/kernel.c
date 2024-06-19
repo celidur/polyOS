@@ -73,6 +73,27 @@ void kernel_main()
     disk_search_and_init();
 
     tree(0);
+    char buf[256];
+
+    int fd = fopen("0:/hellobrhherherhberbehbrehbrhebrhebrhebrhb.txt", "a");
+    if (fd < 0)
+    {
+        kernel_panic("Failed to open file\n");
+    }
+
+    fread(fd, buf, 256);
+
+    serial_printf("buf: %s\n", buf);
+
+    fwrite(fd, "Hello, World!\n", 14);
+
+    fseek(fd, 0, FILE_SEEK_SET);
+
+    fread(fd, buf, 256);
+
+    serial_printf("buf: %s\n", buf);
+
+    fclose(fd);
 
 
     // Initialize IDT

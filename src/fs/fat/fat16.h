@@ -94,16 +94,10 @@ struct raw_data
     }; 
 };
 
-struct fat_entry_t
-{
-    struct fat_entry_alias alias;
-    char filename[MAX_FILENAME];
-    u32 entry_offset;
-    u32 nb_entries;
-};
 
 struct fat_dir_t;
 struct fat_root_dir_t;
+struct fat_entry_t;
 struct fat_item
 {
     FAT_ITEM_TYPE type;
@@ -120,6 +114,15 @@ struct fat_dir_item_t
     struct fat_item item;
     struct fat_dir_item_t *next;
     struct fat_dir_item_t *prev;
+};
+
+struct fat_entry_t
+{
+    struct fat_entry_alias alias;
+    char filename[MAX_FILENAME];
+    u32 entry_offset;
+    u32 nb_entries;
+    struct fat_item* parent;
 };
 
 struct fat_dir_root_item_t
