@@ -4,6 +4,7 @@
 #include <os/status.h>
 #include <os/io.h>
 #include <os/types.h>
+#include <os/streamer.h>
 
 static struct disk disks[MAX_DISKS];
 
@@ -64,6 +65,7 @@ static int disk_write_sector(int lba, int total, void *buf)
 
 void disk_search_and_init()
 {
+    disk_streamer_init();
     memset(&disks[0], 0, sizeof(struct disk));
     disks[0].type = DISK_TYPE_REAL;
     disks[0].sector_size = SECTOR_SIZE;
