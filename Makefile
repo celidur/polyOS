@@ -93,4 +93,7 @@ $(PROGRAM_NAMES): stdlib
 user_programs_clean:
 	$(foreach dir,$(PROGRAM_DIRS),$(MAKE) -C $(dir) clean;)
 
-.PHONY: all clean
+clean_log:
+	if [ -d "./log" ]; then rm ./log/*; fi
+
+.PHONY: all clean clean_log
