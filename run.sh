@@ -1,4 +1,10 @@
 # /bin/bash
-make clean
-sh ./build.sh
-qemu-system-x86_64 -hda ./bin/os.bin -serial stdio
+
+# compile if any argument is passed
+if [ "$1" ] || [ ! -f "./bin/os.bin" ]; then
+    # make clean
+    sh ./build.sh
+fi
+
+qemu-system-x86_64 -hda ./bin/os.bin -serial stdio 2>&1 | tee "log/log_$(date +'%Y%m%d_%H%M%S').txt"
+

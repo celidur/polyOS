@@ -517,21 +517,22 @@ static int fat16_update_fat_item_data(struct fat_private *private, struct fat_en
     for (int i = 0; i < nb_entries - 1; i++)
     {
         u8 *entry = data[i].data;
-        entry[0] = i + 1 + (i == nb_entries - 1 ? 0x40 : 0);
+        u8 index = nb_entries - i - 1;
+        entry[0] = index + (i == 0 ? 0x40 : 0);
         entry[11] = 0x0F;
-        entry[1]  = item->filename[i + 0];  
-        entry[3]  = item->filename[i + 1];  
-        entry[5]  = item->filename[i + 2];  
-        entry[7]  = item->filename[i + 3];  
-        entry[9]  = item->filename[i + 4];  
-        entry[14] = item->filename[i + 5];
-        entry[16] = item->filename[i + 6];
-        entry[18] = item->filename[i + 7];
-        entry[20] = item->filename[i + 8];
-        entry[22] = item->filename[i + 9];
-        entry[24] = item->filename[i + 10];
-        entry[28] = item->filename[i + 11];
-        entry[30] = item->filename[i + 12];
+        entry[1]  = item->filename[(index - 1) * 13 + 0];  
+        entry[3]  = item->filename[(index - 1) * 13 + 1];  
+        entry[5]  = item->filename[(index - 1) * 13 + 2];  
+        entry[7]  = item->filename[(index - 1) * 13 + 3];  
+        entry[9]  = item->filename[(index - 1) * 13 + 4];  
+        entry[14] = item->filename[(index - 1) * 13 + 5];
+        entry[16] = item->filename[(index - 1) * 13 + 6];
+        entry[18] = item->filename[(index - 1) * 13 + 7];
+        entry[20] = item->filename[(index - 1) * 13 + 8];
+        entry[22] = item->filename[(index - 1) * 13 + 9];
+        entry[24] = item->filename[(index - 1) * 13 + 10];
+        entry[28] = item->filename[(index - 1) * 13 + 11];
+        entry[30] = item->filename[(index - 1) * 13 + 12];
     }
     memcpy(&data[nb_entries - 1].alias, &item->alias, sizeof(struct fat_entry_alias));
     if (item->nb_entries != nb_entries)
@@ -572,11 +573,13 @@ static int fat16_update_fat_item_data(struct fat_private *private, struct fat_en
     }
 
     if (item->parent->type == FAT_ITEM_TYPE_ROOT_DIRECTORY) {
-        int res = disk_streamer_seek(stream, fat16_sector_to_absolute(private, root_directory_sector_pos) + item->entry_offset);
+        int res = disk_streamer_seek(stream, root_directory_absolute_pos + item->entry_offset);
         if (res < 0)
             return res;
 
-        res = disk_streamer_write(stream, data, total_size);
+        serial_printf("address: %x\n", root_directory_absolute_pos + item->entry_offset);
+
+        // res = disk_streamer_write(stream, data, total_size);
         if (res < 0)
             return res;
     } else {

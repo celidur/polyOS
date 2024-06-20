@@ -24,8 +24,11 @@ DIRECTORIES = $(BIN_DIR) $(sort $(dir $(OBJ_FILES)))
 
 OS := $(shell uname -s)
 
+PROGRAM_DIRS := $(wildcard ./programs/*/)
+PROGRAM_NAMES := $(filter-out stdlib, $(notdir $(patsubst %/,%,$(PROGRAM_DIRS))))
 
 all: $(DIRECTORIES) $(BIN_DIR)/os.bin user_programs
+	mkdir -p ./log
 	@echo "Mounting disk image..."
 ifeq ($(OS), Darwin)
 	docker run --rm -v "$(PWD):/workspace" --privileged alpine /bin/sh -c '\
@@ -75,20 +78,19 @@ clean: user_programs_clean
 	rm -rf $(BIN_DIR) $(BUILD_DIR)
 	rm -rf ./file/bin/*.elf
 
-user_programs:
+user_programs: ./file/bin $(PROGRAM_NAMES)
+
+./file/bin:
 	@mkdir -p ./file/bin
 
-	cd ./programs/stdlib && make all
+stdlib:
+	+$(MAKE) -C programs/stdlib all
 
-	cd ./programs/blank && make all
-	cp ./programs/blank/blank.elf ./file/bin/blank.elf
-
-	cd ./programs/shell && make all
-	cp ./programs/shell/shell.elf ./file/bin/shell.elf
+$(PROGRAM_NAMES): stdlib
+	+$(MAKE) -C programs/$@ all
+	cp programs/$@/$@.elf ./file/bin/$@.elf
 
 user_programs_clean:
-	cd ./programs/stdlib && make clean
-	cd ./programs/blank && make clean
-	cd ./programs/shell && make clean
+	$(foreach dir,$(PROGRAM_DIRS),$(MAKE) -C $(dir) clean;)
 
 .PHONY: all clean

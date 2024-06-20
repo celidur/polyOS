@@ -116,6 +116,7 @@ int disk_streamer_write(struct disk_stream *streamer, void *buf, int total)
     }
 
     serial_printf("Writing %d bytes to sector %d\n", total_to_write, sector);
+    serial_printf("start: %x, end: %x\n", streamer->pos, streamer->pos + total_to_write);
     int res = disk_streamer_read_sector(streamer, sector);
     if (res < 0)
     {

@@ -39,8 +39,9 @@ void kernel_panic(const char *msg)
     set_color(BLACK, LIGHT_RED);
     print("\nKERNEL PANIC: ");
     set_color(BLACK, RED);
-    printf(msg);
+    print(msg);
     disable_cursor();
+    serial_printf("KERNEL PANIC: %s\n", msg);
     while (1)
         ;
 }

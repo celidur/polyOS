@@ -218,6 +218,7 @@ int printf(const char *fmt, ...){
         if (i >= MAX_BUFFER){
             buff[i] = '\0';
             print(buff);
+            serial_write(buff);
             i = 0;
         }
         if (*p != '%'){
@@ -232,6 +233,7 @@ int printf(const char *fmt, ...){
                     if (i >= MAX_BUFFER){
                         buff[i] = '\0';
                         print(buff);
+                        serial_write(buff);
                         i = 0;
                     }
                     buff[i++] = sval[j];
@@ -243,6 +245,7 @@ int printf(const char *fmt, ...){
                     if (i >= MAX_BUFFER){
                         buff[i] = '\0';
                         print(buff);
+                        serial_write(buff);
                         i = 0;
                     }
                     buff[i++] = sval[j];
@@ -258,6 +261,7 @@ int printf(const char *fmt, ...){
                     if (i >= MAX_BUFFER){
                         buff[i] = '\0';
                         print(buff);
+                        serial_write(buff);
                         i = 0;
                     }
                     buff[i++] = sval[j];
@@ -273,6 +277,7 @@ int printf(const char *fmt, ...){
 
     buff[i] = '\0';
     print(buff);
+    serial_write(buff);
 
     return 0;
 }
