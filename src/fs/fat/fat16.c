@@ -540,18 +540,16 @@ static int fat16_update_fat_item_data(struct fat_private *private, struct fat_en
         for (int i = 0; i < item->nb_entries; i++)
         {
             u32 offset = item->entry_offset + (i * sizeof(struct raw_data));
-            u32 free_entry = FAT16_ENTRY_FREE;
+            u8 free_entry = FAT16_ENTRY_FREE;
 
             if (item->parent->type == FAT_ITEM_TYPE_ROOT_DIRECTORY) {
                 int res = disk_streamer_seek(stream, root_directory_absolute_pos + offset);
                 if (res < 0)
                     return res;
 
-                serial_printf("address: %x\n", root_directory_absolute_pos + offset);
                 res = disk_streamer_write(stream, &free_entry, sizeof(free_entry));
                 if (res < 0)
                     return res;
-                serial_printf("Write free entry\n");
             } else {
                 serial_printf("Cluster: %d\n", fat32_get_first_cluster(&item->parent->directory->self));
                 int cluster = fat32_get_first_cluster(&item->parent->directory->self);
@@ -577,9 +575,7 @@ static int fat16_update_fat_item_data(struct fat_private *private, struct fat_en
         if (res < 0)
             return res;
 
-        serial_printf("address: %x\n", root_directory_absolute_pos + item->entry_offset);
-
-        // res = disk_streamer_write(stream, data, total_size);
+        res = disk_streamer_write(stream, data, total_size);
         if (res < 0)
             return res;
     } else {

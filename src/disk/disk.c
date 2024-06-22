@@ -20,11 +20,12 @@ static int disk_read_sector(int lba, int total, void *buf)
     unsigned short *ptr = (unsigned short *)buf;
     for (int b = 0; b < total; b++)
     {
-        char c = inb(0x1F7);
-        while (!(c & 0x08))
-        {
-            c = inb(0x1F7);
-        }
+        int timeout = 100000;
+        do {
+            if (timeout-- == 0) {
+                return -EIO;
+            }
+        } while ((inb(0x1F7) & 0x08) == 0);
 
         for (int i = 0; i < 256; i++)
         {
@@ -47,11 +48,12 @@ static int disk_write_sector(int lba, int total, void *buf)
     unsigned short *ptr = (unsigned short *)buf;
     for (int b = 0; b < total; b++)
     {
-        char c = inb(0x1F7);
-        while (!(c & 0x08))
-        {
-            c = inb(0x1F7);
-        }
+        int timeout = 100000;
+        do {
+            if (timeout-- == 0) {
+                return -EIO;
+            }
+        } while ((inb(0x1F7) & 0x08) == 0);
 
         for (int i = 0; i < 256; i++)
         {
@@ -60,7 +62,6 @@ static int disk_write_sector(int lba, int total, void *buf)
         }
     }
     return 0;
-
 }
 
 void disk_search_and_init()

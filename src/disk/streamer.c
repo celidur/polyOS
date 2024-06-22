@@ -3,8 +3,7 @@
 #include <os/kheap.h>
 #include <os/memory.h>
 #include <os/config.h>
-
-#include <os/terminal.h>
+#include <os/kernel.h>
 
 
 static struct cache cache[MAX_DISKS];
@@ -38,12 +37,16 @@ int disk_streamer_flush(struct disk_stream *streamer)
 {
     if (streamer->cache->dirty && streamer->cache->sector != -1)
     {
-        serial_printf("Flushing sector %d\n", streamer->cache->sector);
         streamer->cache->dirty = false;
-        int res = disk_write_block(streamer->disk, streamer->cache->sector, 1, streamer->cache->data);
-        serial_printf("Flushed sector %d\n", streamer->cache->sector);
-        if (res < 0)
+        int timeout = 5;
+        int res = -1;
+        do {
+            res = disk_write_block(streamer->disk, streamer->cache->sector, 1, streamer->cache->data);
+        } while (res < 0 && timeout-- > 0);
+
+        if (res < 0){
             return res;
+        }
     }
     return 0;
 }
@@ -58,8 +61,15 @@ static int disk_streamer_read_sector(struct disk_stream *streamer, int sector)
 {
     if (streamer->cache->sector == sector)
         return 0;
-    disk_streamer_flush(streamer);
-    int res = disk_read_block(streamer->disk, sector, 1, streamer->cache->data);
+    int res = disk_streamer_flush(streamer);
+    if (res < 0)
+    {
+        kernel_panic("Failed to flush cache\n");
+    }
+    int timeout = 5;
+    do {
+        res = disk_read_block(streamer->disk, sector, 1, streamer->cache->data);
+    } while (res < 0 && timeout-- > 0);
     if (res < 0)
     {
         streamer->cache->sector = -1;
@@ -108,15 +118,11 @@ int disk_streamer_write(struct disk_stream *streamer, void *buf, int total)
     bool overflow = (offset + total_to_write) >= SECTOR_SIZE;
     int remaining = total;
 
-    // serial_printf("offset: %d, total_to_write: %d, overflow: %d\n", offset, total_to_write, overflow);
-
     if (overflow)
     {
         total_to_write -= (offset + total_to_write) - SECTOR_SIZE;
     }
 
-    serial_printf("Writing %d bytes to sector %d\n", total_to_write, sector);
-    serial_printf("start: %x, end: %x\n", streamer->pos, streamer->pos + total_to_write);
     int res = disk_streamer_read_sector(streamer, sector);
     if (res < 0)
     {
