@@ -1,0 +1,28 @@
+* fat16
+    - [ ] increase the directory sector if no space for new entry
+    - [ ] add file
+    - [ ] remove file
+    - [ ] add directory
+    - [ ] remove directory
+
+* SysCall
+    - [ ] open
+    - [ ] close
+    - [ ] read
+    - [ ] write
+    - [ ] lseek
+
+* Shell
+    - [ ] ls
+    - [ ] cd
+    - [ ] mkdir
+    - [ ] rmdir
+    - [ ] touch
+    - [ ] rm
+    - [ ] cat
+    - [ ] echo
+    - [ ] cp
+    - [ ] mv
+    - [ ] pwd
+
+    

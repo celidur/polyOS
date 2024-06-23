@@ -3,4 +3,4 @@
 .vscode
 *.elf
 **/.DS_Store
-./log
+log

@@ -48,6 +48,7 @@ void kernel_panic(const char *msg)
 
 void kernel_main()
 {
+    int res = 0;
     // demo_graphics();
     set_text_mode(VGA_90x60_TEXT);
 
@@ -74,25 +75,23 @@ void kernel_main()
     disk_search_and_init();
 
     tree(0);
-    char buf[256];
+    // char buf[256];
 
-    int fd = fopen("0:/hellobrhherherhberbehbrehbrhebrhebrhebrhb.txt", "a");
+    int fd = fopen("0:/f", "a");
+    if (fd < 0)
+    {
+        kernel_panic("Failed to open file\n");
+    }
+    fwrite(fd, "Hello, World!\n", 14);
+    fclose(fd);
+
+    fd = fopen("0:/f", "w");
     if (fd < 0)
     {
         kernel_panic("Failed to open file\n");
     }
 
-    fread(fd, buf, 256);
-
-    serial_printf("buf: %s\n", buf);
-
-    fwrite(fd, "Hello, World!\n", 14);
-
-    fseek(fd, 0, FILE_SEEK_SET);
-
-    fread(fd, buf, 256);
-
-    serial_printf("buf: %s\n", buf);
+    res = fwrite(fd, "Hello, World!\n", 14);
 
     fclose(fd);
 
@@ -135,7 +134,7 @@ void kernel_main()
 
     
     struct process *process = NULL;
-    int res = process_load_switch("0:/bin/shell.elf", &process);
+    res = process_load_switch("0:/bin/shell.elf", &process);
     if (res < 0)
     {
         kernel_panic("Failed to load process\n");
