@@ -107,7 +107,6 @@ static int fat16_release_cluster(struct fat_private *private, int cluster)
 
 static int fat16_release_chain(struct fat_private *private, int cluster)
 {
-    serial_printf("Releasing cluster %d\n", cluster);
     int next_cluster = fat16_get_next_cluster(private, cluster);
     if (next_cluster < 0)
         return next_cluster;
@@ -127,7 +126,6 @@ static int fat16_set_end_of_chain(struct fat_private *private, int cluster)
     if (!stream)
         return -EIO;
 
-    serial_printf("Setting end of chain for cluster %d\n", cluster);
     int res = fat16_release_chain(private, cluster);
     if (res < 0)
         return res;
@@ -316,9 +314,10 @@ static int fat16_get_entry(struct fat_private *fat_private, struct fat_item *cur
         struct fat_header *header = &fat_private->header.primary_header;
         struct disk_stream *stream = fat_private->directory_stream;
         int root_directory_sector_pos = (header->fat_copies * header->sectors_per_fat) + header->reserved_sectors;
-        if (offset + sizeof(struct raw_data) > fat_private->root_directory.root_dir->ending_sector_pos)
+        int root_directory_absolute_pos = fat16_sector_to_absolute(fat_private, root_directory_sector_pos);
+        if (root_directory_absolute_pos + offset + sizeof(struct raw_data) > fat16_sector_to_absolute(fat_private, current_directory->root_dir->ending_sector_pos))
             return -ENOMEM;
-        if (disk_streamer_seek(stream, fat16_sector_to_absolute(fat_private, root_directory_sector_pos) + offset) != ALL_OK)
+        if (disk_streamer_seek(stream, root_directory_absolute_pos + offset) != ALL_OK)
             return -EIO;
 
         if (disk_streamer_read(stream, entry, sizeof(struct raw_data)) != ALL_OK)
@@ -453,8 +452,6 @@ static int fat16_get_root_directory(struct fat_private *fs_private)
     int res = fat16_load_directory_entries(fs_private, root, root);
     if (res < 0)
         return res;
-
-    serial_printf("Cluser size %d\n", fat16_get_cluster_size(fs_private));
     
     return ALL_OK;
 }
@@ -513,8 +510,6 @@ static int fat16_write_internal_to_stream(struct fat_private *private, struct di
     if (cluster_use < 0)
         return cluster_use;
 
-    serial_printf("Cluster use: %d\n", cluster_use);
-
     int cluster_offset = offset % cluster_size;
 
     int starting_sector = fat16_cluster_to_sector(private, cluster_use);
@@ -544,7 +539,7 @@ static int fat16_write_internal(struct fat_private *private, int starting_cluste
 
 // For now it will not allocate more space in directory if not enough
 static int fat16_get_free_item_entry(struct fat_private *private, struct fat_item *parent, int number) {
-    if (fat16_is_directory(parent))
+    if (!fat16_is_directory(parent))
         return -EINVARG;
 
     struct disk_stream *stream = private->directory_stream;
@@ -574,6 +569,45 @@ static int fat16_get_free_item_entry(struct fat_private *private, struct fat_ite
 
         offset += sizeof(struct raw_data);
     }
+}
+
+static int fat16_release_item_entry(struct fat_private *private, struct fat_item *parent, int offset, int number){
+    if (!fat16_is_directory(parent))
+        return -EINVARG;
+
+    struct fat_header *header = &private->header.primary_header;
+    int root_directory_sector_pos = (header->fat_copies * header->sectors_per_fat) + header->reserved_sectors;
+    int root_directory_absolute_pos = fat16_sector_to_absolute(private, root_directory_sector_pos);
+
+    struct disk_stream *stream = private->directory_stream;
+    if (!stream)
+        return -EIO;
+
+    for (int i = 0; i < number; i++)
+    {
+        u32 offset = offset + (i * sizeof(struct raw_data));
+        u8 free_entry = FAT16_ENTRY_FREE;
+
+        if (parent->type == FAT_ITEM_TYPE_ROOT_DIRECTORY) {
+            int res = disk_streamer_seek(stream, root_directory_absolute_pos + offset);
+            if (res < 0)
+                return res;
+
+            if (root_directory_absolute_pos + offset + sizeof(free_entry) > fat16_sector_to_absolute(private, parent->root_dir->ending_sector_pos))
+                return -ENOMEM;
+
+            res = disk_streamer_write(stream, &free_entry, sizeof(free_entry));
+            if (res < 0)
+                return res;
+        } else {
+            serial_printf("Cluster: %d\n", fat32_get_first_cluster(&parent->directory->self));
+            int cluster = fat32_get_first_cluster(&parent->directory->self);
+            int res = fat16_write_internal(private, cluster, offset, &free_entry, sizeof(free_entry));
+            if (res < 0)
+                return res;
+        }
+    }
+    return ALL_OK;
 }
 
 // TODO: Implement
@@ -612,34 +646,14 @@ static int fat16_update_fat_item_data(struct fat_private *private, struct fat_en
         entry[30] = item->filename[(index - 1) * 13 + 12];
     }
     memcpy(&data[nb_entries - 1].alias, &item->alias, sizeof(struct fat_entry_alias));
+
     if (item->nb_entries != nb_entries)
     {
-        for (int i = 0; i < item->nb_entries; i++)
-        {
-            u32 offset = item->entry_offset + (i * sizeof(struct raw_data));
-            u8 free_entry = FAT16_ENTRY_FREE;
-
-            if (item->parent->type == FAT_ITEM_TYPE_ROOT_DIRECTORY) {
-                int res = disk_streamer_seek(stream, root_directory_absolute_pos + offset);
-                if (res < 0)
-                    return res;
-
-                res = disk_streamer_write(stream, &free_entry, sizeof(free_entry));
-                if (res < 0)
-                    return res;
-            } else {
-                serial_printf("Cluster: %d\n", fat32_get_first_cluster(&item->parent->directory->self));
-                int cluster = fat32_get_first_cluster(&item->parent->directory->self);
-                int res = fat16_write_internal(private, cluster, offset, &free_entry, sizeof(free_entry));
-                if (res < 0)
-                    return res;
-            }
-        }
-    }   
+        fat16_release_item_entry(private, item->parent, item->entry_offset, item->nb_entries);
+    }
     
     if (item->nb_entries < nb_entries)
     {
-        serial_printf("Need to add some entries\n");
         item->entry_offset = fat16_get_free_item_entry(private, item->parent, nb_entries);
         if (item->entry_offset < 0)
             return item->entry_offset;
@@ -884,6 +898,30 @@ static int fat16_close(void *private)
     kfree(private);
     return ALL_OK;
 }
+
+static int fat16_remove(void *fs_private, struct path_part *path)
+{
+    struct fat_private *private = fs_private;
+    struct fat_item *item = fat16_get_directory_entry(private, path);
+    if (!item)
+        return -EBADPATH;
+
+    if (item->type != FAT_ITEM_TYPE_FILE)
+        return -EINVARG;
+
+    struct fat_entry_t *entry = item->item;
+    int res = fat16_release_chain(private, fat32_get_first_cluster(entry));
+    if (res < 0)
+        return res;
+
+    res = fat16_release_item_entry(private, item->item->parent, item->item->entry_offset, item->item->nb_entries);
+    if (res < 0)
+        return res;
+
+    return ALL_OK;
+}
+
+
 
 static void print_fat16_tree(struct fat_dir_root_item_t *directory,int depth) {
     if (!directory)

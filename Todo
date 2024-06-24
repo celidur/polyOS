@@ -1,5 +1,6 @@
 * fat16
     - [ ] increase the directory sector if no space for new entry
+    - [x] find new entry for file if rename it with longer name
     - [ ] add file
     - [ ] remove file
     - [ ] add directory
@@ -25,4 +26,3 @@
     - [ ] mv
     - [ ] pwd
 
-    

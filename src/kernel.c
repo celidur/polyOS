@@ -77,22 +77,12 @@ void kernel_main()
     tree(0);
     // char buf[256];
 
-    int fd = fopen("0:/f", "a");
+    int fd = fopen("0:/hello.txt", "a");
     if (fd < 0)
     {
         kernel_panic("Failed to open file\n");
     }
     fwrite(fd, "Hello, World!\n", 14);
-    fclose(fd);
-
-    fd = fopen("0:/f", "w");
-    if (fd < 0)
-    {
-        kernel_panic("Failed to open file\n");
-    }
-
-    res = fwrite(fd, "Hello, World!\n", 14);
-
     fclose(fd);
 
 
