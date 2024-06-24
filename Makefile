@@ -2,7 +2,6 @@ BIN_DIR = ./bin
 BUILD_DIR = ./build
 SRC_DIR = ./src
 
-
 FILES_ASM = $(shell find $(SRC_DIR) -type f -name '*.asm' ! -name 'boot.asm')
 FILES_C = $(shell find $(SRC_DIR) -type f -name '*.c')
 
@@ -18,7 +17,6 @@ NASMFLAGS = -f elf -g
 BUILDER = i686-elf-gcc
 LINKER = i686-elf-ld
 NASM = nasm
-
 
 DIRECTORIES = $(BIN_DIR) $(sort $(dir $(OBJ_FILES)))
 
@@ -54,11 +52,18 @@ $(DIRECTORIES):
 
 $(BIN_DIR)/os.bin: $(BIN_DIR)/boot.bin $(BIN_DIR)/kernel.bin
 	@rm -f $@
-	dd if=$(BIN_DIR)/boot.bin >> $@
-	dd if=$(BIN_DIR)/kernel.bin >> $@
-	dd if=/dev/zero bs=1048576 count=16 >> $@
+	@dd if=$(BIN_DIR)/boot.bin >> $@
+	@dd if=$(BIN_DIR)/kernel.bin >> $@
+	@echo "Modifying ReservedSectors in boot.bin..."
+	@size_in_bytes=$(shell wc -c < $(BIN_DIR)/kernel.bin | awk '{print $$1}') && \
+	size_in_sectors=$$((($$size_in_bytes + 1023) / 512)) && \
+	printf "Calculated size_in_sectors: 0x%04X\n" $$size_in_sectors && \
+	low_byte=$$(printf '%04X' $$size_in_sectors | cut -c3-4) && \
+	high_byte=$$(printf '%04X' $$size_in_sectors | cut -c1-2) && \
+	printf "\x$$low_byte" | dd of=$@ bs=1 seek=14 count=1 conv=notrunc && \
+	printf "\x$$high_byte" | dd of=$@ bs=1 seek=15 count=1 conv=notrunc
+	@dd if=/dev/zero bs=1048576 count=16 >> $@
 	@echo "OS image created."
-
 
 $(BIN_DIR)/kernel.bin: $(BIN_DIR)/ $(OBJ_FILES) user_programs
 	$(LINKER) -g -relocatable $(OBJ_FILES) -o $(BUILD_DIR)/kernelfull.o
@@ -72,7 +77,6 @@ $(BUILD_DIR)/%.asm.o: $(SRC_DIR)/%.asm
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	$(BUILDER) $(INCLUDES) $(FLAGS) -std=gnu99 -c $< -o $@
-
 
 clean: user_programs_clean
 	rm -rf $(BIN_DIR) $(BUILD_DIR)

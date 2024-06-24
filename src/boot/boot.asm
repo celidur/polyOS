@@ -12,7 +12,7 @@ _start:
 OEMIdentifier     db "PolyOS  "
 BytesPerSector    dw 0x200
 SectorsPerCluster db 0x80
-ReservedSectors   dw 0x00FF
+ReservedSectors   dw 0xFFFF
 FATCopies         db 0x02
 RootDirEntries    dw 0x40
 NumSectors        dw 0x00
