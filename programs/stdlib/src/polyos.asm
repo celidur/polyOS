@@ -15,6 +15,13 @@ global print_memory:function
 global remove_last_char:function
 global clear_screen:function
 
+global fopen:function
+global fread:function
+global fwrite:function
+global fseek:function
+global fstat:function
+global fclose:function
+
 ; void print(char *str)
 print:
     push ebp
@@ -134,5 +141,79 @@ clear_screen:
     mov ebp, esp
     mov eax, 12 ; Command clear_screen
     int 0x80
+    pop ebp
+    ret
+
+; int fopen(const char *filename, const char *mode)
+fopen:
+    push ebp
+    mov ebp, esp
+    mov eax, 13 ; Command fopen
+    push dword [ebp+12] ; filename
+    push dword [ebp+8] ; mode
+    int 0x80
+    add esp, 8
+    pop ebp
+    ret
+
+; int fread(int fd, void *buf, size_t size)
+fread:
+    push ebp
+    mov ebp, esp
+    mov eax, 14 ; Command fread
+    push dword [ebp+16] ; fd
+    push dword [ebp+12] ; buf
+    push dword [ebp+8] ; size
+    int 0x80
+    add esp, 12
+    pop ebp
+    ret
+
+; int fwrite(int fd, void *buf, size_t size)
+fwrite:
+    push ebp
+    mov ebp, esp
+    mov eax, 15 ; Command fwrite
+    push dword [ebp+16] ; fd
+    push dword [ebp+12] ; buf
+    push dword [ebp+8] ; size
+    int 0x80
+    add esp, 12
+    pop ebp
+    ret
+
+; int fseek(int fd, int offset, FILE_SEEK_MODE mode)
+fseek:
+    push ebp
+    mov ebp, esp
+    mov eax, 16 ; Command fseek
+    push dword [ebp+16] ; fd
+    push dword [ebp+12] ; offset
+    push dword [ebp+8] ; mode
+    int 0x80
+    add esp, 12
+    pop ebp
+    ret
+
+; int fstat(int fd, struct stat *stat)
+fstat:
+    push ebp
+    mov ebp, esp
+    mov eax, 17 ; Command fstat
+    push dword [ebp+12] ; fd
+    push dword [ebp+8] ; stat
+    int 0x80
+    add esp, 8
+    pop ebp
+    ret
+
+; int fclose(int fd)
+fclose:
+    push ebp
+    mov ebp, esp
+    mov eax, 18 ; Command fclose
+    push dword [ebp+8] ; fd
+    int 0x80
+    add esp, 4
     pop ebp
     ret

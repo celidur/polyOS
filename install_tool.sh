@@ -1,7 +1,22 @@
 # /bin/bash
-# supposing that we using apt 
-sudo apt-get update
-sudo apt-get install -y nasm build-essential bison flex libgmp3-dev libmpc-dev libmpfr-dev texinfo libisl-dev qemu-system-x86
+OS=$(uname)
+if [ -f /etc/apt/sources.list ]; then
+    echo "Detected Ubuntu or Debian"
+    sudo apt-get update
+    sudo apt-get install -y nasm build-essential bison flex libgmp3-dev libmpc-dev libmpfr-dev texinfo libisl-dev qemu-system-x86 make
+elif [  "$OS" = "Darwin" ]; then
+    echo "Detected macOS"
+    if ! command -v brew > /dev/null 2>&1; then
+        echo "Installing brew"
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    fi
+    brew list i686-elf-gcc &>/dev/null || brew install i686-elf-gcc
+    brew list qemu &>/dev/null || brew install qemu
+    exit 0
+else
+    echo "Unsupported operating system"
+    exit 1
+fi
 
 export PREFIX="$HOME/opt/cross"
 export TARGET=i686-elf

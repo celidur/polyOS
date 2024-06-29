@@ -775,6 +775,8 @@ static void *fat16_open(void *fs_private, struct path_part *path, FILE_MODE mode
         descriptor->item = NULL;
         serial_printf("Creating file %s\n", path->part);
         // TODO: Create file
+        kfree(descriptor);
+        return ERROR(-EBADPATH);
     }
 
     if (descriptor->item->type != FAT_ITEM_TYPE_FILE)

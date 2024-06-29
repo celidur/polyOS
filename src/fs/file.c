@@ -6,6 +6,7 @@
 #include <os/string.h>
 #include <os/disk.h>
 #include <os/kernel.h>
+#include <os/terminal.h>
 
 static struct filesystem *filesystems[MAX_FILESYSTEMS];
 static struct file_descriptor *file_descriptors[MAX_FILE_DESCRIPTORS];
@@ -154,9 +155,6 @@ int fopen(const char *filename, const char *str)
     res = desc->index;
 
 out:
-
-    if (res < 0)
-        res = 0;
     return res;
 }
 
