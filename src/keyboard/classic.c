@@ -7,6 +7,7 @@
 
 #define SHIFT_LEFT 0x2A
 #define SHIFT_RIGHT 0x36
+#define SHIFT_LOCK 0x3A
 #define CTRL 0x1D
 
 
@@ -104,11 +105,12 @@ void classic_keyboard_handle_interrupt() {
     inb(KEYBOARD_INPUT_PORT);
 
     if (scancode & CLASSIC_KEYBOARD_KEY_RELEASED) {
+        scancode &= ~CLASSIC_KEYBOARD_KEY_RELEASED;
         if (scancode == SHIFT_LEFT) {
-            classic_keyboard.shift &= 0x02;
+            classic_keyboard.shift &= ~0x01;
         }
         else if (scancode == SHIFT_RIGHT) {
-            classic_keyboard.shift &= 0x01;
+            classic_keyboard.shift &= ~0x02;
         }
         else if (scancode == CTRL) {
             classic_keyboard.ctrl = 0;
@@ -125,6 +127,9 @@ void classic_keyboard_handle_interrupt() {
     }
     else if (scancode == CTRL) {
         classic_keyboard.ctrl = 1;
+        return;
+    } else if (scancode == SHIFT_LOCK) {
+        classic_keyboard.shift ^= 0x04;
         return;
     }
     
