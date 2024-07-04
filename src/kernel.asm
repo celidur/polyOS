@@ -2,6 +2,7 @@
 global _start
 extern kernel_main
 global kernel_registers
+global halt
 
 CODE_SEG equ 0x08
 DATA_SEG equ 0x10
@@ -42,5 +43,9 @@ kernel_registers:
     mov fs, ax
     mov gs, ax
     ret
+
+halt:
+    hlt
+    jmp $
 
 times 512-($-$$) db 0

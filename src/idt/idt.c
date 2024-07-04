@@ -200,6 +200,9 @@ void int80h_register_command(int command_id, INT80H_COMMAND handler)
     {
         kernel_panic("Invalid command id\n");
     }
+    if (int80h_commands[command_id] == handler)
+        return;
+
     if (int80h_commands[command_id])
     {
         kernel_panic("Command already registered\n");

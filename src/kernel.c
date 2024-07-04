@@ -14,6 +14,9 @@
 #include <os/vga.h>
 #include <os/bitmap.h>
 
+#include <os/io.h>
+#include <os/idt.h>
+
 struct tss tss;
 static page_t *kernel_chunk = 0;
 struct gdt gdt_real[TOTAL_GDT_SEGMENTS];
@@ -101,6 +104,16 @@ static void boot_loadinfo()
     set_text_mode(VGA_90x60_TEXT);
 }
 
+void reboot()
+{
+    uint8_t good = 0x02;
+    disable_interrupts();
+    while (good & 0x02)
+        good = inb(0x64);
+    serial_printf("Rebooting\n");
+    outb(0x64, 0xFE);
+    halt();
+}
 // static void debug()
 // {
 //     set_color(BLACK, LIGHT_GREEN);
@@ -122,6 +135,7 @@ void kernel_main()
     int res = 0;
 
     kernel_init();
+    serial_printf("Kernel initialized\n");
 
     boot_loadinfo();
     
