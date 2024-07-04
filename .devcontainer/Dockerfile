@@ -86,13 +86,7 @@ RUN mkdir -p /usr/share/novnc && \
 
 # Configure x11vnc and noVNC
 COPY setup-vnc.sh /setup-vnc.sh
-
-RUN chmod +x /setup-vnc.sh 
-
-# # Copy and set up OpenRC service
-# COPY my-xvfb /etc/init.d/my-xvfb
-# RUN chmod +x /etc/init.d/my-xvfb && \
-#     rc-update add my-xvfb default
+RUN chmod +x /setup-vnc.sh
 
 # Verify installation
 RUN $TARGET-gcc --version && \

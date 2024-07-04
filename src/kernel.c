@@ -87,6 +87,8 @@ static void kernel_init()
 
     // Initialize keyboard
     keyboard_init();
+
+    set_text_mode(VGA_90x60_TEXT);
 }
 
 static void boot_loadinfo()
@@ -110,7 +112,7 @@ void reboot()
     disable_interrupts();
     while (good & 0x02)
         good = inb(0x64);
-    serial_printf("Rebooting\n");
+    serial_printf("Rebooting...\n");
     outb(0x64, 0xFE);
     halt();
 }
