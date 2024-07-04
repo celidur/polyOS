@@ -204,6 +204,11 @@ int process_load_for_slot(const char *filename, struct process **process, int pr
     *process = _process;
     processes[process_slot] = _process;
 
+    struct command_argument args;
+    args.next = NULL;
+    strncpy(args.argument, filename + 3, sizeof(args.argument));
+
+    res = process_inject_arguments(_process, &args);
 out:
     if (ISERR(res))
     {
@@ -386,6 +391,9 @@ int process_inject_arguments(struct process* process, struct command_argument* r
         current = current->next;
     }
     process->arguments.argc = argc;
+    if (process->arguments.argv) {
+        kfree(process->arguments.argv);
+    }
     process->arguments.argv = argv;
     return ALL_OK;
 }
