@@ -2,6 +2,7 @@
 
 section .asm
 
+global serial:function
 global print:function
 global polyos_getkey:function
 global polyos_putchar:function
@@ -21,6 +22,17 @@ global fwrite:function
 global fseek:function
 global fstat:function
 global fclose:function
+
+; void serial(char *str)
+serial:
+    push ebp
+    mov ebp, esp
+    push dword [ebp+8]
+    mov eax, 0 ; Command serial
+    int 0x80
+    add esp, 4
+    pop ebp
+    ret
 
 ; void print(char *str)
 print:

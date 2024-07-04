@@ -3,6 +3,15 @@
 #include <os/keyboard.h>
 #include <os/terminal.h>
 
+void *int80h_command0_serial(struct interrupt_frame *frame)
+{
+    void *user_memoire = task_get_stack_item(task_current(), 0);
+    char buff[1024];
+    copy_string_from_task(task_current(), user_memoire, buff, 1024);
+    serial_printf(buff);
+    return 0;
+}
+
 void *int80h_command1_print(struct interrupt_frame *frame)
 {
     void *user_memoire = task_get_stack_item(task_current(), 0);

@@ -16,6 +16,7 @@ struct process_arguments {
     char **argv;
 };
 
+void serial(char *str);
 void print(char *str);
 int polyos_getkey();
 int polyos_getkeyblock();

@@ -24,6 +24,7 @@ struct file_stat
 
 int putchar(int c);
 int printf(const char *fmt, ...);
+int serial_printf(const char *fmt, ...);
 
 int fopen(const char *filename, const char *mode);
 int fread(int fd, void *ptr, int size);
