@@ -1,0 +1,25 @@
+{
+    "name": "Cross Compiler Dev Container",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.shell.linux": "/bin/sh"
+            },
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vscode.makefile-tools"
+            ]
+        }
+    },
+    "forwardPorts": [
+        8080 // noVNC port
+    ],
+    "postCreateCommand": "echo 'Dev container setup complete!'",
+    "postStartCommand": "/setup-vnc.sh",
+    "runArgs": [
+        "--privileged"
+    ]
+}
