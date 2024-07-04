@@ -32,5 +32,6 @@ void polyos_exit();
 void print_memory();
 void remove_last_char();
 void clear_screen();
+void reboot();
 
 #endif

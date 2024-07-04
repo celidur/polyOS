@@ -22,6 +22,7 @@ enum SystemCommands
     SYSTEM_COMMAND16_SEEK_FILE,
     SYSTEM_COMMAND17_STAT_FILE,
     SYSTEM_COMMAND18_CLOSE_FILE,
+    SYSTEM_COMMAND19_REBOOT
 };
 
 void int80h_register_commands();

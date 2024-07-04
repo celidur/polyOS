@@ -26,9 +26,9 @@ int main(int argc, char **argv)
             printf("malloc: %x\n", (uint32_t)ptr);
         } else if (strncmp(buffer, "clear", 6) == 0){
             clear_screen();
-        }
-        
-        else if (polyos_system_run(buffer) < 0){
+        } else if (strncmp(buffer, "reboot", 7) == 0){
+            reboot();
+        } else if (polyos_system_run(buffer) < 0){
             printf("Command not found\n");
         }
     }

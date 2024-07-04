@@ -16,6 +16,8 @@ global print_memory:function
 global remove_last_char:function
 global clear_screen:function
 
+global reboot:function
+
 global fopen:function
 global fread:function
 global fwrite:function
@@ -228,4 +230,10 @@ fclose:
     int 0x80
     add esp, 4
     pop ebp
+    ret
+
+; void reboot()
+reboot:
+    mov eax, 19 ; Command reboot
+    int 0x80
     ret

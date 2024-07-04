@@ -1,5 +1,5 @@
-#ifndef IO_H
-#define IO_H
+#ifndef INT80_IO_H
+#define INT80_IO_H
 
 struct interrupt_frame;
 void *int80h_command0_serial(struct interrupt_frame *frame);
