@@ -1,17 +1,38 @@
-* fat16
-    - [ ] increase the directory sector if no space for new entry
-    - [x] find new entry for file if rename it with longer name
-    - [ ] add file
-    - [ ] remove file
-    - [ ] add directory
-    - [ ] remove directory
+* Task
+    - [ ] fix get and set from user to be aligned with a page
 
 * SysCall
-    - [ ] open
-    - [ ] close
-    - [ ] read
-    - [ ] write
-    - [ ] lseek
+    - [x] open
+    - [x] close
+    - [x] read
+    - [x] write
+    - [x] seek
+
+* FileSystem
+    - [ ] add mount
+    - [ ] add unmount
+    - [ ] ramfs
+        - [ ] create /tmp directory
+        - [ ] create /proc directory
+    - [ ] fat16
+        - [ ] increase the directory sector if no space for new entry
+        - [x] find new entry for file if rename it with longer name
+        - [ ] add file
+        - [ ] remove file
+        - [ ] add directory
+        - [ ] remove directory
+
+* Process
+    - [ ] add fork
+    - [ ] add kernel process
+    - [ ] implement waitpid
+    - [ ] implement inter-process communication
+    - [ ] implement signal
+    - [ ] elf loader
+        - [ ] implement shared library
+
+* Timer
+    - [ ] implement timer
 
 * Shell
     - [ ] ls
@@ -25,4 +46,7 @@
     - [ ] cp
     - [ ] mv
     - [ ] pwd
+    - [ ] add history command
 
+* VGA
+    - [x] fix VGA_90x60_TEXT need sometime to be set 2 times
