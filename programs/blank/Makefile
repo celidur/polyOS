@@ -1,3 +1,6 @@
+PARENT_DIR := $(shell basename $(shell pwd))
+TARGET = ./$(PARENT_DIR).elf
+
 SRC_DIR = ./src
 BUILD_DIR = ./build
 STDLIB_PATH = ../stdlib
@@ -7,8 +10,7 @@ BUILDER = i686-elf-gcc
 LINKER = i686-elf-ld
 NASM = nasm
 
-TARGET = ./blank.elf
-LINKER_SCRIPT = ./linker.ld
+LINKER_SCRIPT = $(STDLIB_PATH)/linker/linker.ld
 
 C_SOURCES = $(wildcard $(SRC_DIR)/*.c)
 ASM_SOURCES = $(wildcard $(SRC_DIR)/*.asm)
