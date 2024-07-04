@@ -23,7 +23,8 @@ void set_text_mode(enum screen_mode mode);
 void set_graphics_mode(enum screen_mode mode);
 void set_pixel(u32 x, u32 y, u32 color);
 
-void demo_graphics(void);
+int get_screen_width(void);
+int get_screen_height(void);
 
 
 #endif

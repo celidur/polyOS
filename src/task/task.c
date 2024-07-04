@@ -225,13 +225,13 @@ int copy_string_to_task(struct task *task, void* buff, void* virt, u32 size)
         size_to_copy = size_remaining > PAGING_PAGE_SIZE ? PAGING_PAGE_SIZE : size_remaining;
         void *ptr = (void* )((u32)(buff) + offset);
 
-        old_entry = paging_get(directory, ptr);
+        old_entry = paging_get(directory, paging_align_to_lower_page(ptr));
         paging_map(task->page_directory, ptr, ptr, PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL | PAGING_IS_WRITABLE);
         paging_switch(task->page_directory);
         strncpy(virt, ptr, size_to_copy);
         kernel_page();
 
-        if (paging_set(directory, ptr, old_entry) < 0)
+        if (paging_set(directory, paging_align_to_lower_page(ptr), old_entry) < 0)
         {
             return -EIO;
         }

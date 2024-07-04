@@ -3,11 +3,9 @@
 #include <os/types.h>
 #include <os/serial.h>
 #include <os/io.h>
+#include <os/vga.h>
 
 #include <stdarg.h>
-
-#define VGA_WIDTH 90
-#define VGA_HEIGHT 60
 
 #define MAX_BUFFER 1024
 
@@ -53,9 +51,9 @@ static uint16_t terminal_make_char(uint8_t c, color_t color)
 static void clear_row(uint16_t row)
 {
     uint16_t blank = terminal_make_char(' ', current_color);
-    for (int x = 0; x < VGA_WIDTH; x++)
+    for (int x = 0; x < get_screen_width(); x++)
     {
-        buffer[row * VGA_WIDTH + x] = blank;
+        buffer[row * get_screen_width() + x] = blank;
     }
 }
 
@@ -64,7 +62,7 @@ void clear_screen()
     row_position = 0;
     column_position = 0;
     set_cursor(0);
-    for (int y = 0; y < VGA_HEIGHT; y++)
+    for (int y = 0; y < get_screen_height(); y++)
     {
         clear_row(y);
     }
@@ -78,21 +76,21 @@ void terminal_initialize()
 }
 
 static void new_line(){
-    if (row_position < VGA_HEIGHT - 1)
+    if (row_position < get_screen_height() - 1)
     {
         row_position++;
         column_position = 0;
         return;
     }
-    row_position = VGA_HEIGHT - 1;
-    for (size_t row = 1; row < VGA_HEIGHT; row++)
+    row_position = get_screen_height() - 1;
+    for (size_t row = 1; row < get_screen_height(); row++)
     {
-        for (size_t col = 0; col < VGA_WIDTH; col++)
+        for (size_t col = 0; col < get_screen_width(); col++)
         {
-            buffer[(row - 1) * VGA_WIDTH + col] = buffer[row * VGA_WIDTH + col];
+            buffer[(row - 1) * get_screen_width() + col] = buffer[row * get_screen_width() + col];
         }
     }
-    clear_row(VGA_HEIGHT - 1);
+    clear_row(get_screen_height() - 1);
     column_position = 0;
 }
 
@@ -103,13 +101,13 @@ static void write_byte(uint8_t byte, uint8_t color)
         new_line();
         return;
     }
-    if (column_position >= VGA_WIDTH)
+    if (column_position >= get_screen_width())
     {
         new_line();
     }
-    buffer[row_position * VGA_WIDTH + column_position] = terminal_make_char(byte, color);
+    buffer[row_position * get_screen_width() + column_position] = terminal_make_char(byte, color);
     column_position++;
-    set_cursor(row_position * VGA_WIDTH + column_position);
+    set_cursor(row_position * get_screen_width() + column_position);
 }
 
 
@@ -119,13 +117,13 @@ void terminal_backspace()
     if (column_position > 0)
     {
         column_position--;
-        buffer[row_position * VGA_WIDTH + column_position] = terminal_make_char(' ', current_color);
+        buffer[row_position * get_screen_width() + column_position] = terminal_make_char(' ', current_color);
     } else if (row_position > 0){
         row_position--;
-        column_position = VGA_WIDTH - 1;
-        buffer[row_position * VGA_WIDTH + column_position] = terminal_make_char(' ', current_color);
+        column_position = get_screen_width() - 1;
+        buffer[row_position * get_screen_width() + column_position] = terminal_make_char(' ', current_color);
     }
-    set_cursor(row_position * VGA_WIDTH + column_position);
+    set_cursor(row_position * get_screen_width() + column_position);
 }
 
 void terminal_writechar(uint8_t c, color_t color)

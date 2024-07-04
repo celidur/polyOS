@@ -46,19 +46,10 @@ void kernel_panic(const char *msg)
         ;
 }
 
-void kernel_main()
+static void kernel_init()
 {
-    int res = 0;
-    // demo_graphics();
-    set_text_mode(VGA_90x60_TEXT);
-
     terminal_initialize();
     serial_configure(SERIAL_COM1_BASE, Baud_115200);
-
-
-    dump_state();
-
-
     memset(gdt_real, 0, sizeof(gdt_real));
     gdt_struct_to_gdt(gdt_struct, gdt_real, TOTAL_GDT_SEGMENTS);
 
@@ -73,18 +64,6 @@ void kernel_main()
 
     // Initialize disks
     disk_search_and_init();
-
-    tree(0);
-    // char buf[256];
-
-    int fd = fopen("0:/hello.txt", "a");
-    if (fd < 0)
-    {
-        kernel_panic("Failed to open file\n");
-    }
-    fwrite(fd, "Hello, World!\n", 14);
-    fclose(fd);
-
 
     // Initialize IDT
     idt_init();
@@ -105,10 +84,11 @@ void kernel_main()
 
     // Initialize keyboard
     keyboard_init();
+}
 
-
+static void boot_loadinfo()
+{
     set_graphics_mode(VGA_640x480x2);
-    // load_bitmap("0:/test.bmp");
     bitmap_t *bitmap = bitmap_create("0:/load.bmp");
     display_monochrome_bitmap(bitmap);
     free_bitmap(bitmap);
@@ -117,11 +97,33 @@ void kernel_main()
     {
         asm volatile("nop");
     }
-
-
+    
     set_text_mode(VGA_90x60_TEXT);
-    set_text_mode(VGA_90x60_TEXT);
+}
 
+// static void debug()
+// {
+//     set_color(BLACK, LIGHT_GREEN);
+//     printf("DEBUG\n");
+//     // VGA INFO
+//     // dump_state();
+
+//     // tree(0);
+//     // print_memory();
+
+//     // print("Paging info\n");
+//     // print_paging_info(process->task->page_directory);
+
+//     set_color(BLACK, WHITE);
+// }
+
+void kernel_main()
+{
+    int res = 0;
+
+    kernel_init();
+
+    boot_loadinfo();
     
     struct process *process = NULL;
     res = process_load_switch("0:/bin/shell.elf", &process);
@@ -129,33 +131,6 @@ void kernel_main()
     {
         kernel_panic("Failed to load process\n");
     }
-
-    set_color(BLACK, LIGHT_GREEN);
-    print_memory();
-
-    set_color(BLACK, WHITE);
-
-    print_paging_info(process->task->page_directory);
-
-
-    // int res = process_load_switch("0:/bin/blank.elf", &process);
-    // if (res < 0)
-    // {
-    //     kernel_panic("Failed to load process\n");
-    // }
-
-    // struct command_argument arg;
-    // strcpy(arg.argument, "TEST");
-    // arg.next = NULL;
-    // process_inject_arguments(process, &arg);
-
-    // res = process_load_switch("0:/bin/blank.elf", &process);
-    // if (res < 0)
-    // {
-    //     kernel_panic("Failed to load process\n");
-    // }
-    // strcpy(arg.argument, "TEST2");
-    // process_inject_arguments(process, &arg);
 
     task_run_first_ever_task();
 

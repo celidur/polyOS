@@ -905,6 +905,22 @@ static void read_regs(uint8_t *regs)
 	outb(VGA_AC_INDEX, 0x20);
 }
 
+void verify_regs(uint8_t *regs)
+{
+	uint32_t i;
+	uint8_t orig_regs[VGA_NUM_REGS];
+
+	read_regs(orig_regs);
+	for(i = 0; i < VGA_NUM_REGS; i++)
+	{
+		if(regs[i] != orig_regs[i])
+		{
+			serial_printf("VGA register mismatch at index %d\n", i);
+			serial_printf("Expected: 0x%x, Actual: 0x%x\n", regs[i], orig_regs[i]);
+		}
+	}
+}
+
 void dump_state(void)
 {
 	uint8_t state[VGA_NUM_REGS];
@@ -984,6 +1000,9 @@ static void (*g_write_pixel)(uint32_t x, uint32_t y, uint32_t c);
 static uint32_t g_wd, g_ht;
 static uint32_t g_seg;
 
+static uint32_t g_cols = 80;
+static uint32_t g_rows = 25;
+
 /*****************************************************************************
 *****************************************************************************/
 
@@ -1001,8 +1020,6 @@ static uint32_t vpeekb(uint32_t off)
 {
 	return *(uint32_t*)(g_seg + off);
 }
-
-
 
 static void set_plane(uint32_t p)
 {
@@ -1187,150 +1204,110 @@ void vline(uint32_t x, uint32_t y, uint32_t ht)
 	fill_rect(x, y, 1, ht);
 }
 
-
-/*****************************************************************************
-*****************************************************************************/
-static void draw_x(void)
-{
-	uint32_t y;
-
-	/* clear screen */
-	// for(y = 0; y < g_ht; y++)
-	// 	for(x = 0; x < g_wd; x++)
-	// 		g_write_pixel(x, y, 0);
-	/* draw 2-color X */
-	for(y = 0; y < g_ht; y++)
-	{
-		g_write_pixel((g_wd - g_ht) / 2 + y, y, 1);
-		g_write_pixel((g_ht + g_wd) / 2 - y, y, 3);
-	}
-
-
-	fill_rect(0, 0, 100, 100);
-
-	vline(180, 0, 100);
-
-	hline(0, 180, 100);
-	
-	for (size_t i = 0; i < 100000000; i++)
-    {
-        asm volatile("nop");
-    }
-}
-/*****************************************************************************
-READ AND DUMP VGA REGISTER VALUES FOR CURRENT VIDEO MODE
-This is where g_40x25_text[], g_80x50_text[], etc. came from :)
-*****************************************************************************/
-
-/*****************************************************************************
-SET TEXT MODES
-*****************************************************************************/
 void set_text_mode(enum screen_mode mode)
 {
-	uint32_t rows, cols, ht, i;
+	uint32_t ht, i;
+
+	uint8_t *regs;
 
 	switch (mode)
 	{
 	case VGA_40x25_TEXT:
-		write_regs(g_40x25_text);
-		cols = 40;
-		rows = 25;
+		regs = g_40x25_text;
+		g_cols = 40;
+		g_rows = 25;
 		ht = 16;
 		break;
 	case VGA_40x50_TEXT:
-		write_regs(g_40x50_text);
-		cols = 40;
-		rows = 50;
+		regs = g_40x50_text;
+		g_cols = 40;
+		g_rows = 50;
 		ht = 8;
 		break;
 	case VGA_80x25_TEXT:
-		write_regs(g_80x25_text);
-		cols = 80;
-		rows = 25;
+		regs = g_80x25_text;
+		g_cols = 80;
+		g_rows = 25;
 		ht = 8;
 		break;
 	case VGA_80x50_TEXT:
-		write_regs(g_80x50_text);
-		cols = 80;
-		rows = 50;
+		regs = g_80x50_text;
+		g_cols = 80;
+		g_rows = 50;
 		ht = 8;
 		break;
 	case VGA_90x30_TEXT:
-		write_regs(g_90x30_text);
-		cols = 90;
-		rows = 30;
+		regs = g_90x30_text;
+		g_cols = 90;
+		g_rows = 30;
 		ht = 8;
 		break;
 	case VGA_90x60_TEXT:
 	default:
-		write_regs(g_90x60_text);
-		cols = 90;
-		rows = 60;
+		regs = g_90x60_text;
+		g_cols = 90;
+		g_rows = 60;
 		ht = 8;
 		break;
 	}
+
+	write_regs(regs);
+	verify_regs(regs);
+
+	// /* set font */
+	// if(ht >= 16)
+	// 	write_font(g_8x16_font, 16);
+	// else
+	// 	write_font(g_8x8_font, 8);
+
+	g_seg = get_fb_seg();
+	for(i = 0; i < g_cols * g_rows; i++)
+		*(uint16_t*)(g_seg + i * 2) = 32;
 
 	/* set font */
 	if(ht >= 16)
 		write_font(g_8x16_font, 16);
 	else
 		write_font(g_8x8_font, 8);
-
-	// (void)i;
-	// (void)cols;
-	// (void)rows;
-	
-	/* tell the BIOS what we've done, so BIOS text output works OK */
-	// *(uint16_t*)((0x40 << 4) + 0x4A) = cols; /* columns on screen */
-	// *(uint16_t*)((0x40 << 4) + 0x4C) = cols * rows * 2; /* framebuffer size */
-	// *(uint16_t*)((0x40 << 4) + 0x50) = 0; /* cursor pos'n */
-	// *(uint8_t*)((0x40 << 4) + 0x60) = ht - 1; /* cursor shape */
-	// *(uint8_t*)((0x40 << 4) + 0x61) = ht - 2;
-	// *(uint8_t*)((0x40 << 4) + 0x84) = rows - 1; /* rows on screen - 1 */
-	// *(uint8_t*)((0x40 << 4) + 0x85) = ht; /* char height */	
-	/* set white-on-black attributes for all text */
-
-	g_seg = get_fb_seg();
-	for(i = 0; i < cols * rows; i++)
-		*(uint16_t*)(g_seg + i * 2) = 32;
 }
 
 void set_graphics_mode(enum screen_mode mode)
 {
+	uint8_t *regs;
 	switch (mode)
 	{
 	case VGA_640x480x2:
-		write_regs(g_640x480x2);
+		regs = g_640x480x2;
 		g_wd = 640;
 		g_ht = 480;
 		g_write_pixel = write_pixel1;
 		break;
 	case VGA_320x200x4:
-		write_regs(g_320x200x4);
+		regs = g_320x200x4;
 		g_wd = 320;
 		g_ht = 200;
 		g_write_pixel = write_pixel2;
 		break;
 	case VGA_640x480x16:
-		write_regs(g_640x480x16);
+		regs = g_640x480x16;
 		g_wd = 640;
 		g_ht = 480;
 		g_write_pixel = write_pixel4p;
 		break;
 	case VGA_720x480x16:
-		write_regs(g_720x480x16);
+		regs = g_720x480x16;
 		g_wd = 720;
 		g_ht = 480;
 		g_write_pixel = write_pixel4p;
 		break;
 	case VGA_320x200x256:
-		write_regs(g_320x200x256);
+		regs = g_320x200x256;
 		g_wd = 320;
 		g_ht = 200;
 		g_write_pixel = write_pixel8;
 		break;
 	case VGA_320x200x256_MODEX:
-		write_regs(g_320x200x256_modex);
+		regs = g_320x200x256_modex;
 		g_wd = 320;
 		g_ht = 200;
 		g_write_pixel = write_pixel8x;
@@ -1338,157 +1315,23 @@ void set_graphics_mode(enum screen_mode mode)
 	default:
 		break;
 	}
+	write_regs(regs);
+	verify_regs(regs);
 	g_seg = get_fb_seg();
 
 	for(uint32_t y = 0; y < g_ht; y++)
 		for(uint32_t x = 0; x < g_wd; x++)
 			g_write_pixel(x, y, 0);
 }
-/*****************************************************************************
-DEMO GRAPHICS MODES
-*****************************************************************************/
-void demo_graphics(void)
-{
-	// /* 2-color */
-	set_graphics_mode(VGA_640x480x2);
-	draw_x();	
-	// /* 4-color */
-	// set_graphics_mode(VGA_320x200x4);
-	// draw_x();
-	// /* 16-color */
-	// set_graphics_mode(VGA_640x480x16);
-	// draw_x();
-
-	/* 16-color (extended) */
-	// set_graphics_mode(VGA_720x480x16);
-	// draw_x();
-	/* 256-color */
-	set_graphics_mode(VGA_320x200x256);
-	draw_x();
-	/* 256-color Mode-X */
-	set_graphics_mode(VGA_320x200x256_MODEX);
-	draw_x();
-	/* go back to text mode */
-    set_text_mode(VGA_90x60_TEXT);
-    // set_text_mode(VGA_90x60_TEXT);
-}
-/*****************************************************************************
-*****************************************************************************/
-static uint8_t reverse_bits(uint8_t arg)
-{
-	uint8_t ret_val = 0;
-
-	if(arg & 0x01)
-		ret_val |= 0x80;
-	if(arg & 0x02)
-		ret_val |= 0x40;
-	if(arg & 0x04)
-		ret_val |= 0x20;
-	if(arg & 0x08)
-		ret_val |= 0x10;
-	if(arg & 0x10)
-		ret_val |= 0x08;
-	if(arg & 0x20)
-		ret_val |= 0x04;
-	if(arg & 0x40)
-		ret_val |= 0x02;
-	if(arg & 0x80)
-		ret_val |= 0x01;
-	return ret_val;
-}
-/*****************************************************************************
-512-CHARACTER FONT
-*****************************************************************************/
-static void font512(void)
-{
-/* Turbo C++ 1.0 seems to 'lose' any data declared 'static const' */
-	/*static*/ const char msg1[] = "!txet sdrawkcaB";
-	/*static*/ const char msg2[] = "?rorrim a toG";
-/**/
-	uint8_t seq2, seq4, gc4, gc5, gc6;
-	uint32_t font_height, i, j;
-
-/* start in 80x25 text mode */
-	set_text_mode(VGA_80x25_TEXT);
-/* code pasted in from write_font():
-save registers
-set_plane() modifies GC 4 and SEQ 2, so save them as well */
-	outb(VGA_SEQ_INDEX, 2);
-	seq2 = inb(VGA_SEQ_DATA);
-
-	outb(VGA_SEQ_INDEX, 4);
-	seq4 = inb(VGA_SEQ_DATA);
-/* turn off even-odd addressing (set flat addressing)
-assume: chain-4 addressing already off */
-	outb(VGA_SEQ_DATA, seq4 | 0x04);
-
-	outb(VGA_GC_INDEX, 4);
-	gc4 = inb(VGA_GC_DATA);
-
-	outb(VGA_GC_INDEX, 5);
-	gc5 = inb(VGA_GC_DATA);
-/* turn off even-odd addressing */
-	outb(VGA_GC_DATA, gc5 & ~0x10);
-
-	outb(VGA_GC_INDEX, 6);
-	gc6 = inb(VGA_GC_DATA);
-/* turn off even-odd addressing */
-	outb(VGA_GC_DATA, gc6 & ~0x02);
-/* write font to plane P4 */
-	set_plane(2);
-/* this is different from write_font():
-use font 1 instead of font 0, and use it for BACKWARD text */
-	font_height = 16;
-	for(i = 0; i < 256; i++)
-	{
-		for(j = 0; j < font_height; j++)
-		{
-			vpokeb(16384u * 1 + 32 * i + j,
-				reverse_bits(
-					g_8x16_font[font_height * i + j]));
-		}
-	}
-/* restore registers */
-	outb(VGA_SEQ_INDEX, 2);
-	outb(VGA_SEQ_DATA, seq2);
-	outb(VGA_SEQ_INDEX, 4);
-	outb(VGA_SEQ_DATA, seq4);
-	outb(VGA_GC_INDEX, 4);
-	outb(VGA_GC_DATA, gc4);
-	outb(VGA_GC_INDEX, 5);
-	outb(VGA_GC_DATA, gc5);
-	outb(VGA_GC_INDEX, 6);
-	outb(VGA_GC_DATA, gc6);
-/* now: sacrifice attribute bit b3 (foreground intense color)
-use it to select characters 256-511 in the second font */
-	outb(VGA_SEQ_INDEX, 3);
-	outb(VGA_SEQ_DATA, 4);
-/* xxx - maybe re-program 16-color palette here
-so attribute bit b3 is no longer used for 'intense' */
-	for(i = 0; i < sizeof(msg1); i++)
-	{
-		vpokeb((80 * 8  + 40 + i) * 2 + 0, msg1[i]);
-/* set attribute bit b3 for backward font */
-		vpokeb((80 * 8  + 40 + i) * 2 + 1, 0x0F);
-	}
-	for(i = 0; i < sizeof(msg2); i++)
-	{
-		vpokeb((80 * 16 + 40 + i) * 2 + 0, msg2[i]);
-		vpokeb((80 * 16 + 40 + i) * 2 + 1, 0x0F);
-	}
-}
 
 void set_pixel(uint32_t x, uint32_t y, uint32_t color){
 	g_write_pixel(x, y, color);
 }
 
-/*****************************************************************************
-*****************************************************************************/
-// int main(int arg_c, char *arg_v[])
-// {
-// 	//dump_state();
-// 	//set_text_mode(arg_c > 1);
-// 	//demo_graphics();
-// 	font512();
-// 	return 0;
-// }
+int get_screen_width(void) {
+	return g_cols;
+}
+
+int get_screen_height(void) {
+	return g_rows;
+}
