@@ -67,7 +67,7 @@ $(BIN_DIR)/os.bin: $(BIN_DIR)/boot.bin $(BIN_DIR)/kernel.bin
 
 $(BIN_DIR)/kernel.bin: $(BIN_DIR)/ $(OBJ_FILES) user_programs
 	$(LINKER) -g -relocatable $(OBJ_FILES) -o $(BUILD_DIR)/kernelfull.o
-	$(BUILDER) $(FLAGS) -T $(SRC_DIR)/linker.ld -o $(BIN_DIR)/kernel.bin -ffreestanding -O0 -nostdlib $(BUILD_DIR)/kernelfull.o
+	$(BUILDER) $(FLAGS) -T $(SRC_DIR)/linker.ld -o $(BIN_DIR)/kernel.bin -lgcc -ffreestanding -O0 -nostdlib $(BUILD_DIR)/kernelfull.o
 
 $(BIN_DIR)/boot.bin: $(SRC_DIR)/boot/boot.asm
 	$(NASM) -f bin $< -o $@

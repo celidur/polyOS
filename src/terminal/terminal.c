@@ -4,8 +4,9 @@
 #include <os/serial.h>
 #include <os/io.h>
 #include <os/vga.h>
-
+#include <os/types.h>
 #include <stdarg.h>
+#include <os/memory.h>
 
 #define MAX_BUFFER 1024
 
@@ -157,9 +158,10 @@ void print(const char *str)
     // serial_write(str);
 }
 
-static char* itoa(int i){
-    static char str[12];
-    int loc = 11;
+static char* itoa(s64 i) {
+    static char str[22];
+    memset(str, '0', 22);
+    int loc = 21;
     str[loc] = '\0';
     char neg = 1;
     if (i >= 0){
@@ -172,7 +174,7 @@ static char* itoa(int i){
         i /= 10;
     }
 
-    if (loc == 11){
+    if (loc == 21){
         str[--loc] = '0';
     }
     if (neg){
@@ -284,7 +286,8 @@ int serial_printf(const char *fmt, ...){
     va_list ap;
     const char* p;
     char* sval;
-    int ival;
+    u32 ival;
+    u64 lval;
     char buff[MAX_BUFFER + 1];
     int i=0;
 
@@ -303,6 +306,18 @@ int serial_printf(const char *fmt, ...){
             case 'd':
                 ival = va_arg(ap, int);
                 sval = itoa(ival);
+                for (int j = 0; sval[j] != '\0'; j++){
+                    if (i >= MAX_BUFFER){
+                        buff[i] = '\0';
+                        serial_write(buff);
+                        i = 0;
+                    }
+                    buff[i++] = sval[j];
+                }
+                break;
+            case 'l':
+                lval = va_arg(ap, u64);
+                sval = itoa(lval);
                 for (int j = 0; sval[j] != '\0'; j++){
                     if (i >= MAX_BUFFER){
                         buff[i] = '\0';

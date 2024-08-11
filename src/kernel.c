@@ -91,6 +91,13 @@ static void kernel_init()
     set_text_mode(VGA_90x60_TEXT);
 }
 
+u64 get_ticks()
+{
+    uint32_t low, high;
+    asm volatile("rdtsc" : "=a" (low), "=d" (high));
+    return low | ((u64)high << 32);
+}
+
 static void boot_loadinfo()
 {
     set_graphics_mode(VGA_640x480x2);
@@ -98,10 +105,16 @@ static void boot_loadinfo()
     display_monochrome_bitmap(bitmap);
     free_bitmap(bitmap);
 
-    for (size_t i = 0; i < 200000000; i++)
+    for (size_t i = 0; i < 100; i++)
     {
-        asm volatile("nop");
+        serial_printf(".");
+        for (size_t i = 0; i < 1000000; i++)
+        {
+            asm volatile("nop");
+        }
     }
+
+    serial_printf("\n");
     
     set_text_mode(VGA_90x60_TEXT);
 }

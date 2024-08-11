@@ -138,11 +138,9 @@ static void idt_handle_exception(){
 void interrupt_handler(int interrupt,struct interrupt_frame* frame)
 {
     kernel_page();
+    task_current_save_state(frame);
     if (interrupt_callbacks[interrupt] != 0)
-    {
-        task_current_save_state(frame);
         interrupt_callbacks[interrupt](frame);
-    }
 
     task_page();
     outb(0x20, 0x20);
@@ -151,12 +149,9 @@ void interrupt_handler(int interrupt,struct interrupt_frame* frame)
 void interrupt_handler_error(u32 error_code, int interrupt,struct interrupt_frame* frame)
 {
     kernel_page();
+    task_current_save_state(frame);
     if (interrupt_callbacks_error[interrupt] != 0)
-    {
-
-        task_current_save_state(frame);
         interrupt_callbacks_error[interrupt](frame, error_code);
-    }
     task_page();
     outb(0x20, 0x20);
 }
@@ -190,6 +185,8 @@ void *int80h_handler(struct interrupt_frame *frame)
     kernel_page();
     task_current_save_state(frame);
     res = int80h_handle_command(frame);
+    frame->eax = (uint32_t)(res);
+    task_current_save_state(frame);
     task_page();
     return res;
 }

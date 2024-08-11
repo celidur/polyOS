@@ -1,4 +1,5 @@
 * Task
+    - [ ] read https://wiki.osdev.org/Brendan%27s_Multi-tasking_Tutorial to implement multi-tasking properly
     - [ ] fix get and set from user to be aligned with a page
 
 * SysCall
