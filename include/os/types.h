@@ -15,7 +15,7 @@ typedef short			    s16;
 typedef int			        s32;
 typedef long long	    	s64;
 
-typedef u64 size_t;
+typedef u32 size_t;
 
 /* required for opal-api.h */
 typedef u8  uint8_t;

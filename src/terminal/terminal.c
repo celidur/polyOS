@@ -1,7 +1,6 @@
 #include <os/terminal.h>
 #include <os/string.h>
 #include <os/types.h>
-#include <os/serial.h>
 #include <os/io.h>
 #include <os/vga.h>
 #include <os/types.h>
@@ -21,6 +20,8 @@ static uint16_t column_position = 0;
 static color_t current_color = 0;
 
 static uint16_t* buffer = 0;
+
+int serial_write(const char *buf);
 
 static bool ascii_is_printable(uint8_t c)
 {

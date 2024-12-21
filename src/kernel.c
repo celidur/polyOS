@@ -10,7 +10,6 @@
 #include <os/int80/int80.h>
 #include <os/keyboard.h>
 #include <os/terminal.h>
-#include <os/serial.h>
 #include <os/vga.h>
 #include <os/bitmap.h>
 
@@ -48,11 +47,10 @@ void kernel_panic(const char *msg)
     while (1)
         ;
 }
-
+uint64_t rust_test_function(uint64_t x);
 static void kernel_init()
 {
     terminal_initialize();
-    serial_configure(SERIAL_COM1_BASE, Baud_115200);
     memset(gdt_real, 0, sizeof(gdt_real));
     gdt_struct_to_gdt(gdt_struct, gdt_real, TOTAL_GDT_SEGMENTS);
 
@@ -153,7 +151,7 @@ void kernel_main()
     serial_printf("Kernel initialized\n");
 
     boot_loadinfo();
-    
+
     struct process *process = NULL;
     res = process_load_switch("0:/bin/shell.elf", &process);
     if (res < 0)

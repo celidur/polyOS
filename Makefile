@@ -2,6 +2,10 @@ BIN_DIR = ./bin
 BUILD_DIR = ./build
 SRC_DIR = ./src
 
+RUST_DIR = ./src/rust
+RUST_TARGET = i686-custom
+RUST_LIB = $(RUST_DIR)/target/$(RUST_TARGET)/release/librust_kernel.a
+
 FILES_ASM = $(shell find $(SRC_DIR) -type f -name '*.asm' ! -name 'boot.asm')
 FILES_C = $(shell find $(SRC_DIR) -type f -name '*.c')
 
@@ -50,6 +54,9 @@ endif
 $(DIRECTORIES):
 	@mkdir -p $(DIRECTORIES)
 
+$(RUST_LIB): $(RUST_DIR)/Cargo.toml
+	cd $(RUST_DIR) && cargo +nightly build --release --target $(RUST_TARGET).json
+
 $(BIN_DIR)/os.bin: $(BIN_DIR)/boot.bin $(BIN_DIR)/kernel.bin
 	@rm -f $@
 	@dd if=$(BIN_DIR)/boot.bin >> $@
@@ -65,8 +72,8 @@ $(BIN_DIR)/os.bin: $(BIN_DIR)/boot.bin $(BIN_DIR)/kernel.bin
 	@dd if=/dev/zero bs=1048576 count=16 >> $@
 	@echo "OS image created."
 
-$(BIN_DIR)/kernel.bin: $(BIN_DIR)/ $(OBJ_FILES) user_programs
-	$(LINKER) -g -relocatable $(OBJ_FILES) -o $(BUILD_DIR)/kernelfull.o
+$(BIN_DIR)/kernel.bin: $(BIN_DIR)/ $(OBJ_FILES) $(RUST_LIB) user_programs
+	$(LINKER) -g -relocatable $(OBJ_FILES) $(RUST_LIB) -o $(BUILD_DIR)/kernelfull.o
 	$(BUILDER) $(FLAGS) -T $(SRC_DIR)/linker.ld -o $(BIN_DIR)/kernel.bin -lgcc -ffreestanding -O0 -nostdlib $(BUILD_DIR)/kernelfull.o
 
 $(BIN_DIR)/boot.bin: $(SRC_DIR)/boot/boot.asm
@@ -81,6 +88,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 clean: user_programs_clean
 	rm -rf $(BIN_DIR) $(BUILD_DIR)
 	rm -rf ./file/bin/*.elf
+	cd $(RUST_DIR) && cargo clean
 
 user_programs: ./file/bin $(PROGRAM_NAMES)
 

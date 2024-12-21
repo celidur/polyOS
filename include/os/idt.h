@@ -41,6 +41,7 @@ void idt_init();
 
 void enable_interrupts();
 void disable_interrupts();
+u32 are_interrupts_enabled();
 
 struct interrupt_frame;
 typedef void *(*INT80H_COMMAND)(struct interrupt_frame *frame);

@@ -84,7 +84,7 @@ gdt_descriptor:
 [BITS 32]
 load32:
     mov eax, 1
-    mov ecx, 160
+    mov ecx, 255
     mov edi, 0x0100000
     call ata_lba_read
     ; call long_mode

@@ -5,7 +5,7 @@
 
 void kernel_main();
 
-void kernel_panic(const char *msg);
+void kernel_panic(const char *msg) __attribute__((noreturn));
 
 void kernel_page();
 void kernel_registers();
