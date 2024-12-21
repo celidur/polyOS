@@ -13,6 +13,8 @@ struct process *current_process = NULL;
 
 static struct process *processes[MAX_PROCESS] = {NULL};
 
+int process_free_process(struct process* process);
+
 static void process_init(struct process *process)
 {
     memset(process, 0, sizeof(struct process));
@@ -36,7 +38,7 @@ static int process_load_binary(const char *filename, struct process *process)
 {
     int res = 0;
     int fd = fopen(filename, "r");
-    if (!fd)
+    if (fd <= 0)
     {
         res = -EIO;
         goto out;
@@ -151,9 +153,7 @@ static int process_map_memory(struct process* process)
 int process_load_for_slot(const char *filename, struct process **process, int process_slot)
 {
     int res = 0;
-    struct task *task = NULL;
     struct process *_process = NULL;
-    void *stack_ptr = NULL;
 
     if (process_get(process_slot))
     {
@@ -175,26 +175,25 @@ int process_load_for_slot(const char *filename, struct process **process, int pr
         goto out;
     }
 
-    stack_ptr = kzalloc(USER_PROGRAM_STACK_SIZE);
-    if (!stack_ptr)
+    _process->stack = kzalloc(USER_PROGRAM_STACK_SIZE);
+    if (!_process->stack)
     {
         res = -ENOMEM;
         goto out;
     }
 
     strncpy(_process->filename, filename, sizeof(_process->filename));
-    _process->stack = stack_ptr;
     _process->pid = process_slot;
 
     // create task
-    task = task_new(_process);
-    if (!task)
+    _process->task = task_new(_process);
+    if (ERROR_I(_process->task) == 0)
     {
-        res = -EIO;
+        res = ERROR_I(_process->task);
+        _process->task = NULL;
         goto out;
     }
 
-    _process->task = task;
     res = process_map_memory(_process);
     if (res != ALL_OK)
     {
@@ -212,12 +211,12 @@ int process_load_for_slot(const char *filename, struct process **process, int pr
 out:
     if (ISERR(res))
     {
-        if (task)
-            task_free(task);
-        if (stack_ptr)
-            kfree(stack_ptr);
         if (_process)
-            kfree(_process);
+        {
+            process_free_process(_process);
+            _process = NULL;
+            *process = NULL;
+        }
     }
     return res;
 }
@@ -400,18 +399,26 @@ int process_inject_arguments(struct process* process, struct command_argument* r
 
 static int process_terminate_allocations(struct process* process){
     for (int i = 0; i < MAX_PROGRAM_ALLOCATIONS; i++){
-        process_free(process, process->allocations[i].ptr);
+        if (process->allocations[i].ptr){
+            process_free(process, process->allocations[i].ptr);
+        }
     }
     return ALL_OK;
 }
 
 static int process_free_binary_data(struct process* process){
-    kfree(process->ptr);
+    if (process->ptr)
+    {
+        kfree(process->ptr);
+    }
     return ALL_OK;
 }
 
 static int process_free_elf_data(struct process* process){
-    elf_close(process->elf_file);
+    if (process->elf_file)
+    {
+        elf_close(process->elf_file);
+    }
     return ALL_OK;
 }
 
@@ -443,19 +450,37 @@ static void process_unlink(struct process* process){
     }
 }
 
-int process_terminate(struct process* process){
-    int res = process_terminate_allocations(process);
-    if (res < 0){
-        return res;
+int process_free_process(struct process* process){
+    process_terminate_allocations(process);
+    process_free_program_data(process);
+
+    if (process->stack)
+    {    
+        kfree(process->stack);
+        process->stack = NULL;
     }
-    res = process_free_program_data(process);
-    if (res < 0){
-        return res;
+
+    if (process->task)
+    {
+        task_free(process->task);
+        process->task = NULL;
     }
 
     kfree(process);
-    task_free(process->task);
-    process_unlink(process);
 
     return ALL_OK;
+}
+
+int process_terminate(struct process* process)
+{
+    // Unlink the process from the process array.
+    process_unlink(process);
+    int res = process_free_process(process);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:
+    return res;
 }

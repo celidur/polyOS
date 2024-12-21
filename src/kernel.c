@@ -55,7 +55,7 @@ static void kernel_init()
     gdt_struct_to_gdt(gdt_struct, gdt_real, TOTAL_GDT_SEGMENTS);
 
     // Load GDT
-    gdt_load(gdt_real, sizeof(gdt_real));
+    gdt_load(gdt_real, sizeof(gdt_real)-1);
 
     // Initialize kernel heap
     kheap_init();

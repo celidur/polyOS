@@ -7,7 +7,7 @@
 bitmap_t * bitmap_create(char * filename) {
     bitmap_t * ret = kmalloc(sizeof(bitmap_t));
     int fd = fopen(filename, "r");
-    if(!fd) {
+    if(fd <= 0) {
         serial_printf("Fail to open %s\n", filename);
         return NULL;
     }

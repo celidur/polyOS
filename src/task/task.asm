@@ -34,9 +34,10 @@ task_return:
     push dword [ebx + 44] ; push the data/stack selector
     push dword [ebx + 40] ; push stack pointer
 
-    pushf
-    pop eax
+    ; Push the flags
+    mov eax, [ebx+36]
     or eax, 0x200
+
     push eax
 
     push dword [ebx + 32] ; push code segment

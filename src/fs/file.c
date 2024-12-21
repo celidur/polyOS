@@ -33,6 +33,12 @@ static void fs_insert_filesystem(struct filesystem *filesystem)
     *fs = filesystem;
 }
 
+static void file_free_descriptor(struct file_descriptor *desc)
+{
+    file_descriptors[desc->index - 1] = NULL;
+    kfree(desc);
+}
+
 static void fs_load()
 {
     memset(filesystems, 0, sizeof(filesystems));
@@ -105,6 +111,10 @@ static FILE_MODE file_get_mode_by_string(const char *str)
 int fopen(const char *filename, const char *str)
 {
     int res = 0;
+    struct disk* disk = NULL;
+    FILE_MODE mode = FILE_MODE_INVALID;
+    void* descriptor_private_data = NULL;
+    struct file_descriptor* desc = 0;
     struct path_root *root = path_parser_parse(filename, NULL);
     if (!root)
     {
@@ -117,7 +127,7 @@ int fopen(const char *filename, const char *str)
         goto out;
     }
 
-    struct disk *disk = disk_get(root->drive_no);
+    disk = disk_get(root->drive_no);
     if (!disk)
     {
         res = -EIO;
@@ -129,21 +139,20 @@ int fopen(const char *filename, const char *str)
         goto out;
     }
 
-    FILE_MODE mode = file_get_mode_by_string(str);
+    mode = file_get_mode_by_string(str);
     if (mode == FILE_MODE_INVALID)
     {
         res = -EINVARG;
         goto out;
     }
 
-    void *descriptor_private_data = disk->fs->open(disk->fs_private, root->first, mode);
+    descriptor_private_data = disk->fs->open(disk->fs_private, root->first, mode);
     if (ISERR(descriptor_private_data))
     {
         res = ERROR_I(descriptor_private_data);
         goto out;
     }
 
-    struct file_descriptor *desc = NULL;
     res = file_new_descriptor(&desc);
     if (res < 0)
     {
@@ -155,6 +164,22 @@ int fopen(const char *filename, const char *str)
     res = desc->index;
 
 out:
+    if (res < 0){
+        if (root){
+            path_parser_free(root);
+            root = NULL;
+        }
+
+        if (disk && descriptor_private_data){
+            disk->fs->close(descriptor_private_data);
+            descriptor_private_data = NULL;
+        }
+
+        if (desc){
+            file_free_descriptor(desc);
+            desc = NULL;
+        }
+    }
     return res;
 }
 
@@ -198,12 +223,6 @@ int fstat(int fd, struct file_stat *stat)
         return -EIO;
 
     return desc->fs->stat(desc->private, stat);
-}
-
-static void file_free_descriptor(struct file_descriptor *desc)
-{
-    file_descriptors[desc->index - 1] = NULL;
-    kfree(desc);
 }
 
 int fclose(int fd)

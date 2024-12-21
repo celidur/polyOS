@@ -80,7 +80,7 @@ static int fat16_get_next_cluster(struct fat_private *private, int cluster)
         return -EIO;
 
     u32 fat_table_pos = fat16_get_first_fat_sector(private) * private->sector_size;
-    if (disk_streamer_seek(stream, fat_table_pos * (cluster * FAT16_FAT_ENTRY_SIZE)) < 0)
+    if (disk_streamer_seek(stream, fat_table_pos + (cluster * FAT16_FAT_ENTRY_SIZE)) < 0)
         return -EIO;
 
     u16 result = 0;

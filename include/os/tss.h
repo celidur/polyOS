@@ -9,6 +9,7 @@ struct tss
     u32 esp0; // kernel stack pointer
     u32 ss0;  // kernel stack segment
     u32 esp1;
+    u32 ss1;
     u32 esp2;
     u32 ss2;
     u32 sr3;
@@ -30,6 +31,7 @@ struct tss
     u32 gs;
     u32 ldtr;
     u32 iopb;
+    u32 ssp;
 } __attribute__((packed));
 
 void tss_load(int tss_segment);
