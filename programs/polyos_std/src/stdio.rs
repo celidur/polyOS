@@ -52,8 +52,6 @@ macro_rules! println {
     };
 }
 
-
-
 struct SerialWriter;
 
 impl Write for SerialWriter {

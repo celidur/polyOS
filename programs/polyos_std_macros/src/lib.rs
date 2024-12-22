@@ -16,7 +16,7 @@ pub fn main(_attr: TokenStream, item: TokenStream) -> TokenStream {
             #func_name();
 
             // Exit the program
-            polyos_std::entry::exit(0);
+            polyos_std::process::exit(0);
         }
 
         // Original main function

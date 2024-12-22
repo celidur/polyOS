@@ -1,15 +1,21 @@
 #![no_std]
 
+#[allow(unused_imports)] // macros from `alloc` are not used on all platforms
+#[macro_use]
 extern crate alloc;
 
 #[macro_use]
 pub mod stdio;
 #[allow(warnings)]
 mod bindings;
+pub mod cli;
 mod memory;
-pub mod entry;
+pub mod prelude;
+pub mod process;
 
-pub use alloc::{boxed, format, string, vec, rc};
+pub use prelude::*;
+
+pub use alloc::{boxed, collections, format, rc, string, vec};
 
 #[cfg(feature = "macros")]
 pub use polyos_std_macros::main;
@@ -18,5 +24,5 @@ pub use polyos_std_macros::main;
 fn panic(info: &core::panic::PanicInfo) -> ! {
     serial_println!("{}\n", info);
     println!("{}", info);
-    entry::exit(1);
+    process::exit(1);
 }

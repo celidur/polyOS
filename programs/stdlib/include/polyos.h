@@ -28,7 +28,7 @@ void polyos_process_load_start(const char *filename);
 void polyos_process_get_args(struct process_arguments *args);
 int polyos_system(struct command_argument *args);
 int polyos_system_run(const char *command);
-void polyos_exit();
+void polyos_exit() __attribute__((noreturn));
 void print_memory();
 void remove_last_char();
 void clear_screen();

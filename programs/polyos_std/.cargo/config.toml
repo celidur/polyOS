@@ -1,0 +1,15 @@
+[unstable]
+# This feature requires nightly and will build the 'core' and 'alloc' crates for your custom target.
+build-std = ["core", "alloc", "compiler_builtins"]
+
+[build]
+target = "i686-polyos.json"
+
+[target.i686-polyos]
+linker = "i686-elf-gcc"
+rustflags = [
+    "-C", "link-arg=-T../stdlib/linker/linker.ld", 
+    "-C", "link-arg=-nostdlib",
+    "-C", "link-arg=-ffreestanding",
+    "-C", "link-arg=-O3"
+]
