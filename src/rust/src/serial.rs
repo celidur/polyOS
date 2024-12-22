@@ -45,15 +45,13 @@ pub extern "C" fn serial_write(buf: *const ::core::ffi::c_char) -> ::core::ffi::
     use crate::interrupts;
     use core::fmt::Write;
 
-    let len = unsafe {
-        strlen(buf) as usize
-    };
+    let len = unsafe { strlen(buf) as usize };
 
     interrupts::without_interrupts(|| {
         use core::str;
         SERIAL1
             .lock()
-            .write_str(unsafe{ str::from_raw_parts(buf as *const u8, len)})
+            .write_str(unsafe { str::from_raw_parts(buf as *const u8, len) })
             .expect("Printing to serial failed")
     });
 

@@ -3,9 +3,10 @@
 
 #include <os/types.h>
 
-void kernel_main();
-
 void kernel_panic(const char *msg) __attribute__((noreturn));
+
+void boot_loadinfo();
+void kernel_init();
 
 void kernel_page();
 void kernel_registers();

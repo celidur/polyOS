@@ -35,10 +35,10 @@ struct task
     struct task *prev;
 };
 
-void task_return(struct registers *regs);
+void task_return(struct registers *regs) __attribute__((noreturn));
 void user_registers();
 int task_page();
-void task_run_first_ever_task();
+void task_run_first_ever_task() __attribute__((noreturn));
 int task_switch(struct task *task);
 struct task *task_new(struct process *process);
 struct task *task_current();
@@ -50,6 +50,6 @@ void task_current_save_state(struct interrupt_frame *frame);
 int copy_string_from_task(struct task *task, void *virt, void *phys, int max);
 int copy_string_to_task(struct task *task, void* buff, void* virt, u32 size);
 void* task_virtual_address_to_physical(struct task* task, void* virtual_address);
-void task_next();
+void task_next() __attribute__((noreturn));
 
 #endif

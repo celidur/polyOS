@@ -47,8 +47,8 @@ void kernel_panic(const char *msg)
     while (1)
         ;
 }
-uint64_t rust_test_function(uint64_t x);
-static void kernel_init()
+
+void kernel_init()
 {
     terminal_initialize();
     memset(gdt_real, 0, sizeof(gdt_real));
@@ -96,7 +96,7 @@ u64 get_ticks()
     return low | ((u64)high << 32);
 }
 
-static void boot_loadinfo()
+void boot_loadinfo()
 {
     set_graphics_mode(VGA_640x480x2);
     bitmap_t *bitmap = bitmap_create("0:/load.bmp");
@@ -142,24 +142,3 @@ void reboot()
 
 //     set_color(BLACK, WHITE);
 // }
-
-void kernel_main()
-{
-    int res = 0;
-
-    kernel_init();
-    serial_printf("Kernel initialized\n");
-
-    boot_loadinfo();
-
-    struct process *process = NULL;
-    res = process_load_switch("0:/bin/shell.elf", &process);
-    if (res < 0)
-    {
-        kernel_panic("Failed to load process\n");
-    }
-
-    task_run_first_ever_task();
-
-    // Never reached
-}
