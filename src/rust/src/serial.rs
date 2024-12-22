@@ -44,18 +44,16 @@ macro_rules! serial_println {
 pub extern "C" fn serial_write(buf: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     use crate::interrupts;
     use core::fmt::Write;
-    use core::slice;
 
-    let buf = unsafe {
-        let len = strlen(buf) as usize;
-        slice::from_raw_parts(buf as *const u8, len)
+    let len = unsafe {
+        strlen(buf) as usize
     };
 
     interrupts::without_interrupts(|| {
         use core::str;
         SERIAL1
             .lock()
-            .write_str(str::from_utf8(buf).unwrap())
+            .write_str(unsafe{ str::from_raw_parts(buf as *const u8, len)})
             .expect("Printing to serial failed")
     });
 

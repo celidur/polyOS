@@ -1,0 +1,19 @@
+[package]
+name = "polyos_std"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["rlib"]
+
+[build-dependencies]
+bindgen = "0.71.0"
+walkdir = "2.3"
+
+
+[dependencies]
+polyos_std_macros = { path = "../polyos_std_macros", optional = true }
+
+[features]
+default = ["macros"]
+macros = ["polyos_std_macros"]

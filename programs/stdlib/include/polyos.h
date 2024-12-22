@@ -1,7 +1,7 @@
 #ifndef POLYOS_H
 #define POLYOS_H
 
-#include <stddef.h>
+#include <types.h>
 #include <stdbool.h>
 
 struct command_argument {

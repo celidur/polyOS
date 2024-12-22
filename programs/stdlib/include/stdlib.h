@@ -1,8 +1,7 @@
 #ifndef POLYOS_STDLIB_H
 #define POLYOS_STDLIB_H
 
-#include <stddef.h>
-#include <stdint.h>
+#include "types.h"
 
 void* malloc(size_t size);
 void free(void *ptr);

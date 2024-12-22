@@ -3,7 +3,7 @@ BUILD_DIR = ./build
 SRC_DIR = ./src
 
 RUST_DIR = ./src/rust
-RUST_TARGET = i686-custom
+RUST_TARGET = i686-polyos
 RUST_LIB = $(RUST_DIR)/target/$(RUST_TARGET)/release/librust_kernel.a
 
 FILES_ASM = $(shell find $(SRC_DIR) -type f -name '*.asm' ! -name 'boot.asm')
@@ -99,11 +99,18 @@ stdlib:
 	+$(MAKE) -C programs/stdlib all
 
 $(PROGRAM_NAMES): stdlib
-	+$(MAKE) -C programs/$@ all
-	cp programs/$@/$@.elf ./file/bin/$@.elf
+	@if [ -f programs/$@/Makefile ]; then \
+		$(MAKE) -C programs/$@ all; \
+		cp programs/$@/$@.elf ./file/bin/$@.elf; \
+	fi
+
 
 user_programs_clean:
-	$(foreach dir,$(PROGRAM_DIRS),$(MAKE) -C $(dir) clean;)
+	$(foreach dir,$(PROGRAM_DIRS), \
+		if [ -f $(dir)/Makefile ]; then \
+			$(MAKE) -C $(dir) clean; \
+		fi;)
+
 
 clean_log:
 	if [ -d "./log" ]; then rm ./log/*; fi

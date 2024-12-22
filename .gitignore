@@ -4,5 +4,3 @@
 *.elf
 **/.DS_Store
 log
-src/rust/target
-src/rust/src/bindings.rs

@@ -3,8 +3,6 @@
 #include "stdlib.h"
 #include "polyos.h"
 #include "string.h"
-#include <stddef.h>
-#include <stdint.h>
 
 int main(int argc, char **argv)
 {
