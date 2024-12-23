@@ -51,7 +51,7 @@ static int process_load_binary(const char *filename, struct process *process)
         goto out;
     }
 
-    void *program_data_ptr = kzalloc(stat.size);
+    void *program_data_ptr = kpalloc(stat.size);
     if (!program_data_ptr)
     {
         res = -ENOMEM;
@@ -175,7 +175,7 @@ int process_load_for_slot(const char *filename, struct process **process, int pr
         goto out;
     }
 
-    _process->stack = kzalloc(USER_PROGRAM_STACK_SIZE);
+    _process->stack = kpalloc(USER_PROGRAM_STACK_SIZE);
     if (!_process->stack)
     {
         res = -ENOMEM;
@@ -293,7 +293,7 @@ void* process_malloc(struct process* process, size_t size){
         return NULL;
     }
 
-    void* ptr = kzalloc(size);
+    void* ptr = kpalloc(size);
     if (!ptr){
         return NULL;
     }

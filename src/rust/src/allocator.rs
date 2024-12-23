@@ -1,24 +1,99 @@
-use core::alloc::{GlobalAlloc, Layout};
+use crate::serial_println;
+use alloc::format;
+use alloc::string::String;
+use core::{
+    alloc::{GlobalAlloc, Layout},
+    sync::atomic::{AtomicUsize, Ordering},
+};
+use linked_list_allocator::LockedHeap;
 
-use crate::bindings::{kernel_panic, kfree, kmalloc};
-struct KernelAllocator;
+pub const HEAP_START: usize = 0x1_000_000;
+pub const HEAP_SIZE: usize = 100 * 1024 * 1024; // 100MB
 
-unsafe impl GlobalAlloc for KernelAllocator {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let ptr = kmalloc(layout.size()) as *mut u8;
-        if ptr.is_null() {
-            // Allocation failed
-            let msg = c"Kernel allocator failed to allocate memory".as_ptr();
-            kernel_panic(msg);
+pub struct TrackingAllocator {
+    inner: LockedHeap,
+    allocated: AtomicUsize, // Tracks the total allocated size.
+}
+
+impl TrackingAllocator {
+    pub const fn new() -> Self {
+        Self {
+            inner: LockedHeap::empty(),
+            allocated: AtomicUsize::new(0),
         }
-
-        ptr
     }
 
-    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
-        kfree(ptr as *mut core::ffi::c_void);
+    pub fn init(&self, heap_start: *mut u8, heap_size: usize) {
+        unsafe {
+            self.inner.lock().init(heap_start, heap_size);
+        }
+    }
+
+    pub fn total_allocated(&self) -> usize {
+        self.allocated.load(Ordering::Relaxed)
     }
 }
 
+unsafe impl GlobalAlloc for TrackingAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let ptr = self.inner.alloc(layout);
+        if !ptr.is_null() {
+            self.allocated.fetch_add(layout.size(), Ordering::Relaxed);
+        }
+        ptr
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        self.inner.dealloc(ptr, layout);
+        self.allocated.fetch_sub(layout.size(), Ordering::Relaxed);
+    }
+}
+
+pub fn init_heap() {
+    ALLOCATOR.init(HEAP_START as *mut u8, HEAP_SIZE);
+}
+
+#[no_mangle]
+pub extern "C" fn serial_print_memory() {
+    serial_println!("{}", memory_usage());
+}
+
+#[no_mangle]
+pub extern "C" fn print_memory() {
+    serial_println!("{}", memory_usage());
+}
+
+fn memory_usage() -> String {
+    let allocated = ALLOCATOR.total_allocated();
+    let total = HEAP_SIZE;
+    let left = total - allocated;
+
+    let allocated = if allocated > 1024 * 1024 {
+        format!("{:.2} MB", allocated as f64 / (1024.0 * 1024.0))
+    } else if allocated > 1024 {
+        format!("{:.2} KB", allocated as f64 / 1024.0)
+    } else {
+        format!("{} bytes", allocated)
+    };
+
+    let total = if total > 1024 * 1024 {
+        format!("{:.2} MB", total as f64 / (1024.0 * 1024.0))
+    } else if total > 1024 {
+        format!("{:.2} KB", total as f64 / 1024.0)
+    } else {
+        format!("{} bytes", total)
+    };
+
+    let left = if left > 1024 * 1024 {
+        format!("{:.2} MB", left as f64 / (1024.0 * 1024.0))
+    } else if left > 1024 {
+        format!("{:.2} KB", left as f64 / 1024.0)
+    } else {
+        format!("{} bytes", left)
+    };
+
+    format!("Heap usage: {} / {} ({} left)", allocated, total, left)
+}
+
 #[global_allocator]
-static GLOBAL_ALLOCATOR: KernelAllocator = KernelAllocator;
+static ALLOCATOR: TrackingAllocator = TrackingAllocator::new();

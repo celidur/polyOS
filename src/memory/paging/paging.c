@@ -19,15 +19,20 @@ static int32_t paging_get_highest_flag(u32* entry){
 }
 page_t *paging_new_4gb(u8 flags)
 {
-    u32 *directory = kzalloc(sizeof(u32) * PAGING_PAGE_TABLE_SIZE);
+    u32 *directory = kpalloc(sizeof(u32) * PAGING_PAGE_TABLE_SIZE);
     if (!directory)
     {
         kernel_panic("Failed to allocate page directory");
     }
+    u32 *entries = kpalloc(sizeof(u32) * PAGING_PAGE_TABLE_SIZE * PAGING_PAGE_TABLE_SIZE);
+    if (!entries)
+    {
+        kernel_panic("Failed to allocate page table entries");
+    }
     u32 offset = 0;
     for (int i = 0; i < PAGING_PAGE_TABLE_SIZE; i++)
     {
-        u32 *entry = kzalloc(sizeof(u32) * PAGING_PAGE_TABLE_SIZE);
+        u32 *entry = &entries[i * PAGING_PAGE_TABLE_SIZE];
         if (!entry)
         {
             kernel_panic("Failed to allocate page table");
@@ -94,12 +99,9 @@ int paging_set(u32 *directory, void *virtual_addr, u32 value)
 
 void paging_free_4gb(page_t *chunk)
 {
-    for (int i = 0; i < PAGING_PAGE_TABLE_SIZE; i++)
-    {
-        u32 entry = chunk[i];
-        u32 *table = (u32 *)(entry & 0xFFFFF000);
-        kfree(table);
-    }
+    u32 entry = chunk[0];
+    u32 *table = (u32 *)(entry & 0xFFFFF000);
+    kfree(table);
     kfree(chunk);
 }
 

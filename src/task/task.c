@@ -190,7 +190,7 @@ int copy_string_from_task(struct task *task, void *virt, void *phys, int max)
     if (max >= PAGING_PAGE_SIZE)
         return -EINVARG;
 
-    char *buffer = kzalloc(max);
+    char *buffer = kpalloc(max);
     if (!buffer)
         return -ENOMEM;
 

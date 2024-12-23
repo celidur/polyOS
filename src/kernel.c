@@ -48,8 +48,7 @@ void kernel_panic(const char *msg)
         ;
 }
 
-void kernel_init()
-{
+void kernel_init(){
     terminal_initialize();
     memset(gdt_real, 0, sizeof(gdt_real));
     gdt_struct_to_gdt(gdt_struct, gdt_real, TOTAL_GDT_SEGMENTS);
@@ -57,9 +56,10 @@ void kernel_init()
     // Load GDT
     gdt_load(gdt_real, sizeof(gdt_real)-1);
 
-    // Initialize kernel heap
-    kheap_init();
+}
 
+void kernel_init2()
+{
     // Initialize filesystems
     fs_init();
 

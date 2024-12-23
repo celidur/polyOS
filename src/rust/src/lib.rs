@@ -10,9 +10,9 @@ mod bindings;
 
 mod allocator;
 mod interrupts;
+mod kernel_main;
+mod memory;
 mod panic;
 mod serial;
-mod memory;
-mod kernel_main;
 
 mod macros;

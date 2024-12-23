@@ -29,7 +29,7 @@ void* int80h_command14_fread(struct interrupt_frame *frame) {
     uint32_t size = (uint32_t)task_get_stack_item(task_current(), 2);
     int res = 0;
 
-    void *data = kzalloc(size);
+    void *data = kpalloc(size);
     if (!data) {
         res = -ENOMEM;
         goto out;

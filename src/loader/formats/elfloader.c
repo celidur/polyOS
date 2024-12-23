@@ -166,7 +166,7 @@ int elf_load(const char* filename, struct elf_file** file_out){
         goto out;
     }
 
-    elf_file->elf_memory = kzalloc(stat.size);
+    elf_file->elf_memory = kpalloc(stat.size);
     res = fread(fd, elf_file->elf_memory, stat.size);
     if (res != stat.size){
         goto out;
