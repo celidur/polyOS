@@ -153,6 +153,10 @@ void task_run_first_ever_task()
 
 int task_page()
 {
+    if (!current_task)
+    {
+        return -EINVARG;
+    }
     user_registers();
     return task_switch(current_task);
 }
@@ -178,7 +182,8 @@ void task_current_save_state(struct interrupt_frame *frame)
 {
     if (!current_task)
     {
-        kernel_panic("task_current_save_state: No current task to save! \n");
+        // kernel_panic("task_current_save_state: No current task to save! \n");
+        return;
     }
 
     struct task *task = task_current();
@@ -248,10 +253,9 @@ void* task_virtual_address_to_physical(struct task* task, void* virtual_address)
 
 void task_next(){
     struct task* next = task_get_next();
-    if (!next){
-        kernel_panic("task_next: No next task to switch too \n");
+    if (next){
+        task_switch(next);
+        task_return(&next->regs);
     }
-
-    task_switch(next);
-    task_return(&next->regs);
+    return;
 }

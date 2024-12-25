@@ -133,6 +133,7 @@ static void idt_general_protection_fault(struct interrupt_frame* frame, u32 code
 static void idt_handle_exception(){
     process_terminate(task_current()->process);
     task_next();
+    kernel_panic("No more tasks to run\n");
 }
 
 void interrupt_handler(int interrupt,struct interrupt_frame* frame)

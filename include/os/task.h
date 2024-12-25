@@ -50,6 +50,6 @@ void task_current_save_state(struct interrupt_frame *frame);
 int copy_string_from_task(struct task *task, void *virt, void *phys, int max);
 int copy_string_to_task(struct task *task, void* buff, void* virt, u32 size);
 void* task_virtual_address_to_physical(struct task* task, void* virtual_address);
-void task_next() __attribute__((noreturn));
+void task_next();
 
 #endif

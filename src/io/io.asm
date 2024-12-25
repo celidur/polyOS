@@ -4,8 +4,10 @@ section .asm
 
 global inb
 global inw
+global inl
 global outb
 global outw
+global outl
 
 inb:
     push ebp
@@ -29,6 +31,17 @@ inw:
     pop ebp
     ret
 
+inl:
+    push ebp
+    mov ebp, esp
+
+    xor eax, eax
+    mov edx, [ebp + 8]
+    in eax, dx
+
+    pop ebp
+    ret
+
 outb:
     push ebp
     mov ebp, esp
@@ -47,6 +60,17 @@ outw:
     mov edx, [ebp + 8]
     mov eax, [ebp + 12]
     out dx, ax
+
+    pop ebp
+    ret
+
+outl:
+    push ebp
+    mov ebp, esp
+
+    mov edx, [ebp + 8]
+    mov eax, [ebp + 12]
+    out dx, eax
 
     pop ebp
     ret

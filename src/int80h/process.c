@@ -4,6 +4,7 @@
 #include <os/string.h>
 #include <os/status.h>
 #include <os/config.h>
+#include <os/kernel.h>
 
 void* int80h_command6_process_load_start(struct interrupt_frame *frame){
     void * file_user_ptr = (void*)task_get_stack_item(task_current(), 0);
@@ -67,5 +68,6 @@ void* int80h_command9_exit(struct interrupt_frame *frame){
     struct process* process = task_current()->process;
     process_terminate(process);
     task_next();
+    kernel_panic("No more tasks to run\n");
     return NULL;
 }
