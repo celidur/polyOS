@@ -7,7 +7,7 @@ extern crate alloc;
 #[macro_use]
 pub mod stdio;
 #[allow(warnings)]
-mod bindings;
+pub mod bindings;
 pub mod cli;
 mod memory;
 pub mod prelude;

@@ -1,5 +1,7 @@
 use core::fmt::{self, Write};
 
+use crate::bindings::{polyos_getkeyblock, polyos_putchar, remove_last_char};
+
 struct ConsoleWriter;
 
 impl Write for ConsoleWriter {
@@ -102,4 +104,29 @@ macro_rules! serial_println {
     ($($arg:tt)*) => {
         $crate::serial_print!("{}\n", format_args!($($arg)*));
     };
+}
+
+pub fn terminal_readline(buffer: &mut [u8], output_while_typing: bool) -> usize {
+    let mut i = 0;
+    while i < buffer.len() {
+        let key = unsafe { polyos_getkeyblock() };
+        match key {
+            0x08 => {
+                if i > 0 {
+                    unsafe { remove_last_char() };
+                    buffer[i] = b'\0';
+                    i -= 1;
+                }
+            }
+            13 => break,
+            k => {
+                if output_while_typing {
+                    unsafe { polyos_putchar(key.try_into().unwrap()) };
+                }
+                buffer[i] = k.try_into().unwrap();
+                i += 1;
+            }
+        }
+    }
+    i
 }
