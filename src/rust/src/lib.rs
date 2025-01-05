@@ -9,6 +9,7 @@ extern crate alloc;
 mod bindings;
 
 mod allocator;
+mod devices;
 mod interrupts;
 mod kernel_main;
 mod memory;
