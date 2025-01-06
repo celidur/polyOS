@@ -117,6 +117,15 @@ void boot_loadinfo()
     set_text_mode(VGA_90x60_TEXT);
 }
 
+void shutdown()
+{
+    serial_printf("Shutting down...\n");
+
+    outw(0x604, 0x2000);
+
+    halt();
+}
+
 void reboot()
 {
     uint8_t good = 0x02;

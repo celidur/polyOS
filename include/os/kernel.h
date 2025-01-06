@@ -13,6 +13,7 @@ void kernel_page();
 void kernel_registers();
 void halt();
 void reboot();
+void shutdown();
 u64 get_ticks();
 
 #endif // KERNEL_H

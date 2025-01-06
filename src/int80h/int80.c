@@ -28,4 +28,5 @@ void int80h_register_commands()
     int80h_register_command(SYSTEM_COMMAND17_STAT_FILE, int80h_command17_fstat);
     int80h_register_command(SYSTEM_COMMAND18_CLOSE_FILE, int80h_command18_fclose);
     int80h_register_command(SYSTEM_COMMAND19_REBOOT, int80h_command19_reboot);
+    int80h_register_command(SYSTEM_COMMAND20_SHUTDOWN, int80h_command20_shutdown);
 }

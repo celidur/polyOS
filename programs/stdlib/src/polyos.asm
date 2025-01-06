@@ -17,6 +17,7 @@ global remove_last_char:function
 global clear_screen:function
 
 global reboot:function
+global shutdown:function
 
 global fopen:function
 global fread:function
@@ -235,5 +236,11 @@ fclose:
 ; void reboot()
 reboot:
     mov eax, 19 ; Command reboot
+    int 0x80
+    ret
+
+; void shutdown()
+shutdown:
+    mov eax, 20 ; Command shutdown
     int 0x80
     ret

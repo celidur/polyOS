@@ -1,7 +1,7 @@
 #![no_main]
 #![no_std]
 
-use bindings::{clear_screen, malloc, print_memory, reboot};
+use bindings::{clear_screen, malloc, print_memory, reboot, shutdown};
 use polyos_std::*;
 use process::run;
 
@@ -31,6 +31,9 @@ fn main() {
             },
             "reboot" => unsafe {
                 reboot();
+            },
+            "shutdown" => unsafe {
+                shutdown();
             },
             _ => {
                 if run(buffer) < 0 {

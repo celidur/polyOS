@@ -33,5 +33,6 @@ void print_memory();
 void remove_last_char();
 void clear_screen();
 void reboot();
+void shutdown();
 
 #endif
