@@ -1,3 +1,5 @@
+use alloc::{boxed::Box, string::String};
+
 use crate::{
     allocator::{init_heap, serial_print_memory},
     bindings::{
@@ -5,7 +7,9 @@ use crate::{
         task_run_first_ever_task,
     },
     devices::pci::pci_read_config,
-    entry_point, serial_println,
+    entry_point,
+    fs::{tmp::TmpFileSystem, FileSystem, ROOT_FS},
+    serial_println,
 };
 
 entry_point!(kernel_main);
@@ -43,6 +47,50 @@ fn kernel_main() -> ! {
     serial_print_memory();
 
     list_pci_devices();
+
+    // create file
+
+    {
+        let mut root_fs = ROOT_FS.lock();
+
+        let tmp_fs = TmpFileSystem::new("/tmp");
+        root_fs.mount("/tmp", Box::new(tmp_fs)).unwrap();
+
+        let tmp_fs = TmpFileSystem::new("/");
+        root_fs.mount("/", Box::new(tmp_fs)).unwrap();
+
+        serial_println!("root_fs: {:?}", root_fs);
+
+        let res = root_fs.open("/tmp/test.txt", crate::fs::FileMode::Write);
+        match res {
+            Ok(_) => {
+                serial_println!("file exists");
+            }
+            Err(e) => {
+                serial_println!("Error: {:?}", e);
+            }
+        }
+
+        let mut f = root_fs
+            .open("/tmp/test.txt", crate::fs::FileMode::Write)
+            .unwrap();
+        f.write(b"Hello, World!\n").unwrap();
+        f.seek(0, crate::fs::SeekMode::Set).unwrap();
+        let mut buf = [0; 14];
+        f.read(&mut buf).unwrap();
+        assert!(&buf == b"Hello, World!\n");
+        root_fs.close(f).unwrap();
+
+        let mut f = root_fs
+            .open("/tmp/test.txt", crate::fs::FileMode::Read)
+            .unwrap();
+        let mut buf = [0; 14];
+        f.read(&mut buf).unwrap();
+
+        let s = String::from_utf8(buf.to_vec()).unwrap();
+        serial_println!("Read: {:?}", s);
+        root_fs.close(f).unwrap();
+    }
 
     let p: *mut *mut process = core::ptr::null_mut();
     let res = unsafe { process_load_switch(c"0:/bin/shell-v2.elf".as_ptr(), p) };

@@ -152,14 +152,13 @@ struct elf_file* elf_file_new()
 }
 
 int elf_load(const char* filename, struct elf_file** file_out){
-    struct elf_file* elf_file = elf_file_new();
-    int fd = 0;
-    int res = fopen(filename, "r");
-    if (res <= 0){
+    int res = 0;
+    int fd = fopen(filename, "r");
+    if (fd <= 0){
         return -EIO;
     }
 
-    fd = res;
+    struct elf_file* elf_file = elf_file_new();
     struct file_stat stat;
     res = fstat(fd, &stat);
     if (res < 0){

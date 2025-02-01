@@ -88,7 +88,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 clean: user_programs_clean
 	rm -rf $(BIN_DIR) $(BUILD_DIR)
 	rm -rf ./file/bin/*.elf
-	cd $(RUST_DIR) && cargo clean
+	rm -rf $(RUST_LIB)
 
 user_programs: ./file/bin $(PROGRAM_NAMES)
 

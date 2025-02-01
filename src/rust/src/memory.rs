@@ -1,21 +1,25 @@
 use core::{
     alloc::{Allocator, Layout},
+    ffi::c_void,
     ptr::NonNull,
 };
+use lazy_static::lazy_static;
 
-use alloc::alloc::Global;
+use alloc::{alloc::Global, vec::Vec};
+use spin::Mutex;
 
 use crate::serial_print;
 
 const PAGE_SIZE: usize = 4096;
 
-const MAGIC_NUMBER: u32 = 0x1CAFE1;
-
-#[repr(C)]
-struct AllocationHeader {
+pub struct AllocationHeader {
+    ptr: u32,
     size: usize,
     alignment: usize,
-    magic: u32,
+}
+
+lazy_static! {
+    pub static ref MEMORIES: Mutex<Vec<AllocationHeader>> = Mutex::new(Vec::new());
 }
 
 #[no_mangle]
@@ -23,9 +27,8 @@ pub extern "C" fn kmalloc(size: usize) -> *mut core::ffi::c_void {
     if size == 0 {
         return core::ptr::null_mut();
     }
-    let total_size = size + core::mem::size_of::<AllocationHeader>();
 
-    let layout = match Layout::from_size_align(total_size, core::mem::align_of::<u8>()).ok() {
+    let layout = match Layout::from_size_align(size, core::mem::align_of::<u8>()).ok() {
         Some(layout) => layout,
         None => return core::ptr::null_mut(),
     };
@@ -34,13 +37,14 @@ pub extern "C" fn kmalloc(size: usize) -> *mut core::ffi::c_void {
     match ptr {
         Ok(ptr) => {
             let ptr = ptr.as_ptr() as *mut u8;
-            let header = ptr as *mut AllocationHeader;
-            unsafe {
-                (*header).size = total_size;
-                (*header).alignment = core::mem::align_of::<u8>();
-                (*header).magic = MAGIC_NUMBER;
-            }
-            unsafe { ptr.add(core::mem::size_of::<AllocationHeader>()) as *mut core::ffi::c_void }
+
+            MEMORIES.lock().push(AllocationHeader {
+                ptr: ptr as u32,
+                size,
+                alignment: core::mem::align_of::<u8>(),
+            });
+
+            ptr as *mut core::ffi::c_void
         }
         Err(_) => core::ptr::null_mut(),
     }
@@ -51,8 +55,7 @@ pub extern "C" fn kzalloc(size: usize) -> *mut core::ffi::c_void {
     if size == 0 {
         return core::ptr::null_mut();
     }
-    let total_size = size + core::mem::size_of::<AllocationHeader>();
-    let layout = match Layout::from_size_align(total_size, core::mem::align_of::<u8>()).ok() {
+    let layout = match Layout::from_size_align(size, core::mem::align_of::<u8>()).ok() {
         Some(layout) => layout,
         None => return core::ptr::null_mut(),
     };
@@ -60,13 +63,14 @@ pub extern "C" fn kzalloc(size: usize) -> *mut core::ffi::c_void {
     match ptr {
         Ok(ptr) => {
             let ptr = ptr.as_ptr() as *mut u8;
-            let header = ptr as *mut AllocationHeader;
-            unsafe {
-                (*header).size = total_size;
-                (*header).alignment = core::mem::align_of::<usize>();
-                (*header).magic = MAGIC_NUMBER;
-            }
-            unsafe { ptr.add(core::mem::size_of::<AllocationHeader>()) as *mut core::ffi::c_void }
+
+            MEMORIES.lock().push(AllocationHeader {
+                ptr: ptr as u32,
+                size,
+                alignment: core::mem::align_of::<u8>(),
+            });
+
+            ptr as *mut core::ffi::c_void
         }
         Err(_) => core::ptr::null_mut(),
     }
@@ -77,9 +81,8 @@ pub extern "C" fn kpalloc(size: usize) -> *mut core::ffi::c_void {
     if size == 0 {
         return core::ptr::null_mut();
     }
-    let aligned_size = (size + PAGE_SIZE - 1) & !(PAGE_SIZE - 1);
-    let total_size = aligned_size + PAGE_SIZE;
-    let layout = match Layout::from_size_align(total_size, PAGE_SIZE) {
+    let size = (size + PAGE_SIZE - 1) & !(PAGE_SIZE - 1);
+    let layout = match Layout::from_size_align(size, PAGE_SIZE) {
         Ok(layout) => layout,
         Err(_) => return core::ptr::null_mut(),
     };
@@ -88,21 +91,14 @@ pub extern "C" fn kpalloc(size: usize) -> *mut core::ffi::c_void {
     match ptr {
         Ok(ptr) => {
             let raw_ptr = ptr.as_ptr() as *mut u8;
-            let aligned_ptr = (unsafe { raw_ptr.add(core::mem::size_of::<AllocationHeader>()) }
-                as usize
-                + (PAGE_SIZE - 1))
-                & !(PAGE_SIZE - 1);
 
-            let header =
-                unsafe { (aligned_ptr as *mut u8).sub(core::mem::size_of::<AllocationHeader>()) }
-                    as *mut AllocationHeader;
-            unsafe {
-                (*header).size = total_size;
-                (*header).alignment = PAGE_SIZE;
-                (*header).magic = MAGIC_NUMBER;
-            }
+            MEMORIES.lock().push(AllocationHeader {
+                ptr: raw_ptr as u32,
+                size,
+                alignment: PAGE_SIZE,
+            });
 
-            aligned_ptr as *mut core::ffi::c_void
+            raw_ptr as *mut core::ffi::c_void
         }
         Err(_) => core::ptr::null_mut(),
     }
@@ -114,28 +110,23 @@ pub extern "C" fn kfree(ptr: *mut core::ffi::c_void) {
         return;
     }
 
-    unsafe {
-        let header =
-            (ptr as *mut u8).sub(core::mem::size_of::<AllocationHeader>()) as *mut AllocationHeader;
-
-        let total_size = (*header).size;
-        let alignment = (*header).alignment;
-        let magic = (*header).magic;
-
-        // prevent double free
-        (*header).size = 0;
-        (*header).alignment = 0;
-        (*header).magic = 0;
-
-        if magic != MAGIC_NUMBER {
-            serial_print!("Invalid magic number: {:?}\n", magic);
-            return;
-        }
-
-        if let Ok(layout) = Layout::from_size_align(total_size, alignment) {
-            let raw_ptr = ((ptr as usize - core::mem::size_of::<AllocationHeader>())
-                & !(alignment - 1)) as *mut u8;
-            Global.deallocate(NonNull::new_unchecked(raw_ptr), layout);
+    let mut index = None;
+    for (i, header) in MEMORIES.lock().iter().enumerate() {
+        if core::ptr::eq(header.ptr as *const c_void, ptr) {
+            index = Some(i);
+            break;
         }
     }
+
+    if let Some(index) = index {
+        let header = MEMORIES.lock().remove(index);
+        if let Ok(layout) = Layout::from_size_align(header.size, header.alignment) {
+            let raw_ptr = header.ptr as *mut u8;
+            unsafe {
+                Global.deallocate(NonNull::new_unchecked(raw_ptr), layout);
+            }
+            return;
+        }
+    }
+    serial_print!("Failed to free memory at {:?}", ptr);
 }

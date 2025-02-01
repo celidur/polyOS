@@ -32,7 +32,7 @@ _start:
 
     call kernel_main
 
-    jmp $
+    jmp halt
 
 kernel_registers:
     mov ax, 0x10

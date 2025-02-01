@@ -170,7 +170,7 @@ out:
             root = NULL;
         }
 
-        if (disk && descriptor_private_data){
+        if (disk && (int)descriptor_private_data > 0){
             disk->fs->close(descriptor_private_data);
             descriptor_private_data = NULL;
         }

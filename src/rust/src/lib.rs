@@ -10,6 +10,7 @@ mod bindings;
 
 mod allocator;
 mod devices;
+mod fs;
 mod interrupts;
 mod kernel_main;
 mod memory;

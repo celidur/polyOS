@@ -97,13 +97,29 @@ load32:
     or al, 2
     out 0x92, al
 
+    mov esi, 10
     mov eax, 1
-    mov ecx, 255
     mov edi, 0x0100000
+
+read_loop:
+    push esi
+    push edi
+    push eax
+
+    mov ecx, 255
     call ata_lba_read
-    ; call long_mode
-    ; call detection_cpuid
-    ; call verification_cpuid
+
+    pop eax
+    pop edi
+    pop esi
+
+    add edi, 255 * 512
+    add eax, 255
+
+    dec esi
+
+    jnz read_loop
+
     jmp CODE_SEG:0x0100000
 
 ata_lba_read:

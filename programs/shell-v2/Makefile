@@ -9,5 +9,4 @@ $(TARGET):
 	cp ./target/i686-polyos/release/$(PARENT_DIR) $(TARGET)
 
 clean:
-	cargo clean
 	if [ -f "$(TARGET)" ]; then rm -rf $(TARGET); fi

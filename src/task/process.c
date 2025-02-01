@@ -61,6 +61,7 @@ static int process_load_binary(const char *filename, struct process *process)
     if (fread(fd, program_data_ptr, stat.size) != stat.size)
     {
         res = -EIO;
+        kfree(program_data_ptr);
         goto out;
     }
 

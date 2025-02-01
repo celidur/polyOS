@@ -44,6 +44,7 @@ void kernel_panic(const char *msg)
     print(msg);
     disable_cursor();
     serial_printf("KERNEL PANIC: %s\n", msg);
+    halt();
     while (1)
         ;
 }

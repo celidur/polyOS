@@ -39,7 +39,7 @@ void* int80h_command14_fread(struct interrupt_frame *frame) {
         goto free_data;
     }
 
-    res = copy_string_to_task(task_current(), data, ptr, size);   
+    res = copy_string_to_task(task_current(), data, ptr, size);
 free_data: 
     kfree(data);
 out:
