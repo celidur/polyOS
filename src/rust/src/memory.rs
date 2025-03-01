@@ -22,7 +22,7 @@ lazy_static! {
     pub static ref MEMORIES: Mutex<Vec<AllocationHeader>> = Mutex::new(Vec::new());
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn kmalloc(size: usize) -> *mut core::ffi::c_void {
     if size == 0 {
         return core::ptr::null_mut();
@@ -50,7 +50,7 @@ pub extern "C" fn kmalloc(size: usize) -> *mut core::ffi::c_void {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn kzalloc(size: usize) -> *mut core::ffi::c_void {
     if size == 0 {
         return core::ptr::null_mut();
@@ -76,7 +76,7 @@ pub extern "C" fn kzalloc(size: usize) -> *mut core::ffi::c_void {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn kpalloc(size: usize) -> *mut core::ffi::c_void {
     if size == 0 {
         return core::ptr::null_mut();
@@ -104,7 +104,7 @@ pub extern "C" fn kpalloc(size: usize) -> *mut core::ffi::c_void {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn kfree(ptr: *mut core::ffi::c_void) {
     if ptr.is_null() {
         return;

@@ -10,16 +10,16 @@ pub fn main(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Generate the entry point `main`
     let expanded = quote! {
-        #[export_name = "main"]
-        extern "C" fn rust_main() -> ! {
-            // Call the main function
+        fn rust_main_wrapper() -> ! {
             #func_name();
-
-            // Exit the program
             polyos_std::process::exit(0);
         }
 
-        // Original main function
+        #[unsafe(export_name = "main")]
+        extern "C" fn rust_main() -> ! {
+            rust_main_wrapper()
+        }
+
         #input
     };
 

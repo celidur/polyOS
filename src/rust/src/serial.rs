@@ -40,7 +40,7 @@ macro_rules! serial_println {
         concat!($fmt, "\n"), $($arg)*));
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn serial_write(buf: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     use crate::interrupts;
     use core::fmt::Write;

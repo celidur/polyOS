@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::bindings::{inl, outl};
 
 const PCI_CONFIG_ADDRESS: u16 = 0xCF8;
@@ -14,14 +16,14 @@ pub fn pci_config_address(bus: u8, device: u8, function: u8, offset: u8) -> u32 
 
 pub unsafe fn pci_read_config(bus: u8, device: u8, function: u8, offset: u8) -> u32 {
     let address = pci_config_address(bus, device, function, offset);
-    outl(PCI_CONFIG_ADDRESS, address);
-    inl(PCI_CONFIG_DATA)
+    unsafe { outl(PCI_CONFIG_ADDRESS, address) };
+    unsafe { inl(PCI_CONFIG_DATA) }
 }
 
 pub unsafe fn pci_write_config(bus: u8, device: u8, function: u8, offset: u8, value: u32) {
     let address = pci_config_address(bus, device, function, offset);
-    outl(PCI_CONFIG_ADDRESS, address);
-    outl(PCI_CONFIG_DATA, value);
+    unsafe { outl(PCI_CONFIG_ADDRESS, address) };
+    unsafe { outl(PCI_CONFIG_DATA, value) };
 }
 
 pub fn find_base_address(vendor_id: u32, device_id: u32) -> Option<*mut u8> {

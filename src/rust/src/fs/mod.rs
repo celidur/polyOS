@@ -1,8 +1,6 @@
-mod file;
-mod path;
-mod root;
-pub mod tmp;
+pub mod fat16;
+mod memfs;
+mod vfs;
 
-pub use file::{File, FileMode, FileStat, FileStatFlags, FileSystem, FsError, SeekMode};
-
-pub use root::ROOT_FS;
+pub use memfs::MemFsDriver;
+pub use vfs::{FsError, MountOptions, VFS};

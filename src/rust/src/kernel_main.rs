@@ -1,4 +1,5 @@
-use alloc::{boxed::Box, string::String};
+use alloc::{string::ToString, sync::Arc};
+use spin::Mutex;
 
 use crate::{
     allocator::{init_heap, serial_print_memory},
@@ -6,9 +7,9 @@ use crate::{
         boot_loadinfo, kernel_init, kernel_init2, process, process_load_switch,
         task_run_first_ever_task,
     },
-    devices::pci::pci_read_config,
+    device::{block_dev::register_block_device, disk::Disk, pci::pci_read_config},
     entry_point,
-    fs::{tmp::TmpFileSystem, FileSystem, ROOT_FS},
+    fs::{fat16::Fat16Driver, MemFsDriver, MountOptions, VFS},
     serial_println,
 };
 
@@ -48,48 +49,103 @@ fn kernel_main() -> ! {
 
     list_pci_devices();
 
-    // create file
-
     {
-        let mut root_fs = ROOT_FS.lock();
+        VFS.write()
+            .register_fs_driver("memfs", Arc::new(MemFsDriver));
+        VFS.write()
+            .register_fs_driver("fat16", Arc::new(Fat16Driver));
 
-        let tmp_fs = TmpFileSystem::new("/tmp");
-        root_fs.mount("/tmp", Box::new(tmp_fs)).unwrap();
+        let disk = Arc::new(Mutex::new(Disk::new(0x1F0)));
 
-        let tmp_fs = TmpFileSystem::new("/");
-        root_fs.mount("/", Box::new(tmp_fs)).unwrap();
+        let dev1_id = register_block_device(disk.clone());
 
-        serial_println!("root_fs: {:?}", root_fs);
+        VFS.read()
+            .mount(
+                "/",
+                &MountOptions {
+                    fs_name: "fat16".to_string(),
+                    block_device_id: Some(dev1_id),
+                },
+            )
+            .expect("Failed to mount fat16 at /");
 
-        let res = root_fs.open("/tmp/test.txt", crate::fs::FileMode::Write);
-        match res {
-            Ok(_) => {
-                serial_println!("file exists");
-            }
-            Err(e) => {
-                serial_println!("Error: {:?}", e);
-            }
-        }
+        VFS.read()
+            .mount(
+                "/tmp",
+                &MountOptions {
+                    fs_name: "memfs".to_string(),
+                    block_device_id: None,
+                },
+            )
+            .expect("Failed to mount memfs at /tmp");
 
-        let mut f = root_fs
-            .open("/tmp/test.txt", crate::fs::FileMode::Write)
-            .unwrap();
-        f.write(b"Hello, World!\n").unwrap();
-        f.seek(0, crate::fs::SeekMode::Set).unwrap();
-        let mut buf = [0; 14];
-        f.read(&mut buf).unwrap();
-        assert!(&buf == b"Hello, World!\n");
-        root_fs.close(f).unwrap();
+        VFS.read()
+            .create("/tmp/hello.txt", false)
+            .expect("Failed to create file");
+        let mut file_handle = VFS
+            .read()
+            .open("/tmp/hello.txt")
+            .expect("Failed to open file");
 
-        let mut f = root_fs
-            .open("/tmp/test.txt", crate::fs::FileMode::Read)
-            .unwrap();
-        let mut buf = [0; 14];
-        f.read(&mut buf).unwrap();
+        let message = b"Hello from the Rust kernel!\n";
+        let written = file_handle
+            .ops
+            .write(message)
+            .expect("Failed to write to file");
+        assert!(written == message.len());
 
-        let s = String::from_utf8(buf.to_vec()).unwrap();
-        serial_println!("Read: {:?}", s);
-        root_fs.close(f).unwrap();
+        file_handle
+            .ops
+            .seek(0)
+            .expect("Failed to seek to start of file");
+
+        let mut buffer = [0u8; 128];
+        let read_len = file_handle
+            .ops
+            .read(&mut buffer)
+            .expect("Failed to read from file");
+        let read_str = core::str::from_utf8(&buffer[..read_len]).unwrap_or("<invalid utf-8>");
+
+        assert!(read_str == "Hello from the Rust kernel!\n");
+
+        let mut file_handle = VFS.read().open("/hello.txt").expect("Failed to open file");
+        let mut buffer = [0u8; 128];
+        let read_len = file_handle
+            .ops
+            .read(&mut buffer)
+            .expect("Failed to read from file");
+
+        let read_str = core::str::from_utf8(&buffer[..read_len]).unwrap_or("<invalid utf-8>");
+        serial_println!("Read: {}", read_str);
+
+        file_handle
+            .ops
+            .seek(0)
+            .expect("Failed to seek to start of file");
+
+        let written = file_handle
+            .ops
+            .write(message)
+            .expect("Failed to write to file");
+
+        assert!(written == message.len());
+
+        let mut file_handle = VFS.read().open("/hello.txt").expect("Failed to open file");
+
+        file_handle
+            .ops
+            .seek(0)
+            .expect("Failed to seek to start of file");
+
+        let read_len = file_handle
+            .ops
+            .read(&mut buffer)
+            .expect("Failed to read from file");
+
+        let read_str = core::str::from_utf8(&buffer[..read_len]).unwrap_or("<invalid utf-8>");
+        serial_println!("Read: {}", read_str);
+
+        let _ = disk.lock().sync();
     }
 
     let p: *mut *mut process = core::ptr::null_mut();

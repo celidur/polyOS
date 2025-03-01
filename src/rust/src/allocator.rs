@@ -36,7 +36,7 @@ impl TrackingAllocator {
 
 unsafe impl GlobalAlloc for TrackingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let ptr = self.inner.alloc(layout);
+        let ptr = unsafe { self.inner.alloc(layout) };
         if !ptr.is_null() {
             self.allocated.fetch_add(layout.size(), Ordering::Relaxed);
         }
@@ -44,7 +44,7 @@ unsafe impl GlobalAlloc for TrackingAllocator {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        self.inner.dealloc(ptr, layout);
+        unsafe { self.inner.dealloc(ptr, layout) };
         self.allocated.fetch_sub(layout.size(), Ordering::Relaxed);
     }
 }
@@ -53,12 +53,12 @@ pub fn init_heap() {
     ALLOCATOR.init(HEAP_START as *mut u8, HEAP_SIZE);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn serial_print_memory() {
     serial_println!("{}", memory_usage());
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn print_memory() {
     serial_println!("{}", memory_usage());
 }
