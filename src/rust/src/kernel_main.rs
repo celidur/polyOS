@@ -149,7 +149,7 @@ fn kernel_main() -> ! {
     }
 
     let p: *mut *mut process = core::ptr::null_mut();
-    let res = unsafe { process_load_switch(c"0:/bin/shell-v2.elf".as_ptr(), p) };
+    let res = unsafe { process_load_switch(c"0:/BIN/SHELL-V2.ELF".as_ptr(), p) };
     if res < 0 {
         panic!("Failed to load process");
     }

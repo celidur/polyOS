@@ -32,16 +32,18 @@ PROGRAM_NAMES := $(filter-out stdlib, $(notdir $(patsubst %/,%,$(PROGRAM_DIRS)))
 all: $(DIRECTORIES) $(BIN_DIR)/os.bin user_programs
 	mkdir -p ./log
 	@echo "Mounting disk image..."
-ifeq ($(OS), Darwin)
-	docker run --rm -v "$(PWD):/workspace" --privileged alpine /bin/sh -c '\
-        mkdir /mnt/d && \
-        mount -t vfat /workspace/bin/os.bin /mnt/d &&\
-        cp -r /workspace/file/* /mnt/d && \
-        umount /mnt/d'
-else
+
 	# run mount-disk
 	if [ -d "./mnt" ]; then rm -rf ./mnt; fi
 	mkdir -p ./mnt/d
+ifeq ($(OS), Darwin)
+	DEV_ID=$$(hdiutil attach -imagekey diskimage-class=CRawDiskImage -nomount $(BIN_DIR)/os.bin | grep "/dev/disk" | sed -E 's/ .*//') && \
+	diskutil mount -mountPoint ./mnt/d $$DEV_ID && \
+	cp -r ./file/* ./mnt/d; \
+	sleep 1; \
+	diskutil unmountDisk $$DEV_ID; \
+	hdiutil detach $$DEV_ID;
+else
 	sudo mount -t vfat $(BIN_DIR)/os.bin ./mnt/d
 
 	# Copy file
