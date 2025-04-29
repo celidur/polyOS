@@ -728,7 +728,7 @@ static struct fat_item *fat16_find_item_in_directory(struct fat_dir_root_item_t 
     while (current)
     {
         struct fat_item *item = &current->item;
-        if (strncmp((const char *)item->item->filename, name, MAX_FILENAME) == 0)
+        if (strncasecmp((const char *)item->item->filename, name, MAX_FILENAME) == 0)
             return item;
         current = current->next;
     }

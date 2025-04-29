@@ -4,3 +4,4 @@
 *.elf
 **/.DS_Store
 log
+mnt

@@ -68,6 +68,27 @@ int strncmp(const char *str1, const char *str2, int n)
     return 0;
 }
 
+int strncasecmp(const char *str1, const char *str2, int n)
+{
+    unsigned char u1, u2;
+
+    while (n-- > 0)
+    {
+        u1 = (unsigned char)*str1++;
+        u2 = (unsigned char)*str2++;
+
+        u1 = (unsigned char)tolower(u1);
+        u2 = (unsigned char)tolower(u2);
+
+        if (u1 != u2)
+            return u1 - u2;
+        if (u1 == '\0')
+            return 0;
+    }
+
+    return 0;
+}
+
 int istrncmp(const char *s1, const char *s2, int n)
 {
     unsigned char u1, u2;
