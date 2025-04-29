@@ -14,6 +14,7 @@ void kernel_registers();
 void halt();
 void reboot();
 void shutdown();
+void sync();
 u64 get_ticks();
 
 #endif // KERNEL_H

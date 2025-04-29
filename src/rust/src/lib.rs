@@ -11,9 +11,11 @@ mod allocator;
 mod device;
 mod fs;
 mod interrupts;
+mod kernel;
 mod kernel_main;
 mod memory;
 mod panic;
 mod serial;
+mod utils;
 
 mod macros;

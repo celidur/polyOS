@@ -1,5 +1,7 @@
 #![allow(unused)]
 
+use core::{default, fmt::Debug};
+
 use alloc::{
     boxed::Box,
     collections::BTreeMap,
@@ -7,12 +9,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use lazy_static::lazy_static;
 use spin::RwLock;
-
-lazy_static! {
-    pub static ref VFS: RwLock<Vfs> = RwLock::new(Vfs::new());
-}
 
 #[derive(Debug)]
 pub enum FsError {
@@ -28,7 +25,7 @@ pub enum FsError {
     IsADirectory,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct FileMetadata {
     pub uid: u32,
     pub gid: u32,
@@ -44,13 +41,13 @@ pub struct MountOptions {
     pub block_device_id: Option<usize>,
 }
 
-pub trait FileSystemDriver: Send + Sync {
+pub trait FileSystemDriver: Send + Sync + Debug {
     /// Create a new FileSystem instance given the mount options.
     /// E.g. parse the block device if needed, load superblock, etc.
     fn mount(&self, options: &MountOptions) -> Result<Arc<dyn FileSystem>, FsError>;
 }
 
-pub trait FileSystem: Send + Sync {
+pub trait FileSystem: Send + Sync + Debug {
     fn open(&self, path: &str) -> Result<FileHandle, FsError>;
     fn read_dir(&self, path: &str) -> Result<Vec<String>, FsError>;
     fn create(&self, path: &str, directory: bool) -> Result<(), FsError>;
@@ -77,11 +74,13 @@ impl FileHandle {
     }
 }
 
+#[derive(Debug)]
 struct MountEntry {
     mount_point: String,
     filesystem: Arc<dyn FileSystem>,
 }
 
+#[derive(Debug, Default)]
 pub struct Vfs {
     drivers: BTreeMap<String, Arc<dyn FileSystemDriver>>,
     mounts: RwLock<Vec<MountEntry>>,

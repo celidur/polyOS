@@ -11,6 +11,7 @@ use super::vfs::{
     FileHandle, FileMetadata, FileOps, FileSystem, FileSystemDriver, FsError, MountOptions,
 };
 
+#[derive(Debug, Default)]
 pub struct MemFsDriver;
 
 impl FileSystemDriver for MemFsDriver {
@@ -19,13 +20,14 @@ impl FileSystemDriver for MemFsDriver {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Default)]
 struct MemNode {
     is_dir: bool,
     data: Vec<u8>,
     meta: FileMetadata,
 }
 
+#[derive(Debug, Default)]
 pub struct MemFsVolume {
     inner: RwLock<BTreeMap<String, Arc<Mutex<MemNode>>>>,
 }

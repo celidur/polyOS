@@ -28,10 +28,6 @@ impl RawDirEntry {
     }
 
     pub fn name_and_ext_byte(&self, i: usize) -> u8 {
-        if i < 8 {
-            self.name[i]
-        } else {
-            self.ext[i - 8]
-        }
+        if i < 8 { self.name[i] } else { self.ext[i - 8] }
     }
 }

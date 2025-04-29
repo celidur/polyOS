@@ -1,9 +1,10 @@
 use crate::{
     device::block_dev::{BlockDevice, BlockDeviceError},
     fs::{
-        vfs::{FileHandle, FileMetadata, FileSystem},
         FsError,
+        vfs::{FileHandle, FileMetadata, FileSystem},
     },
+    kernel::KERNEL,
 };
 use alloc::{
     boxed::Box,
@@ -12,7 +13,6 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use spin::Mutex;
 
 use super::{
     boot_sector::BootSector,
@@ -25,8 +25,9 @@ use super::{
     },
 };
 
+#[derive(Debug)]
 pub struct Fat16FileSystem {
-    device: Arc<Mutex<dyn BlockDevice>>,
+    id: usize,
     bs: BootSector,
     fat: FatTable,
     bytes_per_sector: u16,
@@ -38,9 +39,9 @@ pub struct Fat16FileSystem {
 }
 
 impl Fat16FileSystem {
-    pub fn new(dev: Arc<Mutex<dyn BlockDevice>>) -> Result<Self, BlockDeviceError> {
+    pub fn new(id: usize) -> Result<Self, BlockDeviceError> {
         let mut buffer: [u8; 512] = [0; 512];
-        dev.lock().read_sectors(0, 1, &mut buffer)?;
+        KERNEL.read_sectors(id, 0, 1, &mut buffer)?;
         let bs: BootSector = BootSector::read_from_buffer(&buffer)?;
         let bytes_per_sector = bs.bytes_per_sector;
         let root_dir_sectors = (bs.root_entry_count as u32 * 32).div_ceil(bytes_per_sector as u32);
@@ -63,7 +64,7 @@ impl Fat16FileSystem {
             num_fats: bs.num_fats,
         };
         Ok(Self {
-            device: dev,
+            id,
             bs,
             fat,
             bytes_per_sector,
@@ -89,7 +90,7 @@ impl Fat16FileSystem {
             for s in 0..self.root_dir_sectors {
                 let lba = self.first_root_dir_sector + s;
                 let mut buf = [0u8; 512];
-                self.device.lock().read_sectors(lba as u64, 1, &mut buf)?;
+                KERNEL.read_sectors(self.id, lba as u64, 1, &mut buf)?;
                 for i in 0..16 {
                     let start = i * 32;
                     let raw: RawDirEntry = unsafe {
@@ -109,7 +110,8 @@ impl Fat16FileSystem {
                 let mut cbuf = vec![0u8; cluster_size];
                 for s in 0..self.sectors_per_cluster {
                     let lba = csec + s as u32;
-                    self.device.lock().read_sectors(
+                    KERNEL.read_sectors(
+                        self.id,
                         lba as u64,
                         1,
                         &mut cbuf[(s as usize) * 512..(s as usize) * 512 + 512],
@@ -122,9 +124,9 @@ impl Fat16FileSystem {
                         unsafe { core::ptr::read(cbuf[start..].as_ptr() as *const RawDirEntry) };
                     list.push(raw);
                 }
-                let next =
-                    self.fat
-                        .read_fat16_entry(self.device.clone(), cur, self.bytes_per_sector)?;
+                let next = self
+                    .fat
+                    .read_fat16_entry(self.id, cur, self.bytes_per_sector)?;
                 cur = next;
             }
         }
@@ -160,7 +162,7 @@ impl Fat16FileSystem {
                         );
                     }
                 }
-                self.device.lock().write_sectors(lba as u64, 1, &buf)?;
+                KERNEL.write_sectors(self.id, lba as u64, 1, &buf)?;
                 slice_idx += to_write;
                 if slice_idx >= entries.len() {
                     break;
@@ -174,9 +176,9 @@ impl Fat16FileSystem {
             let mut cur = cluster;
             loop {
                 chain.push(cur);
-                let next =
-                    self.fat
-                        .read_fat16_entry(self.device.clone(), cur, self.bytes_per_sector)?;
+                let next = self
+                    .fat
+                    .read_fat16_entry(self.id, cur, self.bytes_per_sector)?;
                 if !(2..0xFFF8).contains(&next) {
                     break;
                 }
@@ -185,13 +187,13 @@ impl Fat16FileSystem {
             while chain.len() < needed_clusters {
                 let endc = *chain.last().unwrap();
                 let newc = self.fat.alloc_cluster(
-                    self.device.clone(),
+                    self.id,
                     self.bytes_per_sector,
                     2,
                     self.total_clusters,
                 )?;
                 self.fat
-                    .extend_chain(self.device.clone(), endc, newc, self.bytes_per_sector)?;
+                    .extend_chain(self.id, endc, newc, self.bytes_per_sector)?;
                 chain.push(newc);
             }
 
@@ -218,9 +220,7 @@ impl Fat16FileSystem {
                 for s in 0..self.sectors_per_cluster {
                     let lba = csec + s as u32;
                     let start = (s as usize) * 512;
-                    self.device
-                        .lock()
-                        .write_sectors(lba as u64, 1, &cbuf[start..start + 512])?;
+                    KERNEL.write_sectors(self.id, lba as u64, 1, &cbuf[start..start + 512])?;
                 }
                 idx += to_write;
                 remain -= to_write;
@@ -230,19 +230,12 @@ impl Fat16FileSystem {
             }
             if chain.len() > needed_clusters {
                 for i in needed_clusters..chain.len() {
-                    self.fat.free_cluster_chain(
-                        self.device.clone(),
-                        chain[i],
-                        self.bytes_per_sector,
-                    )?;
+                    self.fat
+                        .free_cluster_chain(self.id, chain[i], self.bytes_per_sector)?;
                 }
                 let cend = chain[needed_clusters - 1];
-                self.fat.write_fat16_entry(
-                    self.device.clone(),
-                    cend,
-                    0xFFFF,
-                    self.bytes_per_sector,
-                )?;
+                self.fat
+                    .write_fat16_entry(self.id, cend, 0xFFFF, self.bytes_per_sector)?;
             }
         }
         Ok(())
@@ -318,7 +311,8 @@ impl Fat16FileSystem {
             let csec = self.cluster_to_sector(cur) as u64;
             let mut cbuf = vec![0u8; cluster_size];
             for s in 0..self.sectors_per_cluster {
-                self.device.lock().read_sectors(
+                KERNEL.read_sectors(
+                    self.id,
                     csec + s as u64,
                     1,
                     &mut cbuf[s as usize * 512..s as usize * 512 + 512],
@@ -337,9 +331,9 @@ impl Fat16FileSystem {
             if read_limit == 0 {
                 break;
             }
-            let next =
-                self.fat
-                    .read_fat16_entry(self.device.clone(), cur, self.bytes_per_sector)?;
+            let next = self
+                .fat
+                .read_fat16_entry(self.id, cur, self.bytes_per_sector)?;
             cur = next;
         }
         Ok(out_offset)
@@ -361,12 +355,9 @@ impl Fat16FileSystem {
         };
 
         if *start_cluster < 2 && !data.is_empty() {
-            let c = self.fat.alloc_cluster(
-                self.device.clone(),
-                self.bytes_per_sector,
-                2,
-                self.total_clusters,
-            )?;
+            let c =
+                self.fat
+                    .alloc_cluster(self.id, self.bytes_per_sector, 2, self.total_clusters)?;
             *start_cluster = c;
         }
         let mut cur = *start_cluster;
@@ -385,7 +376,8 @@ impl Fat16FileSystem {
                     || offset as usize + data.len() < (cluster_size)
                 {
                     for s in 0..self.sectors_per_cluster {
-                        self.device.lock().read_sectors(
+                        KERNEL.read_sectors(
+                            self.id,
                             csec + s as u64,
                             1,
                             &mut cbuf[s as usize * 512..s as usize * 512 + 512],
@@ -395,7 +387,8 @@ impl Fat16FileSystem {
                 let chunk = core::cmp::min(cluster_size - skip, data.len() - data_offset);
                 cbuf[skip..skip + chunk].copy_from_slice(&data[data_offset..data_offset + chunk]);
                 for s in 0..self.sectors_per_cluster {
-                    self.device.lock().write_sectors(
+                    KERNEL.write_sectors(
+                        self.id,
                         csec + s as u64,
                         1,
                         &cbuf[s as usize * 512..s as usize * 512 + 512],
@@ -412,26 +405,18 @@ impl Fat16FileSystem {
             }
             let nxt = self
                 .fat
-                .read_fat16_entry(self.device.clone(), cur, self.bytes_per_sector)?;
+                .read_fat16_entry(self.id, cur, self.bytes_per_sector)?;
             if !(2..0xFFF8).contains(&nxt) {
                 let newc = self.fat.alloc_cluster(
-                    self.device.clone(),
+                    self.id,
                     self.bytes_per_sector,
                     2,
                     self.total_clusters,
                 )?;
-                self.fat.write_fat16_entry(
-                    self.device.clone(),
-                    cur,
-                    newc,
-                    self.bytes_per_sector,
-                )?;
-                self.fat.write_fat16_entry(
-                    self.device.clone(),
-                    newc,
-                    0xFFFF,
-                    self.bytes_per_sector,
-                )?;
+                self.fat
+                    .write_fat16_entry(self.id, cur, newc, self.bytes_per_sector)?;
+                self.fat
+                    .write_fat16_entry(self.id, newc, 0xFFFF, self.bytes_per_sector)?;
                 cur = newc;
             } else {
                 cur = nxt;
@@ -556,7 +541,8 @@ impl Fat16FileSystem {
             );
         }
         for s in 0..self.sectors_per_cluster {
-            self.device.lock().write_sectors(
+            KERNEL.write_sectors(
+                self.id,
                 csec + s as u64,
                 1,
                 &cbuf[s as usize * 512..s as usize * 512 + 512],
@@ -677,15 +663,10 @@ impl FileSystem for Fat16FileSystem {
         if directory {
             let c = self
                 .fat
-                .alloc_cluster(
-                    self.device.clone(),
-                    self.bytes_per_sector,
-                    2,
-                    self.total_clusters,
-                )
+                .alloc_cluster(self.id, self.bytes_per_sector, 2, self.total_clusters)
                 .map_err(|_| FsError::NoSpace)?;
             self.fat
-                .write_fat16_entry(self.device.clone(), c, 0xFFFF, self.bytes_per_sector)
+                .write_fat16_entry(self.id, c, 0xFFFF, self.bytes_per_sector)
                 .map_err(|_| FsError::IoError)?;
             short_raw.cluster_low = c;
             self.init_dir_cluster(c, if dir_cluster == 0 { c } else { dir_cluster })
@@ -728,11 +709,11 @@ impl FileSystem for Fat16FileSystem {
                 }
             }
             self.fat
-                .free_cluster_chain(self.device.clone(), c, self.bytes_per_sector)
+                .free_cluster_chain(self.id, c, self.bytes_per_sector)
                 .map_err(|_| FsError::IoError)?;
         } else if e.cluster_low >= 2 {
             self.fat
-                .free_cluster_chain(self.device.clone(), e.cluster_low, self.bytes_per_sector)
+                .free_cluster_chain(self.id, e.cluster_low, self.bytes_per_sector)
                 .map_err(|_| FsError::IoError)?;
         }
         let mut list = self
@@ -806,7 +787,7 @@ impl FileSystem for Fat16FileSystem {
 impl Clone for Fat16FileSystem {
     fn clone(&self) -> Self {
         Self {
-            device: self.device.clone(),
+            id: self.id,
             bs: self.bs,
             fat: FatTable {
                 first_fat_sector: self.fat.first_fat_sector,

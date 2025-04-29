@@ -13,12 +13,14 @@ pub enum DiskError {
     IoError,
 }
 
+#[derive(Debug)]
 pub struct CacheEntry {
     pub data: [u16; 256],
     pub dirty: bool,
     pub nb_use: u64,
 }
 
+#[derive(Debug, Default)]
 pub struct Disk {
     base: u16,
     cache: BTreeMap<u64, Arc<Mutex<CacheEntry>>>,

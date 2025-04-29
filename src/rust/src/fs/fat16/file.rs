@@ -1,6 +1,6 @@
 use crate::device::block_dev::BlockDeviceError;
-use crate::fs::vfs::FileOps;
 use crate::fs::FsError;
+use crate::fs::vfs::FileOps;
 use alloc::sync::Arc;
 
 use super::filesystem::Fat16FileSystem;

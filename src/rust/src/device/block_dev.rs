@@ -1,11 +1,10 @@
 #![allow(unused)]
 
 use alloc::{sync::Arc, vec::Vec};
-use core::result::Result;
-use lazy_static::lazy_static;
+use core::{fmt::Debug, result::Result};
 use spin::Mutex;
 
-pub trait BlockDevice: Send + Sync {
+pub trait BlockDevice: Send + Sync + Debug {
     /// Read `count` sectors from `lba` into `buf`.
     /// Return the number of sectors actually read or an error.
     fn read_sectors(
@@ -37,22 +36,8 @@ pub enum BlockDeviceError {
     NotFound,
 }
 
-lazy_static! {
-    static ref BLOCK_DEVICES: Mutex<Vec<Arc<Mutex<dyn BlockDevice>>>> = Mutex::new(Vec::new());
-}
-
-pub fn register_block_device(dev: Arc<Mutex<dyn BlockDevice>>) -> usize {
-    let mut devices = BLOCK_DEVICES.lock();
-    devices.push(dev);
-    devices.len() - 1
-}
-
-pub fn get_block_device(id: usize) -> Option<Arc<Mutex<dyn BlockDevice + 'static>>> {
-    let devices = BLOCK_DEVICES.lock();
-    devices.get(id).cloned()
-}
-
 // Example block device (e.g., a dummy RAM disk or real hardware)
+#[derive(Debug)]
 pub struct MockBlockDevice {
     // In a real driver, store device state (ports, memory, etc.)
     // For simplicity, let's store an in-memory buffer as a "disk"

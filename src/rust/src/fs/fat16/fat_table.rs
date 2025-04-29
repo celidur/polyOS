@@ -1,9 +1,13 @@
-use crate::device::block_dev::{BlockDevice, BlockDeviceError};
+use crate::{
+    device::block_dev::{BlockDevice, BlockDeviceError},
+    kernel::KERNEL,
+};
 use alloc::sync::Arc;
 use spin::Mutex;
 
 use super::utils::fat_offset;
 
+#[derive(Debug)]
 pub struct FatTable {
     pub first_fat_sector: u32,
     pub sectors_per_fat: u16,
@@ -13,7 +17,7 @@ pub struct FatTable {
 impl FatTable {
     pub fn read_fat16_entry(
         &self,
-        dev: Arc<Mutex<dyn BlockDevice>>,
+        id: usize,
         cluster: u16,
         bytes_per_sector: u16,
     ) -> Result<u16, BlockDeviceError> {
@@ -24,14 +28,14 @@ impl FatTable {
 
         let sector_lba = self.first_fat_sector + sector_index;
         let mut buf = [0u8; 512];
-        dev.lock().read_sectors(sector_lba as u64, 1, &mut buf)?;
+        KERNEL.read_sectors(id, sector_lba as u64, 1, &mut buf)?;
         let val = u16::from_le_bytes([buf[offset_in_sector], buf[offset_in_sector + 1]]);
         Ok(val)
     }
 
     pub fn write_fat16_entry(
         &self,
-        dev: Arc<Mutex<dyn BlockDevice>>,
+        id: usize,
         cluster: u16,
         value: u16,
         bytes_per_sector: u16,
@@ -44,18 +48,18 @@ impl FatTable {
             let offset_in_sector = (offset % sec_size) as usize;
             let sector_lba = fat_start + sector_index;
             let mut buf = [0u8; 512];
-            dev.lock().read_sectors(sector_lba as u64, 1, &mut buf)?;
+            KERNEL.read_sectors(id, sector_lba as u64, 1, &mut buf)?;
             let b = value.to_le_bytes();
             buf[offset_in_sector] = b[0];
             buf[offset_in_sector + 1] = b[1];
-            dev.lock().write_sectors(sector_lba as u64, 1, &buf)?;
+            KERNEL.write_sectors(id, sector_lba as u64, 1, &buf)?;
         }
         Ok(())
     }
 
     pub fn free_cluster_chain(
         &self,
-        dev: Arc<Mutex<dyn BlockDevice>>,
+        id: usize,
         start: u16,
         bytes_per_sector: u16,
     ) -> Result<(), BlockDeviceError> {
@@ -67,8 +71,8 @@ impl FatTable {
             if !(2..0xFFF8).contains(&current) {
                 break;
             }
-            let next = self.read_fat16_entry(dev.clone(), current, bytes_per_sector)?;
-            self.write_fat16_entry(dev.clone(), current, 0x0000, bytes_per_sector)?;
+            let next = self.read_fat16_entry(id, current, bytes_per_sector)?;
+            self.write_fat16_entry(id, current, 0x0000, bytes_per_sector)?;
             current = next;
         }
         Ok(())
@@ -76,16 +80,16 @@ impl FatTable {
 
     pub fn alloc_cluster(
         &self,
-        dev: Arc<Mutex<dyn BlockDevice>>,
+        id: usize,
         bytes_per_sector: u16,
         _start: u16,
         total_clusters: u16,
     ) -> Result<u16, BlockDeviceError> {
         for i in 2..total_clusters {
             let c = i;
-            let val = self.read_fat16_entry(dev.clone(), c, bytes_per_sector)?;
+            let val = self.read_fat16_entry(id, c, bytes_per_sector)?;
             if val == 0x0000 {
-                self.write_fat16_entry(dev.clone(), c, 0xFFFF, bytes_per_sector)?;
+                self.write_fat16_entry(id, c, 0xFFFF, bytes_per_sector)?;
                 return Ok(c);
             }
         }
@@ -110,13 +114,13 @@ impl FatTable {
 
     pub fn extend_chain(
         &self,
-        dev: Arc<Mutex<dyn BlockDevice>>,
+        id: usize,
         cluster: u16,
         newc: u16,
         bytes_per_sector: u16,
     ) -> Result<(), BlockDeviceError> {
-        self.write_fat16_entry(dev.clone(), cluster, newc, bytes_per_sector)?;
-        self.write_fat16_entry(dev, newc, 0xFFFF, bytes_per_sector)?;
+        self.write_fat16_entry(id, cluster, newc, bytes_per_sector)?;
+        self.write_fat16_entry(id, newc, 0xFFFF, bytes_per_sector)?;
         Ok(())
     }
 }

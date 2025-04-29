@@ -3,7 +3,7 @@ use core::mem::size_of;
 use crate::device::block_dev::BlockDeviceError;
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct BootSector {
     pub jump_boot: [u8; 3],
     pub oem_name: [u8; 8],

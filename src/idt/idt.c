@@ -43,6 +43,11 @@ int idt_register_interrupt_callback_error(int interrupt, INTERRUPT_CALLBACK_FUNC
 
 static void idt_clock(struct interrupt_frame* frame)
 {
+    kernel_page();
+    task_current_save_state(frame);
+
+    sync();
+
     outb(0x20, 0x20);
     task_next();
 }

@@ -1,15 +1,12 @@
-use alloc::{string::ToString, sync::Arc};
-use spin::Mutex;
-
 use crate::{
     allocator::{init_heap, serial_print_memory},
     bindings::{
         boot_loadinfo, kernel_init, kernel_init2, process, process_load_switch,
         task_run_first_ever_task, tree,
     },
-    device::{block_dev::register_block_device, disk::Disk, pci::pci_read_config},
+    device::pci::pci_read_config,
     entry_point,
-    fs::{fat16::Fat16Driver, MemFsDriver, MountOptions, VFS},
+    kernel::KERNEL,
     serial_println,
 };
 
@@ -45,110 +42,91 @@ fn kernel_main() -> ! {
 
     unsafe { boot_loadinfo() };
 
+    KERNEL.init_rootfs();
+
     serial_print_memory();
 
     list_pci_devices();
 
-    // {
-    //     VFS.write()
-    //         .register_fs_driver("memfs", Arc::new(MemFsDriver));
-    //     VFS.write()
-    //         .register_fs_driver("fat16", Arc::new(Fat16Driver));
+    {
+        KERNEL
+            .vfs
+            .read()
+            .create("/tmp/hello.txt", false)
+            .expect("Failed to create file");
+        let mut file_handle = KERNEL
+            .vfs
+            .read()
+            .open("/tmp/hello.txt")
+            .expect("Failed to open file");
 
-    //     let disk = Arc::new(Mutex::new(Disk::new(0x1F0)));
+        let message = b"Hello from the Rust kernel!\n";
+        let written = file_handle
+            .ops
+            .write(message)
+            .expect("Failed to write to file");
+        assert!(written == message.len());
 
-    //     let dev1_id = register_block_device(disk.clone());
+        file_handle
+            .ops
+            .seek(0)
+            .expect("Failed to seek to start of file");
 
-    //     VFS.read()
-    //         .mount(
-    //             "/",
-    //             &MountOptions {
-    //                 fs_name: "fat16".to_string(),
-    //                 block_device_id: Some(dev1_id),
-    //             },
-    //         )
-    //         .expect("Failed to mount fat16 at /");
+        let mut buffer = [0u8; 128];
+        let read_len = file_handle
+            .ops
+            .read(&mut buffer)
+            .expect("Failed to read from file");
+        let read_str = core::str::from_utf8(&buffer[..read_len]).unwrap_or("<invalid utf-8>");
 
-    //     VFS.read()
-    //         .mount(
-    //             "/tmp",
-    //             &MountOptions {
-    //                 fs_name: "memfs".to_string(),
-    //                 block_device_id: None,
-    //             },
-    //         )
-    //         .expect("Failed to mount memfs at /tmp");
+        assert!(read_str.as_bytes() == message);
 
-    //     VFS.read()
-    //         .create("/tmp/hello.txt", false)
-    //         .expect("Failed to create file");
-    //     let mut file_handle = VFS
-    //         .read()
-    //         .open("/tmp/hello.txt")
-    //         .expect("Failed to open file");
+        let mut file_handle = KERNEL
+            .vfs
+            .read()
+            .open("/hello.txt")
+            .expect("Failed to open file");
+        let mut buffer = [0u8; 128];
+        let read_len = file_handle
+            .ops
+            .read(&mut buffer)
+            .expect("Failed to read from file");
 
-    //     let message = b"Hello from the Rust kernel!\n";
-    //     let written = file_handle
-    //         .ops
-    //         .write(message)
-    //         .expect("Failed to write to file");
-    //     assert!(written == message.len());
+        let read_str = core::str::from_utf8(&buffer[..read_len]).unwrap_or("<invalid utf-8>");
+        serial_println!("Read: {}", read_str);
+        serial_println!("Size: {}", read_len);
 
-    //     file_handle
-    //         .ops
-    //         .seek(0)
-    //         .expect("Failed to seek to start of file");
+        file_handle
+            .ops
+            .seek(0)
+            .expect("Failed to seek to start of file");
 
-    //     let mut buffer = [0u8; 128];
-    //     let read_len = file_handle
-    //         .ops
-    //         .read(&mut buffer)
-    //         .expect("Failed to read from file");
-    //     let read_str = core::str::from_utf8(&buffer[..read_len]).unwrap_or("<invalid utf-8>");
+        let written = file_handle
+            .ops
+            .write(message)
+            .expect("Failed to write to file");
 
-    //     assert!(read_str == "Hello from the Rust kernel!\n");
+        assert!(written == message.len());
 
-    //     let mut file_handle = VFS.read().open("/hello.txt").expect("Failed to open file");
-    //     let mut buffer = [0u8; 128];
-    //     let read_len = file_handle
-    //         .ops
-    //         .read(&mut buffer)
-    //         .expect("Failed to read from file");
+        let mut file_handle = KERNEL
+            .vfs
+            .read()
+            .open("/hello.txt")
+            .expect("Failed to open file");
 
-    //     let read_str = core::str::from_utf8(&buffer[..read_len]).unwrap_or("<invalid utf-8>");
-    //     serial_println!("Read: {}", read_str);
+        file_handle
+            .ops
+            .seek(0)
+            .expect("Failed to seek to start of file");
 
-    //     file_handle
-    //         .ops
-    //         .seek(0)
-    //         .expect("Failed to seek to start of file");
+        let read_len = file_handle
+            .ops
+            .read(&mut buffer)
+            .expect("Failed to read from file");
 
-    //     let written = file_handle
-    //         .ops
-    //         .write(message)
-    //         .expect("Failed to write to file");
-
-    //     assert!(written == message.len());
-
-    //     let mut file_handle = VFS.read().open("/hello.txt").expect("Failed to open file");
-
-    //     file_handle
-    //         .ops
-    //         .seek(0)
-    //         .expect("Failed to seek to start of file");
-
-    //     let read_len = file_handle
-    //         .ops
-    //         .read(&mut buffer)
-    //         .expect("Failed to read from file");
-
-    //     let read_str = core::str::from_utf8(&buffer[..read_len]).unwrap_or("<invalid utf-8>");
-    //     serial_println!("Read: {}", read_str);
-
-    //     let _ = disk.lock().sync();
-    // }
-
-    unsafe { tree(0) };
+        let read_str = core::str::from_utf8(&buffer[..read_len]).unwrap_or("<invalid utf-8>");
+        serial_println!("Read: {}", read_str);
+    }
 
     let p: *mut *mut process = core::ptr::null_mut();
     let res = unsafe { process_load_switch(c"0:/bin/shell-v2.elf".as_ptr(), p) };
