@@ -36,6 +36,20 @@ pub enum BlockDeviceError {
     NotFound,
 }
 
+impl fatfs::IoError for BlockDeviceError {
+    fn is_interrupted(&self) -> bool {
+        false // none of your variants indicate an interrupt
+    }
+
+    fn new_unexpected_eof_error() -> Self {
+        BlockDeviceError::IoError
+    }
+
+    fn new_write_zero_error() -> Self {
+        BlockDeviceError::IoError
+    }
+}
+
 // Example block device (e.g., a dummy RAM disk or real hardware)
 #[derive(Debug)]
 pub struct MockBlockDevice {

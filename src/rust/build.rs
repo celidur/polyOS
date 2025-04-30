@@ -24,7 +24,7 @@ fn main() {
     }
 
     let bindings = bindgen::Builder::default()
-        .clang_arg(format!("-I{}", include_dir))
+        .clang_arg(format!("-I{include_dir}"))
         .clang_arg("-nostdlib")
         .use_core()
         .headers(

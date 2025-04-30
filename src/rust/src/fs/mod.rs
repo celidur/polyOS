@@ -1,4 +1,4 @@
-pub mod fat16;
+pub mod fat;
 mod memfs;
 mod vfs;
 

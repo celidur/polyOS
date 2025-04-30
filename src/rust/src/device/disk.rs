@@ -73,7 +73,11 @@ impl Disk {
                     outb(self.base + 0x7, 0x30);
                 }
                 let mut timeout = 1000000;
-                while unsafe { inb(self.base + 0x7) } & 0x80 != 0 && timeout > 0 {
+                while timeout > 0 {
+                    let status = unsafe { inb(self.base + 0x7) };
+                    if status & 0x80 == 0 && status & 0x08 != 0 {
+                        break;
+                    }
                     timeout -= 1;
                 }
                 if timeout == 0 {

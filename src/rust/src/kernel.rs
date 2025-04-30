@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 
-use alloc::{vec, string::ToString, sync::Arc, vec::Vec};
+use alloc::{string::ToString, sync::Arc, vec, vec::Vec};
 use spin::{Mutex, RwLock};
 use uart_16550::SerialPort;
 
@@ -9,11 +9,10 @@ use crate::{
         block_dev::{BlockDevice, BlockDeviceError},
         disk::Disk,
     },
-    fs::{fat16::Fat16Driver, MemFsDriver, MountOptions, Vfs},
-    interrupts, serial_println,
+    fs::{MemFsDriver, MountOptions, Vfs, fat::FatDriver},
+    interrupts,
 };
 
-#[derive(Debug)]
 pub struct Kernel {
     disks: RwLock<Vec<Arc<Mutex<Disk>>>>,
     block_device: RwLock<Vec<Arc<Mutex<dyn BlockDevice>>>>,
@@ -56,7 +55,7 @@ impl Kernel {
 
         self.vfs
             .write()
-            .register_fs_driver("fat16", Arc::new(Fat16Driver));
+            .register_fs_driver("fat16", Arc::new(FatDriver));
 
         self.vfs
             .read()
@@ -127,8 +126,6 @@ impl Kernel {
             interrupts::without_interrupts(|| {
                 if let Some(mut disk) = disk.try_lock() {
                     let _ = disk.sync();
-                } else {
-                    serial_println!("sync: disk {:p} already locked, skipping\n", disk);
                 }
             })
         });

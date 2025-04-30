@@ -47,7 +47,7 @@ pub trait FileSystemDriver: Send + Sync + Debug {
     fn mount(&self, options: &MountOptions) -> Result<Arc<dyn FileSystem>, FsError>;
 }
 
-pub trait FileSystem: Send + Sync + Debug {
+pub trait FileSystem: Send + Sync {
     fn open(&self, path: &str) -> Result<FileHandle, FsError>;
     fn read_dir(&self, path: &str) -> Result<Vec<String>, FsError>;
     fn create(&self, path: &str, directory: bool) -> Result<(), FsError>;
@@ -74,13 +74,12 @@ impl FileHandle {
     }
 }
 
-#[derive(Debug)]
 struct MountEntry {
     mount_point: String,
     filesystem: Arc<dyn FileSystem>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Vfs {
     drivers: BTreeMap<String, Arc<dyn FileSystemDriver>>,
     mounts: RwLock<Vec<MountEntry>>,
