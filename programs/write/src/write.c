@@ -8,8 +8,7 @@ int main (int argc, char** argv) {
     }
     // add 0: before the file name
     char filename[1024];
-    strcpy(filename, "0:");
-    strncpy(filename + 2, argv[1], 1022);
+    strncpy(filename, argv[1], 1023);
 
     int fd = fopen(filename, "w");
     if (fd < 0) {

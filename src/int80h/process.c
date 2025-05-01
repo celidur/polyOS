@@ -13,12 +13,9 @@ void* int80h_command6_process_load_start(struct interrupt_frame *frame){
     if (res != ALL_OK){
         return (void*)res;
     }
-    char path[MAX_PATH];
-    strcpy(path, "0:/");
-    strcpy(path+3, filename);
 
     struct process* process = NULL;
-    res = process_load_switch(path, &process);
+    res = process_load_switch(filename, &process);
     if (res != ALL_OK){
         return (void*)res;
     }
@@ -37,12 +34,9 @@ void* int80h_command7_invoke_system_command(struct interrupt_frame *frame){
 
     struct command_argument* root_command = &args[0];
     const char* program_name = root_command->argument;
-    char path[MAX_PATH];
-    strcpy(path, "0:/");
-    strncpy(path+3, program_name, sizeof(path)-3);
 
     struct process* process = NULL;
-    int res = process_load_switch(path, &process);
+    int res = process_load_switch(program_name, &process);
     if (res<0){
         return (void*)res;
     }
