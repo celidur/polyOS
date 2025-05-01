@@ -1,4 +1,18 @@
-use crate::bindings::{are_interrupts_enabled, disable_interrupts, enable_interrupts};
+use crate::bindings::{disable_interrupts, enable_interrupts};
+
+#[inline]
+pub fn interrupts_enabled() -> bool {
+    let flags: u32;
+    unsafe {
+        core::arch::asm!(
+            "pushfd",
+            "pop {0}",
+            out(reg) flags,
+            options(nomem, preserves_flags),
+        );
+    }
+    (flags & (1 << 9)) != 0
+}
 
 #[warn(dead_code)]
 #[inline]
@@ -6,10 +20,8 @@ pub fn without_interrupts<F, R>(f: F) -> R
 where
     F: FnOnce() -> R,
 {
-    // true if the interrupt flag is set (i.e. interrupts are enabled)
-    let saved_intpt_flag = unsafe { are_interrupts_enabled() } & 200 != 0;
+    let saved_intpt_flag = interrupts_enabled();
 
-    // if interrupts are enabled, disable them for now
     if saved_intpt_flag {
         unsafe { disable_interrupts() };
     }
@@ -17,11 +29,9 @@ where
     // do `f` while interrupts are disabled
     let ret = f();
 
-    // re-enable interrupts if they were previously enabled
     if saved_intpt_flag {
         unsafe { enable_interrupts() };
     }
 
-    // return the result of `f` to the caller
     ret
 }

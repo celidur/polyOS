@@ -9,7 +9,6 @@ extern int80h_handler
 global idt_load
 global enable_interrupts
 global disable_interrupts
-global are_interrupts_enabled
 global int80h_wrapper
 global interrupt_pointer_table
 global get_cr2
@@ -79,12 +78,6 @@ enable_interrupts:
 
 disable_interrupts:
     cli
-    ret
-
-are_interrupts_enabled:
-    pushfd
-    pop eax
-    test eax, 0x200
     ret
 
 get_cr2:

@@ -1,17 +1,8 @@
-use crate::{bindings::strlen, kernel::KERNEL};
+use crate::kernel::KERNEL;
 
 #[doc(hidden)]
 pub fn _serial(args: ::core::fmt::Arguments) {
-    use crate::interrupts;
-    use core::fmt::Write;
-
-    interrupts::without_interrupts(|| {
-        KERNEL
-            .serial_port
-            .lock()
-            .write_fmt(args)
-            .expect("Printing to serial failed")
-    });
+    KERNEL.serial(args);
 }
 
 #[macro_export]
@@ -31,19 +22,9 @@ macro_rules! serial_println {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn serial_write(buf: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    use crate::interrupts;
-    use core::fmt::Write;
-
-    let len = unsafe { strlen(buf) as usize };
-
-    interrupts::without_interrupts(|| {
-        use core::str;
-        KERNEL
-            .serial_port
-            .lock()
-            .write_str(unsafe { str::from_raw_parts(buf as *const u8, len) })
-            .expect("Printing to serial failed")
+    serial_print!("{}", unsafe {
+        core::ffi::CStr::from_ptr(buf).to_string_lossy()
     });
-
+    
     0
 }

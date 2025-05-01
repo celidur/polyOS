@@ -2,7 +2,6 @@
 #include <os/idt.h>
 #include <os/kheap.h>
 #include <os/paging.h>
-#include <os/disk.h>
 #include <os/memory.h>
 #include <os/gdt.h>
 #include <os/tss.h>
@@ -62,10 +61,10 @@ void kernel_init(){
 void kernel_init2()
 {
     // Initialize filesystems
-    fs_init();
+    // fs_init();
 
     // Initialize disks
-    disk_search_and_init();
+    // disk_search_and_init();
 
     // Initialize IDT
     idt_init();
@@ -100,7 +99,7 @@ u64 get_ticks()
 void boot_loadinfo()
 {
     set_graphics_mode(VGA_640x480x2);
-    bitmap_t *bitmap = bitmap_create("0:/load.bmp");
+    bitmap_t *bitmap = bitmap_create("/load.bmp");
     display_monochrome_bitmap(bitmap);
     free_bitmap(bitmap);
 

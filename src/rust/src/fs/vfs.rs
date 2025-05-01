@@ -62,6 +62,7 @@ pub trait FileOps {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, FsError>;
     fn write(&mut self, buf: &[u8]) -> Result<usize, FsError>;
     fn seek(&mut self, pos: usize) -> Result<usize, FsError>;
+    fn stat(&self) -> Result<FileMetadata, FsError>;
 }
 
 pub struct FileHandle {

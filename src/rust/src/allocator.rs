@@ -63,36 +63,27 @@ pub extern "C" fn print_memory() {
     serial_println!("{}", memory_usage());
 }
 
+fn format_file_size(size: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = 1024 * KB;
+    const GB: u64 = 1024 * MB;
+    if size < KB {
+        format!("{size}B")
+    } else if size < MB {
+        format!("{:.2}KB", size as f64 / KB as f64)
+    } else if size < GB {
+        format!("{:.2}MB", size as f64 / MB as f64)
+    } else {
+        format!("{:.2}GB", size as f64 / GB as f64)
+    }
+}
+
 fn memory_usage() -> String {
     let allocated = ALLOCATOR.total_allocated();
     let total = HEAP_SIZE;
     let left = total - allocated;
 
-    let allocated = if allocated > 1024 * 1024 {
-        format!("{:.2} MB", allocated as f64 / (1024.0 * 1024.0))
-    } else if allocated > 1024 {
-        format!("{:.2} KB", allocated as f64 / 1024.0)
-    } else {
-        format!("{allocated} bytes")
-    };
-
-    let total = if total > 1024 * 1024 {
-        format!("{:.2} MB", total as f64 / (1024.0 * 1024.0))
-    } else if total > 1024 {
-        format!("{:.2} KB", total as f64 / 1024.0)
-    } else {
-        format!("{total} bytes")
-    };
-
-    let left = if left > 1024 * 1024 {
-        format!("{:.2} MB", left as f64 / (1024.0 * 1024.0))
-    } else if left > 1024 {
-        format!("{:.2} KB", left as f64 / 1024.0)
-    } else {
-        format!("{left} bytes")
-    };
-
-    format!("Heap usage: {allocated} / {total} ({left} left)")
+    format!("Heap usage: {} / {} ({} left)", format_file_size(allocated as u64), format_file_size(total as u64), format_file_size(left as u64))
 }
 
 #[global_allocator]

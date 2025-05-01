@@ -16,8 +16,8 @@ use crate::{
 pub struct Kernel {
     disks: RwLock<Vec<Arc<Mutex<Disk>>>>,
     block_device: RwLock<Vec<Arc<Mutex<dyn BlockDevice>>>>,
+    serial_port: Mutex<SerialPort>,
     pub vfs: RwLock<Vfs>,
-    pub serial_port: Mutex<SerialPort>,
 }
 
 lazy_static! {
@@ -55,18 +55,18 @@ impl Kernel {
 
         self.vfs
             .write()
-            .register_fs_driver("fat16", Arc::new(FatDriver));
+            .register_fs_driver("fat", Arc::new(FatDriver));
 
         self.vfs
             .read()
             .mount(
                 "/",
                 &MountOptions {
-                    fs_name: "fat16".to_string(),
+                    fs_name: "fat".to_string(),
                     block_device_id: Some(0),
                 },
             )
-            .expect("Failed to mount fat16 at /");
+            .expect("Failed to mount fat at /");
 
         self.vfs
             .read()
@@ -124,10 +124,21 @@ impl Kernel {
     pub fn sync(&self) {
         self.disks.read().iter().for_each(|disk| {
             interrupts::without_interrupts(|| {
-                if let Some(mut disk) = disk.try_lock() {
-                    let _ = disk.sync();
-                }
+                let _ = disk.lock().sync();
             })
+        });
+    }
+
+    pub fn serial(&self, args: ::core::fmt::Arguments) {
+        use crate::interrupts;
+        use core::fmt::Write;
+    
+        interrupts::without_interrupts(|| {
+            self
+                .serial_port
+                .lock()
+                .write_fmt(args)
+                .expect("Printing to serial failed")
         });
     }
 }

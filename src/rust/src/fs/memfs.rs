@@ -180,4 +180,9 @@ impl FileOps for MemFsFile {
         self.offset = pos.min(node.data.len());
         Ok(self.offset)
     }
+
+    fn stat(&self) -> Result<FileMetadata, FsError> {
+        let node = self.inner.lock();
+        Ok(node.meta.clone())
+    }
 }
