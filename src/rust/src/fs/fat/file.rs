@@ -1,9 +1,15 @@
-use alloc::{string::{String, ToString}, sync::Arc};
+use alloc::{
+    string::{String, ToString},
+    sync::Arc,
+};
 use spin::Mutex;
 
 use crate::{
     device::bufstream::BufStream,
-    fs::{vfs::{FileMetadata, FileOps}, FsError},
+    fs::{
+        FsError,
+        vfs::{FileMetadata, FileOps},
+    },
 };
 
 use fatfs::{Read, Seek, SeekFrom, Write};

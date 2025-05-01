@@ -4,9 +4,7 @@ use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 use bytemuck::cast_slice;
 use spin::Mutex;
 
-use crate::bindings::{inb, inw, outb, outw};
-
-use super::block_dev::{BlockDevice, BlockDeviceError};
+use super::{block_dev::{BlockDevice, BlockDeviceError}, io::{inb, inw, outb, outw}};
 
 pub enum DiskError {
     Timeout,

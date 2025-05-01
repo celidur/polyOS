@@ -1,7 +1,7 @@
 pub mod fat;
+pub mod file;
 mod memfs;
 mod vfs;
-pub mod file;
 
 pub use memfs::MemFsDriver;
 pub use vfs::{FsError, MountOptions, Vfs};

@@ -4,9 +4,15 @@ use alloc::{
 };
 
 use crate::{
-    allocator::{init_heap, serial_print_memory}, bindings::{
-        boot_loadinfo, kernel_init, kernel_init2, process, process_load_switch, task_run_first_ever_task
-    }, device::{bufstream::BufStream, pci::pci_read_config}, entry_point, interrupts, kernel::KERNEL, serial_println
+    allocator::{init_heap, serial_print_memory},
+    bindings::{
+        boot_loadinfo, kernel_init, kernel_init2, process, process_load_switch,
+        task_run_first_ever_task,
+    },
+    device::{bufstream::BufStream, pci::pci_read_config},
+    entry_point, interrupts,
+    kernel::KERNEL,
+    serial_println,
 };
 
 entry_point!(kernel_main);
@@ -42,7 +48,6 @@ fn kernel_main() -> ! {
     unsafe { kernel_init2() };
 
     unsafe { boot_loadinfo() };
-
 
     serial_print_memory();
 

@@ -83,7 +83,12 @@ fn memory_usage() -> String {
     let total = HEAP_SIZE;
     let left = total - allocated;
 
-    format!("Heap usage: {} / {} ({} left)", format_file_size(allocated as u64), format_file_size(total as u64), format_file_size(left as u64))
+    format!(
+        "Heap usage: {} / {} ({} left)",
+        format_file_size(allocated as u64),
+        format_file_size(total as u64),
+        format_file_size(left as u64)
+    )
 }
 
 #[global_allocator]

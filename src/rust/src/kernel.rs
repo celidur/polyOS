@@ -132,10 +132,9 @@ impl Kernel {
     pub fn serial(&self, args: ::core::fmt::Arguments) {
         use crate::interrupts;
         use core::fmt::Write;
-    
+
         interrupts::without_interrupts(|| {
-            self
-                .serial_port
+            self.serial_port
                 .lock()
                 .write_fmt(args)
                 .expect("Printing to serial failed")
