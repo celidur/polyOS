@@ -1,18 +1,14 @@
-use alloc::{
-    format,
-    string::{String, ToString},
-};
-
 use crate::{
     allocator::{init_heap, serial_print_memory},
-    bindings::{
-        boot_loadinfo, kernel_init, kernel_init2, process, process_load_switch,
-        task_run_first_ever_task,
+    bindings::{init_gdt, kernel_init2, process, process_load_switch, task_run_first_ever_task},
+    device::{
+        pci::pci_read_config,
+        screen::{ScreenMode, TextMode},
     },
-    device::{bufstream::BufStream, pci::pci_read_config},
-    entry_point, interrupts,
+    entry_point,
     kernel::KERNEL,
     serial_println,
+    utils::boot_image,
 };
 
 entry_point!(kernel_main);
@@ -40,14 +36,16 @@ fn list_pci_devices() {
 }
 
 fn kernel_main() -> ! {
-    unsafe { kernel_init() };
+    unsafe { init_gdt() };
 
     init_heap();
+
+    KERNEL.set_mode(ScreenMode::TEXT(TextMode::Text90x60));
     KERNEL.init_rootfs();
 
     unsafe { kernel_init2() };
 
-    unsafe { boot_loadinfo() };
+    boot_image();
 
     serial_print_memory();
 

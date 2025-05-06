@@ -3,3 +3,4 @@ pub mod bufstream;
 pub mod disk;
 pub mod io;
 pub mod pci;
+pub mod screen;

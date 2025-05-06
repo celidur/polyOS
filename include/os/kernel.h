@@ -6,7 +6,7 @@
 void kernel_panic(const char *msg) __attribute__((noreturn));
 
 void boot_loadinfo();
-void kernel_init();
+void init_gdt();
 void kernel_init2();
 
 void kernel_page();

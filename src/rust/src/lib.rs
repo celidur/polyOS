@@ -15,6 +15,7 @@ mod kernel;
 mod kernel_main;
 mod memory;
 mod panic;
+mod print;
 mod serial;
 mod utils;
 

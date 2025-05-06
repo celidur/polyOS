@@ -8,24 +8,26 @@ use crate::{
     device::{
         block_dev::{BlockDevice, BlockDeviceError},
         disk::Disk,
+        screen::{ScreenMode, TextMode, Vga},
     },
     fs::{MemFsDriver, MountOptions, Vfs, fat::FatDriver},
     interrupts,
 };
 
-pub struct Kernel {
+pub struct Kernel<'a> {
     disks: RwLock<Vec<Arc<Mutex<Disk>>>>,
     block_device: RwLock<Vec<Arc<Mutex<dyn BlockDevice>>>>,
     serial_port: Mutex<SerialPort>,
+    pub vga: RwLock<Vga<'a>>,
     pub vfs: RwLock<Vfs>,
 }
 
 lazy_static! {
-    pub static ref KERNEL: Arc<Kernel> = Arc::new(Kernel::new());
+    pub static ref KERNEL: Arc<Kernel<'static>> = Arc::new(Kernel::new());
 }
 
-impl Kernel {
-    pub fn new() -> Kernel {
+impl Kernel<'_> {
+    pub fn new() -> Self {
         let disk0 = Arc::new(Mutex::new(Disk::new(0x1F0)));
 
         let disks = RwLock::new(vec![disk0.clone()]);
@@ -41,6 +43,7 @@ impl Kernel {
             vfs,
             serial_port,
             block_device: RwLock::new(Vec::new()),
+            vga: RwLock::new(Vga::new(ScreenMode::TEXT(TextMode::Text90x60))),
         };
 
         kernel.register_block_device(disk0);
@@ -138,6 +141,13 @@ impl Kernel {
                 .lock()
                 .write_fmt(args)
                 .expect("Printing to serial failed")
+        });
+    }
+
+    pub fn set_mode(&self, mode: ScreenMode) {
+        interrupts::without_interrupts(|| {
+            let mut vga = self.vga.write();
+            vga.set_mode(mode);
         });
     }
 }

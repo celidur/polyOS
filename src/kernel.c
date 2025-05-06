@@ -9,8 +9,6 @@
 #include <os/int80/int80.h>
 #include <os/keyboard.h>
 #include <os/terminal.h>
-#include <os/vga.h>
-#include <os/bitmap.h>
 
 #include <os/io.h>
 #include <os/idt.h>
@@ -48,24 +46,16 @@ void kernel_panic(const char *msg)
         ;
 }
 
-void kernel_init(){
-    terminal_initialize();
+void init_gdt(){
     memset(gdt_real, 0, sizeof(gdt_real));
     gdt_struct_to_gdt(gdt_struct, gdt_real, TOTAL_GDT_SEGMENTS);
 
     // Load GDT
     gdt_load(gdt_real, sizeof(gdt_real)-1);
-
 }
 
 void kernel_init2()
 {
-    // Initialize filesystems
-    // fs_init();
-
-    // Initialize disks
-    // disk_search_and_init();
-
     // Initialize IDT
     idt_init();
 
@@ -85,8 +75,6 @@ void kernel_init2()
 
     // Initialize keyboard
     keyboard_init();
-
-    set_text_mode(VGA_90x60_TEXT);
 }
 
 u64 get_ticks()
@@ -94,27 +82,6 @@ u64 get_ticks()
     uint32_t low, high;
     asm volatile("rdtsc" : "=a" (low), "=d" (high));
     return low | ((u64)high << 32);
-}
-
-void boot_loadinfo()
-{
-    set_graphics_mode(VGA_640x480x2);
-    bitmap_t *bitmap = bitmap_create("/load.bmp");
-    display_monochrome_bitmap(bitmap);
-    free_bitmap(bitmap);
-
-    for (size_t i = 0; i < 100; i++)
-    {
-        serial_printf(".");
-        for (size_t i = 0; i < 1000000; i++)
-        {
-            asm volatile("nop");
-        }
-    }
-
-    serial_printf("\n");
-    
-    set_text_mode(VGA_90x60_TEXT);
 }
 
 void shutdown()
@@ -136,18 +103,3 @@ void reboot()
     outb(0x64, 0xFE);
     halt();
 }
-// static void debug()
-// {
-//     set_color(BLACK, LIGHT_GREEN);
-//     printf("DEBUG\n");
-//     // VGA INFO
-//     // dump_state();
-
-//     // tree(0);
-//     // print_memory();
-
-//     // print("Paging info\n");
-//     // print_paging_info(process->task->page_directory);
-
-//     set_color(BLACK, WHITE);
-// }
