@@ -1,8 +1,8 @@
 use alloc::{vec, vec::Vec};
 
-use crate::{interrupts, kernel::KERNEL};
+use crate::kernel::KERNEL;
 
-use super::Vga;
+use super::GraphicVga;
 
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
@@ -90,7 +90,13 @@ impl Bitmap {
         let height = self.height as usize;
 
         let pixel_data = &self.image_bytes;
-        interrupts::without_interrupts(|| {
+
+        KERNEL.with_graphic(|graphic: Option<&mut GraphicVga>| {
+            let graphic = if let Some(g) = graphic {
+                g
+            } else {
+                return;
+            };
             for y in 0..height {
                 for x in 0..width {
                     let byte_index = (y * width + x) / 8;
@@ -98,12 +104,7 @@ impl Bitmap {
                     let pixel = (pixel_data[byte_index] >> (7 - bit_index)) & 1;
                     let color = if pixel != 0 { 0xFF } else { 0x00 };
 
-                    match &mut *KERNEL.vga.write() {
-                        Vga::Graphic(graphic) => {
-                            graphic.set_pixel(x as u32, (height - y) as u32, color);
-                        }
-                        _ => {}
-                    }
+                    graphic.set_pixel(x as u32, (height - y) as u32, color);
                 }
             }
         });

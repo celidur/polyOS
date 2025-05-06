@@ -14,8 +14,8 @@ const VGA_GC_DATA: u16 = 0x3CF;
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub enum ScreenMode {
-    TEXT(TextMode),
-    GRAPHIC(GraphicMode),
+    Text(TextMode),
+    Graphic(GraphicMode),
 }
 
 #[allow(dead_code)]
@@ -47,7 +47,7 @@ pub enum Vga<'vga> {
     Undefined,
 }
 
-impl Vga<'_> {
+impl<'vga> Vga<'vga> {
     pub fn new(mode: ScreenMode) -> Self {
         let mut vga = Vga::Undefined;
         vga.set_mode(mode);
@@ -56,7 +56,7 @@ impl Vga<'_> {
 
     pub fn set_mode(&mut self, mode: ScreenMode) {
         *self = match &mode {
-            ScreenMode::TEXT(text_mode) => {
+            ScreenMode::Text(text_mode) => {
                 let (reg, cols, rows, ht) = match text_mode {
                     TextMode::TEXT40x25 => (TEXT_40X25, 40, 25, 16),
                     TextMode::TEXT40x50 => (TEXT_40X50, 40, 50, 8),
@@ -73,7 +73,7 @@ impl Vga<'_> {
 
                 Vga::Text(unsafe { TextVga::new(self.get_base(), cols, rows) })
             }
-            ScreenMode::GRAPHIC(graphic_mode) => {
+            ScreenMode::Graphic(graphic_mode) => {
                 let (reg, wd, ht, pixel_mode) = match graphic_mode {
                     GraphicMode::GRAPHIC640x480x2 => {
                         (GRAPHIC_640X480X2, 640, 480, PixelMode::Pixel1)
@@ -168,6 +168,22 @@ impl Vga<'_> {
             outb(VGA_GC_DATA, gc5);
             outb(VGA_GC_INDEX, 6);
             outb(VGA_GC_DATA, gc6);
+        }
+    }
+
+    pub fn get_text_vga(&mut self) -> Option<&mut TextVga<'vga>> {
+        if let Vga::Text(vga) = self {
+            Some(vga)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_graphic_vga(&mut self) -> Option<&mut GraphicVga<'vga>> {
+        if let Vga::Graphic(vga) = self {
+            Some(vga)
+        } else {
+            None
         }
     }
 }

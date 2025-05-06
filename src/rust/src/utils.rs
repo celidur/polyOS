@@ -12,7 +12,7 @@ pub extern "C" fn sync() {
 }
 
 pub fn boot_image() {
-    KERNEL.set_mode(ScreenMode::GRAPHIC(GraphicMode::GRAPHIC640x480x2));
+    KERNEL.set_mode(ScreenMode::Graphic(GraphicMode::GRAPHIC640x480x2));
 
     let b = Bitmap::new("/load.bmp");
     if let Some(bitmap) = b {
@@ -31,5 +31,5 @@ pub fn boot_image() {
     }
     serial_println!("Done");
 
-    KERNEL.set_mode(ScreenMode::TEXT(TextMode::Text90x60));
+    KERNEL.set_mode(ScreenMode::Text(TextMode::Text90x60));
 }

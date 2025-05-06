@@ -55,7 +55,7 @@ impl GraphicVga<'_> {
     fn write_pixel4p(&mut self, x: u32, y: u32, c: u8) {
         let wd_in_bytes = self.width / 8;
         let off = wd_in_bytes * y + x / 8;
-        let x = (x & 7) * 1;
+        let x = x & 7;
         let mask = 0x80 >> x;
         let mut pmask = 1;
         for p in 0..4 {
@@ -84,11 +84,11 @@ impl GraphicVga<'_> {
 
     pub fn set_pixel(&mut self, x: u32, y: u32, color: u8) {
         match self.pixel_mode {
-            PixelMode::Pixel1 => self.write_pixel1(x as u32, y as u32, color),
-            PixelMode::Pixel2 => self.write_pixel2(x as u32, y as u32, color),
-            PixelMode::Pixel4p => self.write_pixel4p(x as u32, y as u32, color),
-            PixelMode::Pixel8 => self.write_pixel8(x as u32, y as u32, color),
-            PixelMode::Pixel8x => self.write_pixel8x(x as u32, y as u32, color),
+            PixelMode::Pixel1 => self.write_pixel1(x, y, color),
+            PixelMode::Pixel2 => self.write_pixel2(x, y, color),
+            PixelMode::Pixel4p => self.write_pixel4p(x, y, color),
+            PixelMode::Pixel8 => self.write_pixel8(x, y, color),
+            PixelMode::Pixel8x => self.write_pixel8x(x, y, color),
         }
     }
 }

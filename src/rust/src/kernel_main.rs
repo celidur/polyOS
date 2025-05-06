@@ -40,7 +40,7 @@ fn kernel_main() -> ! {
 
     init_heap();
 
-    KERNEL.set_mode(ScreenMode::TEXT(TextMode::Text90x60));
+    KERNEL.set_mode(ScreenMode::Text(TextMode::Text90x60));
     KERNEL.init_rootfs();
 
     unsafe { kernel_init2() };

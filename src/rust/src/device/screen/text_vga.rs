@@ -169,8 +169,8 @@ impl TextVga<'_> {
         }
         let index = self.screen_pos();
         let c = ScreenChar {
-            ascii_character: ascii_character,
-            color_code: color_code,
+            ascii_character,
+            color_code,
         };
 
         self.ptr.as_mut_slice()[index] = c;
@@ -189,7 +189,9 @@ impl TextVga<'_> {
     }
 
     pub fn write_str(&mut self, s: &str) {
-        self.write_str_color(s, self.current_color);
+        for byte in s.bytes() {
+            self.write_char(byte);
+        }
     }
 
     pub fn clear(&mut self, blank: ScreenChar) {

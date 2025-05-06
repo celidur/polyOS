@@ -8,7 +8,7 @@ use crate::{
     device::{
         block_dev::{BlockDevice, BlockDeviceError},
         disk::Disk,
-        screen::{ScreenMode, TextMode, Vga},
+        screen::{GraphicVga, ScreenMode, TextMode, TextVga, Vga},
     },
     fs::{MemFsDriver, MountOptions, Vfs, fat::FatDriver},
     interrupts,
@@ -18,7 +18,7 @@ pub struct Kernel<'a> {
     disks: RwLock<Vec<Arc<Mutex<Disk>>>>,
     block_device: RwLock<Vec<Arc<Mutex<dyn BlockDevice>>>>,
     serial_port: Mutex<SerialPort>,
-    pub vga: RwLock<Vga<'a>>,
+    vga: RwLock<Vga<'a>>,
     pub vfs: RwLock<Vfs>,
 }
 
@@ -43,7 +43,7 @@ impl Kernel<'_> {
             vfs,
             serial_port,
             block_device: RwLock::new(Vec::new()),
-            vga: RwLock::new(Vga::new(ScreenMode::TEXT(TextMode::Text90x60))),
+            vga: RwLock::new(Vga::new(ScreenMode::Text(TextMode::Text90x60))),
         };
 
         kernel.register_block_device(disk0);
@@ -149,5 +149,27 @@ impl Kernel<'_> {
             let mut vga = self.vga.write();
             vga.set_mode(mode);
         });
+    }
+
+    pub fn with_text<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(Option<&mut TextVga<'_>>) -> R,
+    {
+        interrupts::without_interrupts(|| {
+            let mut vga = self.vga.write();
+            let text = vga.get_text_vga();
+            f(text)
+        })
+    }
+
+    pub fn with_graphic<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(Option<&mut GraphicVga<'_>>) -> R,
+    {
+        interrupts::without_interrupts(|| {
+            let mut vga = self.vga.write();
+            let graphic = vga.get_graphic_vga();
+            f(graphic)
+        })
     }
 }
