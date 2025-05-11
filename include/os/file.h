@@ -30,10 +30,8 @@ typedef unsigned int FILE_STAT_FLAGS;
 struct file_stat
 {
     uint32_t size;
-    FILE_STAT_FLAGS flags;
 };
 
-void fs_init();
 int fopen(const char *filename, const char *str);
 int fread(int fd, void *ptr, uint32_t size);
 int fseek(int fd, uint32_t offset, FILE_SEEK_MODE mode);

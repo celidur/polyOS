@@ -10,12 +10,22 @@ use spin::Mutex;
 
 use crate::serial_print;
 
-const PAGE_SIZE: usize = 4096;
+pub const PAGE_SIZE: usize = 4096;
 
 pub struct AllocationHeader {
-    ptr: u32,
-    size: usize,
-    alignment: usize,
+    pub ptr: u32,
+    pub size: usize,
+    pub alignment: usize,
+}
+
+impl AllocationHeader {
+    pub fn new(ptr: u32, size: usize, alignment: usize) -> Self {
+        AllocationHeader {
+            ptr,
+            size,
+            alignment,
+        }
+    }
 }
 
 lazy_static! {

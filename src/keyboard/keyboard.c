@@ -43,36 +43,3 @@ void keyboard_backspace(struct process *process)
     int index = keyboard_get_tail_index(process);
     process->keyboard.buffer[index] = '\0';
 }
-
-void keyboard_push(char c)
-{
-    struct process *process = process_current();
-    if (!process)
-    {
-        return;
-    }
-    if (c == 0){
-        return;
-    }
-    int index = keyboard_get_tail_index(process);
-    process->keyboard.buffer[index] = c;
-    process->keyboard.tail++;
-}
-
-char keyboard_pop()
-{
-    struct process *process = process_current();
-    if (!process)
-    {
-        return 0;
-    }
-    int index = process->keyboard.head % sizeof(process->keyboard.buffer);
-    char c = process->keyboard.buffer[index];
-    if (c == 0x00)
-    {
-        return 0;
-    }
-    process->keyboard.buffer[index] = 0x00;
-    process->keyboard.head++;
-    return c;
-}

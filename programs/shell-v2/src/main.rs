@@ -11,6 +11,7 @@ fn main() {
     println!("PolyOS v2.0.0");
     loop {
         print!("> ");
+        buffer.fill(0);
         let len = polyos_std::stdio::terminal_readline(&mut buffer, true);
         let buffer = core::str::from_utf8(&buffer[..len]).unwrap();
         println!();

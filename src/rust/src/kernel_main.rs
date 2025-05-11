@@ -1,6 +1,6 @@
 use crate::{
     allocator::{init_heap, serial_print_memory},
-    bindings::{init_gdt, kernel_init2, process, process_load_switch, task_run_first_ever_task},
+    bindings::{init_gdt, kernel_init2},
     device::{
         pci::pci_read_config,
         screen::{ScreenMode, TextMode},
@@ -8,6 +8,7 @@ use crate::{
     entry_point,
     kernel::KERNEL,
     serial_println,
+    task::task::task_next,
     utils::boot_image,
 };
 
@@ -51,11 +52,11 @@ fn kernel_main() -> ! {
 
     list_pci_devices();
 
-    let p: *mut *mut process = core::ptr::null_mut();
-    let res = unsafe { process_load_switch(c"/bin/shell-v2.elf".as_ptr(), p) };
-    if res < 0 {
-        panic!("Failed to load process");
-    }
+    serial_println!("Kernel main: spawning shell-v2.elf");
 
-    unsafe { task_run_first_ever_task() };
+    let _ = KERNEL.with_process_manager(|pm| pm.spawn("/bin/shell-v2.elf", None, None));
+
+    task_next();
+
+    panic!("No more tasks to run\n");
 }

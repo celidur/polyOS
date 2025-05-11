@@ -66,11 +66,11 @@ pub trait FileOps {
 }
 
 pub struct FileHandle {
-    pub ops: Box<dyn FileOps + Send>,
+    pub ops: Box<dyn FileOps + Send + Sync>,
 }
 
 impl FileHandle {
-    pub fn new(ops: Box<dyn FileOps + Send>) -> Self {
+    pub fn new(ops: Box<dyn FileOps + Send + Sync>) -> Self {
         Self { ops }
     }
 }

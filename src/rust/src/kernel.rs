@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 
-use alloc::{string::ToString, sync::Arc, vec, vec::Vec};
+use alloc::{collections::VecDeque, string::ToString, sync::Arc, vec::Vec};
 use spin::{Mutex, RwLock};
 use uart_16550::SerialPort;
 
@@ -12,6 +12,7 @@ use crate::{
     },
     fs::{MemFsDriver, MountOptions, Vfs, fat::FatDriver},
     interrupts,
+    task::{process_manager::ProcessManager, task_manager::TaskManager},
 };
 
 pub struct Kernel<'a> {
@@ -19,6 +20,9 @@ pub struct Kernel<'a> {
     block_device: RwLock<Vec<Arc<Mutex<dyn BlockDevice>>>>,
     serial_port: Mutex<SerialPort>,
     vga: RwLock<Vga<'a>>,
+    process_manager: RwLock<ProcessManager>,
+    task_manager: RwLock<TaskManager>,
+    keyboard: RwLock<VecDeque<u8>>,
     pub vfs: RwLock<Vfs>,
 }
 
@@ -44,6 +48,9 @@ impl Kernel<'_> {
             serial_port,
             block_device: RwLock::new(Vec::new()),
             vga: RwLock::new(Vga::new(ScreenMode::Text(TextMode::Text90x60))),
+            process_manager: RwLock::new(ProcessManager::new()),
+            keyboard: RwLock::new(VecDeque::new()),
+            task_manager: RwLock::new(TaskManager::new()),
         };
 
         kernel.register_block_device(disk0);
@@ -172,4 +179,43 @@ impl Kernel<'_> {
             f(graphic)
         })
     }
+
+    pub fn with_process_manager<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut ProcessManager) -> R,
+    {
+        interrupts::without_interrupts(|| {
+            let process_manager = &mut *self.process_manager.write();
+            f(process_manager)
+        })
+    }
+
+    pub fn with_task_manager<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut TaskManager) -> R,
+    {
+        interrupts::without_interrupts(|| {
+            let task_manager = &mut *self.task_manager.write();
+            f(task_manager)
+        })
+    }
+
+    pub fn keyboard_push(&self, c: u8) {
+        interrupts::without_interrupts(|| {
+            let mut keyboard = self.keyboard.write();
+            keyboard.push_back(c);
+        });
+    }
+
+    pub fn keyboard_pop(&self) -> Option<u8> {
+        interrupts::without_interrupts(|| {
+            let mut keyboard = self.keyboard.write();
+            keyboard.pop_front()
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn keyboard_push(c: ::core::ffi::c_char) {
+    KERNEL.keyboard_push(c as u8);
 }

@@ -54,4 +54,6 @@ task_return:
     call restore_general_registers
     add esp, 4
 
+    sti
+
     iretd

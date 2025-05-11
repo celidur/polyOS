@@ -41,6 +41,7 @@ impl FatFile {
 }
 
 unsafe impl Send for FatFile {}
+unsafe impl Sync for FatFile {}
 
 impl FileOps for FatFile {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, FsError> {

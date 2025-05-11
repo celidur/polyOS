@@ -88,7 +88,7 @@ static void idt_page_fault(struct interrupt_frame* frame, u32 code_error)
         printf("SGX ");
     printf(") at 0x%x\n", faulting_address);
 
-    struct registers* regs = &task_current()->regs;
+    struct registers* regs = get_register();
     printf("Registers:\n");
     printf("edi: 0x%x\n", regs->edi);
     printf("esi: 0x%x\n", regs->esi);
@@ -136,7 +136,7 @@ static void idt_general_protection_fault(struct interrupt_frame* frame, u32 code
 }
 
 static void idt_handle_exception(){
-    process_terminate(task_current()->process);
+    process_terminate();
     task_next();
     kernel_panic("No more tasks to run\n");
 }

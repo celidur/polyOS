@@ -52,18 +52,18 @@ struct process
     u32 size; // size of the data pointed to by "ptr"
 };
 
-int process_load(const char *filename, struct process **process);
-void *task_get_stack_item(struct task *task, int item);
-int task_page_task(struct task *task);
-struct process *process_current();
-struct process *process_get(int process_id);
+// int process_load(const char *filename, struct process **process);
+// void *task_get_stack_item(struct task *task, int item);
+// int task_page_task(struct task *task);
+// struct process *process_current();
+// struct process *process_get(int process_id);
 
-int process_switch(struct process *process);
-int process_load_switch(const char *filename, struct process **process);
-void* process_malloc(struct process* process, size_t size);
-void process_free(struct process* process, void* ptr);
+// int process_switch(struct process *process);
+// int process_load_switch(const char *filename, struct process **process);
+// void* process_malloc(struct process* process, size_t size);
+// void process_free(struct process* process, void* ptr);
 
-void process_get_arguments(struct process* process, int* argc, char*** argv);
-int process_inject_arguments(struct process* process, struct command_argument* root_command);
-int process_terminate(struct process* process);
+// void process_get_arguments(struct process* process, int* argc, char*** argv);
+// int process_inject_arguments(struct process* process, struct command_argument* root_command);
+int process_terminate();
 #endif
