@@ -1,7 +1,7 @@
 use spin::Mutex;
 
 use crate::{
-    interrupts::idt::{Interrupt, InterruptCallback, InterruptFrame},
+    interrupts::{InterruptFrame, InterruptHandlerKind, InterruptSource},
     kernel::keyboard_push,
 };
 
@@ -35,8 +35,8 @@ impl Keyboard {
 
     pub fn init(&mut self) -> i32 {
         unsafe { outb(PS2_PORT, PS2_COMMAND_ENABLE_FIRST_PORT) };
-        Interrupt::new(KEYBOARD_INTERRUPT)
-            .register(InterruptCallback::Plain(keyboard_interrupt_handler));
+        InterruptSource::new(KEYBOARD_INTERRUPT)
+            .register(InterruptHandlerKind::Plain(keyboard_interrupt_handler));
         0
     }
 

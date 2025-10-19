@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use crate::{
     bindings::{self, MAX_PATH, copy_string_from_task, copy_string_to_task},
     fs::file::{FileStat, fclose, fopen, fread, fseek, fstat, fwrite},
-    interrupts::idt::InterruptFrame,
+    interrupts::InterruptFrame,
     kernel::KERNEL,
 };
 

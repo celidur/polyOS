@@ -1,5 +1,5 @@
 use crate::{
-    interrupts::idt::InterruptFrame,
+    interrupts::InterruptFrame,
     utils::{reboot, shutdown},
 };
 

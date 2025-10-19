@@ -7,7 +7,7 @@ use crate::{
         screen::{ScreenMode, TextMode},
     },
     entry_point,
-    interrupts::{idt::idt_init, idt80::int80h_register_commands},
+    interrupts::interrupts_init,
     kernel::KERNEL,
     schedule::task::task_next,
     serial_println,
@@ -46,11 +46,9 @@ fn kernel_main() -> ! {
     KERNEL.set_mode(ScreenMode::Text(TextMode::Text90x60));
     KERNEL.init_rootfs();
 
-    idt_init();
+    interrupts_init();
 
     unsafe { kernel_init2() };
-
-    int80h_register_commands();
 
     KEYBOARD.lock().init();
 

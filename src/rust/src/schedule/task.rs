@@ -7,7 +7,7 @@ use crate::{
         self, USER_CODE_SEGMENT, USER_DATA_SEGMENT, USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
         kernel_page, paging_get_physical_address, paging_switch, task_return, user_registers,
     },
-    interrupts::idt::InterruptFrame,
+    interrupts::InterruptFrame,
     kernel::KERNEL,
 };
 

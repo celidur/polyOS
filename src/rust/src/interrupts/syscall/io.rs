@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use crate::{
     bindings::copy_string_from_task,
-    interrupts::idt::InterruptFrame,
+    interrupts::InterruptFrame,
     kernel::KERNEL,
     print::{clear_screen, terminal_writechar},
     serial_print,

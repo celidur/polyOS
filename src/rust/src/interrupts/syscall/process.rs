@@ -4,7 +4,7 @@ use alloc::string::ToString;
 
 use crate::{
     bindings::{self, MAX_PATH, copy_string_from_task},
-    interrupts::idt::InterruptFrame,
+    interrupts::InterruptFrame,
     kernel::KERNEL,
     schedule::{process::ProcessArguments, task::task_next},
 };

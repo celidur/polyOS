@@ -1,39 +1,18 @@
-use crate::bindings::{disable_interrupts, enable_interrupts};
-pub mod idt;
-pub mod idt80;
+mod callback;
+mod handler;
+mod idt;
+mod interrupt;
+mod interrupt_frame;
+mod irq_numbers;
+mod register;
+mod syscall;
+mod utils;
 
-#[inline]
-pub fn is_interrupts_enabled() -> bool {
-    let flags: u32;
-    unsafe {
-        core::arch::asm!(
-            "pushfd",
-            "pop {0}",
-            out(reg) flags,
-            options(nomem, preserves_flags),
-        );
-    }
-    (flags & (1 << 9)) != 0
-}
+pub use interrupt::{InterruptHandlerKind, InterruptSource};
+pub use interrupt_frame::InterruptFrame;
+pub use utils::{disable_interrupts, enable_interrupts, without_interrupts};
 
-#[warn(dead_code)]
-#[inline]
-pub fn without_interrupts<F, R>(f: F) -> R
-where
-    F: FnOnce() -> R,
-{
-    let saved_intpt_flag = is_interrupts_enabled();
-
-    if saved_intpt_flag {
-        unsafe { disable_interrupts() };
-    }
-
-    // do `f` while interrupts are disabled
-    let ret = f();
-
-    if saved_intpt_flag {
-        unsafe { enable_interrupts() };
-    }
-
-    ret
+pub fn interrupts_init() {
+    idt::idt_init();
+    syscall::syscall_init();
 }

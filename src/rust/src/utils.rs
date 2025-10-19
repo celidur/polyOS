@@ -6,7 +6,7 @@ use crate::{
         io::{inb, outb, outw},
         screen::{Bitmap, GraphicMode, ScreenMode, TextMode},
     },
-    interrupts::idt::disable_interrupts,
+    interrupts::disable_interrupts,
     kernel::KERNEL,
     serial_print, serial_println,
 };
