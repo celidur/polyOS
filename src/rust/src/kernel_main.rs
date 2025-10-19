@@ -2,13 +2,15 @@ use crate::{
     allocator::{init_heap, serial_print_memory},
     bindings::{init_gdt, kernel_init2},
     device::{
+        keyboard::KEYBOARD,
         pci::pci_read_config,
         screen::{ScreenMode, TextMode},
     },
     entry_point,
+    interrupts::{idt::idt_init, idt80::int80h_register_commands},
     kernel::KERNEL,
+    schedule::task::task_next,
     serial_println,
-    task::task::task_next,
     utils::boot_image,
 };
 
@@ -44,7 +46,13 @@ fn kernel_main() -> ! {
     KERNEL.set_mode(ScreenMode::Text(TextMode::Text90x60));
     KERNEL.init_rootfs();
 
+    idt_init();
+
     unsafe { kernel_init2() };
+
+    int80h_register_commands();
+
+    KEYBOARD.lock().init();
 
     boot_image();
 

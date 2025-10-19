@@ -8,6 +8,49 @@ use core::ptr::null;
 use crate::bindings::{PAGING_PAGE_SIZE, PROGRAM_VIRTUAL_ADDRESS};
 use crate::kernel::KERNEL;
 
+pub const PF_X: u32 = 0x1;
+pub const PF_W: u32 = 0x2;
+pub const PF_R: u32 = 0x4;
+
+pub const PT_NULL: u8 = 0x0;
+pub const PT_LOAD: u8 = 0x1;
+pub const PT_DYNAMIC: u8 = 0x2;
+pub const PT_INTERP: u8 = 0x3;
+pub const PT_NOTE: u8 = 0x4;
+pub const PT_SHLIB: u8 = 0x5;
+pub const PT_PHDR: u8 = 0x6;
+pub const SHT_NULL: u8 = 0x0;
+pub const SHT_PROGBITS: u8 = 0x1;
+pub const SHT_SYMTAB: u8 = 0x2;
+pub const SHT_STRTAB: u8 = 0x3;
+pub const SHT_RELA: u8 = 0x4;
+pub const SHT_HASH: u8 = 0x5;
+pub const SHT_DYNAMIC: u8 = 0x6;
+pub const SHT_NOTE: u8 = 0x7;
+pub const SHT_NOBITS: u8 = 0x8;
+pub const SHT_REL: u8 = 0x9;
+pub const SHT_SHLIB: u8 = 0xA;
+pub const SHT_DYNSYM: u8 = 0xB;
+pub const SHT_LOPROC: u8 = 0xC;
+pub const SHT_HIPROC: u8 = 0xD;
+pub const SHT_LOUSER: u8 = 0xE;
+pub const SHT_HIUSER: u8 = 0xF;
+pub const ET_NONE: u8 = 0x0;
+pub const ET_REL: u8 = 0x1;
+pub const ET_EXEC: u8 = 0x2;
+pub const ET_DYN: u8 = 0x3;
+pub const ET_CORE: u8 = 0x4;
+pub const EI_NIDENT: u8 = 16;
+pub const EI_CLASS: u8 = 4;
+pub const EI_DATA: u8 = 5;
+pub const ELFCLASSNONE: u8 = 0x0;
+pub const ELFCLASS32: u8 = 0x1;
+pub const ELFCLASS64: u8 = 0x2;
+pub const ELFDATANONE: u8 = 0x0;
+pub const ELFDATA2LSB: u8 = 0x1;
+pub const ELFDATA2MSB: u8 = 0x2;
+pub const SHN_UNDEF: u8 = 0x0;
+
 #[derive(Debug)]
 pub enum ElfError {
     Io,

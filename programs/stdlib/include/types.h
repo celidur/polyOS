@@ -42,6 +42,11 @@ typedef s64 int64_t;
 #define min_t(type, a, b) min(((type) a), ((type) b))
 #define max_t(type, a, b) max(((type) a), ((type) b))
 
+/*
+ * Define bool only if compiling with pre-C23 standards,
+ * since from C23 onward, 'bool' is a built-in keyword.
+ */
+#if !defined(__STDC_VERSION__) || __STDC_VERSION__ < 202311L
 typedef int bool;
 
 #ifndef true
@@ -50,8 +55,9 @@ typedef int bool;
 
 #ifndef false
 #define false 0
+#endif
+#endif /* C23 check */
 
 #define NULL ((void *)0)
 
-#endif
 #endif /* _TYPES_H_ */

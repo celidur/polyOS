@@ -7,7 +7,6 @@ use spin::RwLock;
 use crate::{
     bindings::{paging_switch, user_registers},
     error::KernelError,
-    serial_println,
 };
 
 use super::{
@@ -50,25 +49,25 @@ impl TaskManager {
     }
 
     pub fn task_page(&self) -> Result<(), KernelError> {
-        if let Some(cur) = self.current {
-            if let Some(nn_cur) = self.tasks.get(&cur) {
-                let process = &nn_cur.read().process;
-                unsafe {
-                    user_registers();
-                    paging_switch(process.page_directory as *mut u32)
-                };
-                return Ok(());
-            }
+        if let Some(cur) = self.current
+            && let Some(nn_cur) = self.tasks.get(&cur)
+        {
+            let process = &nn_cur.read().process;
+            unsafe {
+                user_registers();
+                paging_switch(process.page_directory as *mut u32)
+            };
+            return Ok(());
         }
         Err(KernelError::NoTasks)
     }
 
     pub fn schedule(&mut self) -> Result<(), KernelError> {
-        if let Some(cur) = self.current {
-            if let Some(nn_cur) = self.tasks.get(&cur) {
-                let prio = nn_cur.read().priority;
-                self.ready[prio].push_back(cur);
-            }
+        if let Some(cur) = self.current
+            && let Some(nn_cur) = self.tasks.get(&cur)
+        {
+            let prio = nn_cur.read().priority;
+            self.ready[prio].push_back(cur);
         }
 
         for prio in 0..MAX_PRIORITY {

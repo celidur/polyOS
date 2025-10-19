@@ -1,28 +1,28 @@
-use core::{ffi::c_void, ptr::null_mut};
+use core::ffi::c_void;
 
 use alloc::vec::Vec;
 
 use crate::{
-    bindings::{self, copy_string_from_task},
+    bindings::copy_string_from_task,
+    interrupts::idt::InterruptFrame,
     kernel::KERNEL,
     print::{clear_screen, terminal_writechar},
     serial_print,
 };
 
-#[unsafe(no_mangle)]
-pub extern "C" fn int80h_command0_serial(_frame: *mut bindings::interrupt_frame) -> *mut c_void {
+pub fn int80h_command0_serial(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
         } else {
-            let res = -1;
-            return res as *mut c_void;
+            let res = u32::MAX;
+            return res;
         };
 
         let ptr = current_task.read().get_stack_item(0);
         if ptr == 0 {
-            let res = -1;
-            return res as *mut c_void;
+            let res = u32::MAX;
+            return res;
         }
         let size = 1025;
 
@@ -33,7 +33,7 @@ pub extern "C" fn int80h_command0_serial(_frame: *mut bindings::interrupt_frame)
                 current_task.read().process.page_directory as *mut u32,
                 ptr as *mut c_void,
                 data.as_ptr() as *mut c_void,
-                size as i32,
+                size,
             )
         };
 
@@ -46,24 +46,23 @@ pub extern "C" fn int80h_command0_serial(_frame: *mut bindings::interrupt_frame)
 
         serial_print!("{}", data);
 
-        null_mut()
+        0
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn int80h_command1_print(_frame: *mut bindings::interrupt_frame) -> *mut c_void {
+pub fn int80h_command1_print(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
         } else {
-            let res = -1;
-            return res as *mut c_void;
+            let res = u32::MAX;
+            return res;
         };
 
         let ptr = current_task.read().get_stack_item(0);
         if ptr == 0 {
-            let res = -1;
-            return res as *mut c_void;
+            let res = u32::MAX;
+            return res;
         }
         let size = 1025;
 
@@ -74,7 +73,7 @@ pub extern "C" fn int80h_command1_print(_frame: *mut bindings::interrupt_frame) 
                 current_task.read().process.page_directory as *mut u32,
                 ptr as *mut c_void,
                 data.as_ptr() as *mut c_void,
-                size as i32,
+                size,
             )
         };
 
@@ -87,48 +86,41 @@ pub extern "C" fn int80h_command1_print(_frame: *mut bindings::interrupt_frame) 
 
         print!("{}", data);
 
-        null_mut()
+        0
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn int80h_command2_getkey(_frame: *mut bindings::interrupt_frame) -> *mut c_void {
+pub fn int80h_command2_getkey(_frame: &InterruptFrame) -> u32 {
     let c = KERNEL.keyboard_pop();
     if let Some(c) = c {
-        return c as *mut c_void;
+        return c as u32;
     }
-    null_mut()
+
+    0
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn int80h_command3_putchar(_frame: *mut bindings::interrupt_frame) -> *mut c_void {
+pub fn int80h_command3_putchar(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
         } else {
-            let res = -1;
-            return res as *mut c_void;
+            let res = u32::MAX;
+            return res;
         };
 
         let c = current_task.read().get_stack_item(0) as u8;
         terminal_writechar(c, 15);
 
-        null_mut()
+        0
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn int80h_command11_remove_last_char(
-    _frame: *mut bindings::interrupt_frame,
-) -> *mut c_void {
+pub fn int80h_command11_remove_last_char(_frame: &InterruptFrame) -> u32 {
     terminal_writechar(0x08, 15);
-    null_mut()
+    0
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn int80h_command12_clear_screen(
-    _frame: *mut bindings::interrupt_frame,
-) -> *mut c_void {
+pub fn int80h_command12_clear_screen(_frame: &InterruptFrame) -> u32 {
     clear_screen();
-    null_mut()
+    0
 }

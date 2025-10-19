@@ -32,11 +32,4 @@ struct file_stat
     uint32_t size;
 };
 
-int fopen(const char *filename, const char *str);
-int fread(int fd, void *ptr, uint32_t size);
-int fseek(int fd, uint32_t offset, FILE_SEEK_MODE mode);
-int fstat(int fd, struct file_stat *stat);
-int fwrite(int fd, void *ptr, u32 size);
-int fclose(int fd);
-
 #endif

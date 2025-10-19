@@ -1,41 +1,36 @@
 use core::ffi::c_void;
 
-use crate::{allocator::print_memory, bindings, kernel::KERNEL};
+use crate::{allocator::print_memory, interrupts::idt::InterruptFrame, kernel::KERNEL};
 
-#[unsafe(no_mangle)]
-pub extern "C" fn int80h_command4_malloc(_frame: *mut bindings::interrupt_frame) -> *mut c_void {
+pub fn int80h_command4_malloc(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
         } else {
-            return core::ptr::null_mut();
+            return 0;
         };
         let size = current_task.read().get_stack_item(0);
         let process = current_task.read().process.clone();
-        process.malloc(size as usize)
+        process.malloc(size as usize) as u32
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn int80h_command5_free(_frame: *mut bindings::interrupt_frame) -> *mut c_void {
+pub fn int80h_command5_free(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
         } else {
-            return core::ptr::null_mut();
+            return 0;
         };
         let ptr = current_task.read().get_stack_item(0) as *mut c_void;
         let process = current_task.read().process.clone();
         process.free(ptr);
 
-        core::ptr::null_mut()
+        0
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn int80h_command10_print_memory(
-    _frame: *mut bindings::interrupt_frame,
-) -> *mut c_void {
+pub fn int80h_command10_print_memory(_frame: &InterruptFrame) -> u32 {
     print_memory();
-    core::ptr::null_mut()
+    0
 }

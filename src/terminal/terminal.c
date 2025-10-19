@@ -1,7 +1,6 @@
 #include <os/terminal.h>
 #include <os/string.h>
 #include <os/types.h>
-#include <os/io.h>
 #include <os/types.h>
 #include <stdarg.h>
 #include <os/memory.h>

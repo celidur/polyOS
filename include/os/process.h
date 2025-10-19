@@ -3,7 +3,6 @@
 #include <os/config.h>
 #include <os/types.h>
 #include <os/task.h>
-#include <os/elfloader.h>
 
 #define PROCESS_FILETYPE_ELF 0
 #define PROCESS_FILETYPE_BINARY 1

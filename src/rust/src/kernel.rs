@@ -12,8 +12,11 @@ use crate::{
     },
     fs::{MemFsDriver, MountOptions, Vfs, fat::FatDriver},
     interrupts,
-    task::{process_manager::ProcessManager, task_manager::TaskManager},
+    schedule::{process_manager::ProcessManager, task_manager::TaskManager},
 };
+
+pub const KERNEL_CODE_SELECTOR: u16 = 0x08;
+pub const KERNEL_DATA_SELECTOR: u16 = 0x10;
 
 pub struct Kernel<'a> {
     disks: RwLock<Vec<Arc<Mutex<Disk>>>>,
@@ -215,7 +218,6 @@ impl Kernel<'_> {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn keyboard_push(c: ::core::ffi::c_char) {
-    KERNEL.keyboard_push(c as u8);
+pub fn keyboard_push(c: u8) {
+    KERNEL.keyboard_push(c);
 }

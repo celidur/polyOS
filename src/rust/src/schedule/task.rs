@@ -7,6 +7,7 @@ use crate::{
         self, USER_CODE_SEGMENT, USER_DATA_SEGMENT, USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
         kernel_page, paging_get_physical_address, paging_switch, task_return, user_registers,
     },
+    interrupts::idt::InterruptFrame,
     kernel::KERNEL,
 };
 
@@ -71,7 +72,7 @@ impl Task {
         }
     }
 
-    pub fn set_state(&mut self, state: &bindings::interrupt_frame) {
+    pub fn set_state(&mut self, state: &InterruptFrame) {
         self.registers.edi = state.edi;
         self.registers.esi = state.esi;
         self.registers.ebp = state.ebp;
@@ -110,13 +111,9 @@ impl Task {
 pub extern "C" fn task_next() {
     let registers = KERNEL.with_task_manager(|tm| {
         let _ = tm.schedule();
-        let current_task = if let Some(t) = tm.get_current() {
-            t
-        } else {
-            return None;
-        };
+        let current_task = tm.get_current()?;
         let task = current_task.read();
-        Some(task.registers.clone())
+        Some(task.registers)
     });
 
     if let Some(registers) = registers {
@@ -127,21 +124,20 @@ pub extern "C" fn task_next() {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn task_page() {
-    let _ = KERNEL.with_task_manager(|tm| {
+    KERNEL.with_task_manager(|tm| {
         let _ = tm.task_page();
     });
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn task_current_save_state(frame: *mut bindings::interrupt_frame) {
-    let _ = KERNEL.with_task_manager(|tm| {
+pub fn task_current_save_state(frame: &InterruptFrame) {
+    KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
         } else {
             return;
         };
         let mut task = current_task.write();
-        task.set_state(unsafe { &*frame });
+        task.set_state(frame);
     });
 }
 

@@ -1,20 +1,28 @@
 use core::{
     alloc::{Allocator, Layout},
     ffi::c_void,
-    ptr::{null_mut, NonNull},
+    ptr::{NonNull, null_mut},
 };
 
-use alloc::{alloc::Global, string::{String, ToString}, sync::Arc, vec::Vec};
+use alloc::{
+    alloc::Global,
+    string::{String, ToString},
+    sync::Arc,
+    vec::Vec,
+};
 use spin::{Mutex, RwLock};
 
 use crate::{
     bindings::{
-        self, page_t, paging_align_address, paging_align_to_lower_page, paging_free_4gb, paging_map_to, paging_new_4gb, PAGING_ACCESS_FROM_ALL, PAGING_IS_PRESENT, PAGING_IS_WRITABLE, PAGING_PAGE_SIZE, PF_W, PROGRAM_VIRTUAL_ADDRESS, USER_PROGRAM_STACK_SIZE, USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END
+        self, PAGING_ACCESS_FROM_ALL, PAGING_IS_PRESENT, PAGING_IS_WRITABLE, PAGING_PAGE_SIZE,
+        PROGRAM_VIRTUAL_ADDRESS, USER_PROGRAM_STACK_SIZE, USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END,
+        page_t, paging_align_address, paging_align_to_lower_page, paging_free_4gb, paging_map_to,
+        paging_new_4gb,
     },
     error::KernelError,
     fs::FileHandle,
     kernel::KERNEL,
-    loader::elf::ElfFile,
+    loader::elf::{ElfFile, PF_W},
     memory::{AllocationHeader, PAGE_SIZE},
 };
 
@@ -70,27 +78,25 @@ impl Process {
         let args = if let Some(args) = args {
             args
         } else {
-            ProcessArguments { args: vec![filename.to_string()] }
+            ProcessArguments {
+                args: vec![filename.to_string()],
+            }
         };
 
-        let mut process_args= bindings::process_argument {
+        let mut process_args = bindings::process_argument {
             argv: null_mut(),
             argc: 0,
         };
 
         process_args.argc = args.args.len() as i32;
-        process_args.argv = process.malloc(
-            (args.args.len() + 1) * core::mem::size_of::<*const i8>() as usize,
-        ) as *mut *mut i8;
+        process_args.argv = process
+            .malloc((args.args.len() + 1) * core::mem::size_of::<*const i8>())
+            as *mut *mut i8;
         let mut args_ptr = process_args.argv;
         for arg in args.args.iter() {
             let arg_ptr = process.malloc(arg.len() + 1) as *mut i8;
             unsafe {
-                core::ptr::copy_nonoverlapping(
-                    arg.as_ptr() as *const i8,
-                    arg_ptr,
-                    arg.len(),
-                );
+                core::ptr::copy_nonoverlapping(arg.as_ptr() as *const i8, arg_ptr, arg.len());
                 // write null terminator at the end the size is len + 1
                 let last = arg_ptr.add(arg.len());
                 *last = 0;
@@ -99,7 +105,7 @@ impl Process {
             }
         }
         unsafe {
-            *args_ptr = 0 as *mut i8;
+            *args_ptr = null_mut();
         }
 
         process.args = process_args;
@@ -109,7 +115,7 @@ impl Process {
 
     fn load_elf(filename: &str) -> Option<Self> {
         let elf = ElfFile::load(filename).ok()?;
-        let entrypoint = elf.header().e_entry as u32;
+        let entrypoint = elf.header().e_entry;
         let page_directory = unsafe { paging_new_4gb(PAGING_IS_PRESENT as u8) } as bindings::page_t;
         Some(Self {
             pid: 0,
@@ -182,7 +188,7 @@ impl Process {
             },
             page_directory,
             stack: vec![],
-            entrypoint: PROGRAM_VIRTUAL_ADDRESS as u32,
+            entrypoint: PROGRAM_VIRTUAL_ADDRESS,
             heap: Mutex::new(vec![]),
         })
     }
@@ -236,9 +242,7 @@ impl Process {
                         self.page_directory as *mut page_t,
                         PROGRAM_VIRTUAL_ADDRESS as *mut c_void,
                         memory.as_ptr() as *mut c_void,
-                        paging_align_address(
-                            memory.as_ptr().add(memory.len() as usize + 1) as *mut c_void
-                        ),
+                        paging_align_address(memory.as_ptr().add(memory.len() + 1) as *mut c_void),
                         (PAGING_IS_PRESENT | PAGING_IS_WRITABLE | PAGING_ACCESS_FROM_ALL) as u8,
                     )
                 };
@@ -321,7 +325,6 @@ impl Process {
                         0,
                     )
                 };
-                return;
             }
         }
     }

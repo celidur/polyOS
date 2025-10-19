@@ -1,7 +1,12 @@
 use core::arch::asm;
 
 use crate::{
-    device::screen::{Bitmap, GraphicMode, ScreenMode, TextMode},
+    bindings::halt,
+    device::{
+        io::{inb, outb, outw},
+        screen::{Bitmap, GraphicMode, ScreenMode, TextMode},
+    },
+    interrupts::idt::disable_interrupts,
     kernel::KERNEL,
     serial_print, serial_println,
 };
@@ -32,4 +37,23 @@ pub fn boot_image() {
     serial_println!("Done");
 
     KERNEL.set_mode(ScreenMode::Text(TextMode::Text90x60));
+}
+
+pub fn shutdown() {
+    serial_println!("Shutting down...");
+
+    unsafe { outw(0x604, 0x2000) };
+
+    unsafe { halt() };
+}
+
+pub fn reboot() {
+    let mut good = 0x02;
+    disable_interrupts();
+    while good & 0x02 != 0 {
+        good = unsafe { inb(0x64) };
+    }
+    serial_println!("Rebooting...");
+    unsafe { outb(0x64, 0xFE) };
+    unsafe { halt() };
 }

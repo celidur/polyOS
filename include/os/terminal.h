@@ -27,12 +27,9 @@ typedef u8 color_t;
 
 void set_color(color_t background, color_t foreground);
 
-void print_c(const char *str, color_t color);
 void print(const char *str);
-void terminal_writechar(u8 c, color_t color);
 int printf(const char *fmt, ...);
 int serial_printf(const char *fmt, ...);
-void clear_screen();
 void disable_cursor();
 
 #endif

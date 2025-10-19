@@ -5,12 +5,8 @@
 #include <os/memory.h>
 #include <os/gdt.h>
 #include <os/tss.h>
-#include <os/process.h>
-#include <os/int80/int80.h>
-#include <os/keyboard.h>
 #include <os/terminal.h>
 
-#include <os/io.h>
 #include <os/idt.h>
 
 struct tss tss;
@@ -56,9 +52,6 @@ void init_gdt(){
 
 void kernel_init2()
 {
-    // Initialize IDT
-    idt_init();
-
     // Initialize TSS
     memset(&tss, 0, sizeof(tss));
     tss.esp0 = 0x600000;
@@ -69,12 +62,6 @@ void kernel_init2()
     kernel_chunk = paging_new_4gb(PAGING_IS_WRITABLE | PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL);
     paging_switch(kernel_chunk);
     enable_paging();
-
-    // initialize interrupts 80h
-    int80h_register_commands();
-
-    // Initialize keyboard
-    keyboard_init();
 }
 
 u64 get_ticks()
@@ -82,24 +69,4 @@ u64 get_ticks()
     uint32_t low, high;
     asm volatile("rdtsc" : "=a" (low), "=d" (high));
     return low | ((u64)high << 32);
-}
-
-void shutdown()
-{
-    serial_printf("Shutting down...\n");
-
-    outw(0x604, 0x2000);
-
-    halt();
-}
-
-void reboot()
-{
-    uint8_t good = 0x02;
-    disable_interrupts();
-    while (good & 0x02)
-        good = inb(0x64);
-    serial_printf("Rebooting...\n");
-    outb(0x64, 0xFE);
-    halt();
 }

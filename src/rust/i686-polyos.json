@@ -9,7 +9,7 @@
     "linker-flavor": "ld.lld",
     "linker": "i686-elf-ld",
     "panic-strategy": "abort",
-    "target-pointer-width": "32",
+    "target-pointer-width": 32,
     "target-endian": "little",
     "relocation-model": "static",
     "pre-link-args": {

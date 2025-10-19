@@ -10,6 +10,6 @@ pub enum KernelError {
 
 impl fmt::Display for KernelError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "KernelError::{:?}", self)
+        write!(f, "KernelError::{self:?}")
     }
 }

@@ -5,17 +5,13 @@ use alloc::vec::Vec;
 use crate::{
     bindings::{self, MAX_PATH, copy_string_from_task, copy_string_to_task},
     fs::file::{FileStat, fclose, fopen, fread, fseek, fstat, fwrite},
+    interrupts::idt::InterruptFrame,
     kernel::KERNEL,
 };
 
-#[unsafe(no_mangle)]
-pub extern "C" fn int80h_command13_fopen(_frame: *mut bindings::interrupt_frame) -> *mut c_void {
+pub fn int80h_command13_fopen(_frame: &InterruptFrame) -> u32 {
     let res = KERNEL.with_task_manager(|tm| {
-        let current_task = if let Some(t) = tm.get_current() {
-            t
-        } else {
-            return None;
-        };
+        let current_task = tm.get_current()?;
 
         let file_user_ptr = current_task.read().get_stack_item(0);
         if file_user_ptr == 0 {
@@ -39,32 +35,31 @@ pub extern "C" fn int80h_command13_fopen(_frame: *mut bindings::interrupt_frame)
     });
 
     if res.is_none() {
-        let res = -1;
-        return res as *mut c_void;
+        let res = u32::MAX;
+        return res;
     }
     let filename = res.unwrap();
 
     let mode = "r";
 
-    fopen(filename as *const i8, mode.as_ptr() as *const i8) as *mut c_void
+    fopen(filename as *const i8, mode.as_ptr() as *const i8) as u32
 }
 
 // TODO: Update this function to be more clean
-#[unsafe(no_mangle)]
-pub extern "C" fn int80h_command14_fread(_frame: *mut bindings::interrupt_frame) -> *mut c_void {
+pub fn int80h_command14_fread(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
         } else {
-            let res = -1;
-            return res as *mut c_void;
+            let res = u32::MAX;
+            return res;
         };
 
         let fd = current_task.read().get_stack_item(0);
         let file_user_ptr = current_task.read().get_stack_item(1);
         if file_user_ptr == 0 {
-            let res = -1;
-            return res as *mut c_void;
+            let res = u32::MAX;
+            return res;
         }
         let size = current_task.read().get_stack_item(2);
 
@@ -79,25 +74,24 @@ pub extern "C" fn int80h_command14_fread(_frame: *mut bindings::interrupt_frame)
                 size,
             ) as *mut c_void
         };
-        res as *mut c_void
+        res as u32
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn int80h_command15_fwrite(_frame: *mut bindings::interrupt_frame) -> *mut c_void {
+pub fn int80h_command15_fwrite(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
         } else {
-            let res = -1;
-            return res as *mut c_void;
+            let res = u32::MAX;
+            return res;
         };
 
         let fd = current_task.read().get_stack_item(0);
         let ptr = current_task.read().get_stack_item(1);
         if ptr == 0 {
-            let res = -1;
-            return res as *mut c_void;
+            let res = u32::MAX;
+            return res;
         }
         let size = current_task.read().get_stack_item(2);
 
@@ -112,36 +106,34 @@ pub extern "C" fn int80h_command15_fwrite(_frame: *mut bindings::interrupt_frame
             )
         };
 
-        fwrite(fd as i32, data.as_mut_ptr() as *mut c_void, size) as *mut c_void
+        fwrite(fd as i32, data.as_mut_ptr() as *mut c_void, size) as u32
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn int80h_command16_fseek(_frame: *mut bindings::interrupt_frame) -> *mut c_void {
+pub fn int80h_command16_fseek(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
         } else {
-            let res = -1;
-            return res as *mut c_void;
+            let res = u32::MAX;
+            return res;
         };
 
         let fd = current_task.read().get_stack_item(0);
         let offset = current_task.read().get_stack_item(1);
         let mode = current_task.read().get_stack_item(2);
 
-        fseek(fd as i32, offset, mode) as *mut c_void
+        fseek(fd as i32, offset, mode) as u32
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn int80h_command17_fstat(_frame: *mut bindings::interrupt_frame) -> *mut c_void {
+pub fn int80h_command17_fstat(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
         } else {
-            let res = -1;
-            return res as *mut c_void;
+            let res = u32::MAX;
+            return res;
         };
 
         let fd = current_task.read().get_stack_item(0);
@@ -160,22 +152,21 @@ pub extern "C" fn int80h_command17_fstat(_frame: *mut bindings::interrupt_frame)
             ) as *mut c_void
         };
 
-        res as *mut c_void
+        res as u32
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn int80h_command18_fclose(_frame: *mut bindings::interrupt_frame) -> *mut c_void {
+pub fn int80h_command18_fclose(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
         } else {
-            let res = -1;
-            return res as *mut c_void;
+            let res = u32::MAX;
+            return res;
         };
 
         let fd = current_task.read().get_stack_item(0);
 
-        fclose(fd as i32) as *mut c_void
+        fclose(fd as i32) as u32
     })
 }

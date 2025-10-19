@@ -25,10 +25,10 @@ impl ProcessManager {
         self.id += 1;
         let process = Arc::new(Process::new(pid, parent, filename, arg)?);
         self.table.insert(pid, process.clone());
-        if let Some(parent_pid) = parent {
-            if let Some(parent_process) = self.table.get_mut(&parent_pid) {
-                parent_process.children.lock().push(pid);
-            }
+        if let Some(parent_pid) = parent
+            && let Some(parent_process) = self.table.get_mut(&parent_pid)
+        {
+            parent_process.children.lock().push(pid);
         }
 
         let res = KERNEL.with_task_manager(|tm| tm.spawn(process.clone()))?;
@@ -39,7 +39,7 @@ impl ProcessManager {
     }
 
     pub fn get(&self, pid: ProcessId) -> Option<Arc<Process>> {
-        self.table.get(&pid).map(|p| p.clone())
+        self.table.get(&pid).cloned()
     }
 
     pub fn remove(&mut self, pid: ProcessId) {

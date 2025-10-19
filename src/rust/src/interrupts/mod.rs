@@ -1,7 +1,9 @@
 use crate::bindings::{disable_interrupts, enable_interrupts};
+pub mod idt;
+pub mod idt80;
 
 #[inline]
-pub fn interrupts_enabled() -> bool {
+pub fn is_interrupts_enabled() -> bool {
     let flags: u32;
     unsafe {
         core::arch::asm!(
@@ -20,7 +22,7 @@ pub fn without_interrupts<F, R>(f: F) -> R
 where
     F: FnOnce() -> R,
 {
-    let saved_intpt_flag = interrupts_enabled();
+    let saved_intpt_flag = is_interrupts_enabled();
 
     if saved_intpt_flag {
         unsafe { disable_interrupts() };
