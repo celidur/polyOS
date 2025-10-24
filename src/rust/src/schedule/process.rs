@@ -214,10 +214,6 @@ impl Process {
             None => return core::ptr::null_mut(),
         };
 
-        serial_println!(
-            "{:?}", memory
-        );
-
         let mut heap = self.heap.lock();
 
         if self

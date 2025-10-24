@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 
 use crate::{
     bindings::{self, task_return, user_registers},
-    constant::{PAGING_PAGE_SIZE, USER_CODE_SEGMENT, USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START},
+    constant::{PAGING_PAGE_SIZE, USER_CODE_SEGMENT, USER_DATA_SEGMENT, USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START},
     interrupts::InterruptFrame,
     kernel::KERNEL,
     memory::{self, PageDirectory},
@@ -60,7 +60,7 @@ impl Task {
                 cs: USER_CODE_SEGMENT,
                 flags: 0,
                 esp: USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START as u32,
-                ss: USER_CODE_SEGMENT,
+                ss: USER_DATA_SEGMENT,
             },
             state: TaskState::Runnable,
             process,
@@ -113,9 +113,6 @@ pub extern "C" fn task_next() {
         let task = current_task.read();
         Some(task.registers)
     });
-
-    serial_println!("Switching to next task");
-    serial_println!("Registers: {:?}", registers);
 
     if let Some(registers) = registers {
         unsafe { task_return((&registers) as *const _ as *mut _) };

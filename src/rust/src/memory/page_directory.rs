@@ -61,19 +61,18 @@ impl PageDirectory {
     }
 
     pub fn switch(&self) {
-        // self.print_info();
         let directory = self.directory.as_ptr() as *mut u32;
         serial_println!("Switching to page directory at {:p}", directory);
-        self.print_info();
-        unsafe { paging_switch(directory) };
+        // self.print_info();
+        // unsafe { paging_switch(directory) };
 
-        // unsafe {
-        //     asm!(
-        //         "mov cr3, eax",
-        //         in("eax") directory as u32,
-        //         options(nostack, preserves_flags)
-        //     );
-        // }
+        unsafe {
+            asm!(
+                "mov cr3, eax",
+                in("eax") directory as u32,
+                options(nostack, preserves_flags)
+            );
+        }
     }
 
     fn is_aligned(address: u32) -> bool {
@@ -93,11 +92,6 @@ impl PageDirectory {
     }
 
     pub fn set(&self, virtual_address: u32, value: u32) -> Result<(), PagingError> {
-        serial_println!(
-            "Setting page directory entry for virtual address {:x} to value {:x}",
-            virtual_address,
-            value
-        );
         if !Self::is_aligned(virtual_address) {
             return Err(PagingError::InvalidArg);
         }
