@@ -1,7 +1,7 @@
 use core::arch::asm;
 
 use crate::{
-    bindings::paging_switch, constant::{PAGING_PAGE_SIZE, PAGING_PAGE_TABLE_SIZE}, memory::page::Page, serial
+    constant::{PAGING_PAGE_SIZE, PAGING_PAGE_TABLE_SIZE}, memory::page::Page, serial
 };
 
 pub mod flags {
@@ -61,11 +61,8 @@ impl PageDirectory {
     }
 
     pub fn switch(&self) {
-        let directory = self.directory.as_ptr() as *mut u32;
-        serial_println!("Switching to page directory at {:p}", directory);
-        // self.print_info();
-        // unsafe { paging_switch(directory) };
-
+        let directory = self.directory.as_ptr();
+        
         unsafe {
             asm!(
                 "mov cr3, eax",

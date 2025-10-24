@@ -45,6 +45,7 @@ fn kernel_main() -> ! {
 
     KERNEL.set_mode(ScreenMode::Text(TextMode::Text90x60));
     KERNEL.init_rootfs();
+    KERNEL.init_page();
 
     interrupts_init();
 
@@ -65,6 +66,11 @@ fn kernel_main() -> ! {
     serial_println!("Kernel main: spawning shell-v2.elf");
 
     let _ = KERNEL.with_process_manager(|pm| pm.spawn("/bin/shell-v2.elf", None, None));
+
+
+    // loop {
+
+    // }
 
     task_next();
 

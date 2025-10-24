@@ -27,7 +27,7 @@ pub struct Kernel<'a> {
     task_manager: RwLock<TaskManager>,
     keyboard: RwLock<VecDeque<u8>>,
     pub vfs: RwLock<Vfs>,
-    pub kernel_page_directory: PageDirectory,
+    kernel_page_directory: RwLock<Option<PageDirectory>>,
 }
 
 lazy_static! {
@@ -46,13 +46,6 @@ impl Kernel<'_> {
         serial_port.init();
         let serial_port = Mutex::new(serial_port);
 
-        let kernel_page_directory = match PageDirectory::new_4gb(
-            memory::WRITABLE | memory::PRESENT | memory::USER_ACCESS,
-        ) {
-            Some(pd) => pd,
-            None => panic!("Failed to create kernel page directory"),
-        };
-
         let mut kernel = Kernel {
             disks,
             vfs,
@@ -62,7 +55,7 @@ impl Kernel<'_> {
             process_manager: RwLock::new(ProcessManager::new()),
             keyboard: RwLock::new(VecDeque::new()),
             task_manager: RwLock::new(TaskManager::new()),
-            kernel_page_directory,
+            kernel_page_directory: RwLock::new(None),
         };
 
         kernel.register_block_device(disk0);
@@ -100,6 +93,16 @@ impl Kernel<'_> {
                 },
             )
             .expect("Failed to mount memfs at /tmp");
+    }
+
+    pub fn init_page(&self) {
+        let kernel_page_directory = match PageDirectory::new_4gb(
+            memory::WRITABLE | memory::PRESENT | memory::USER_ACCESS,
+        ) {
+            Some(pd) => pd,
+            None => panic!("Failed to create kernel page directory"),
+        };
+        *self.kernel_page_directory.write() = Some(kernel_page_directory);
     }
 
     pub fn register_block_device(&mut self, dev: Arc<Mutex<dyn BlockDevice>>) -> usize {
@@ -228,8 +231,10 @@ impl Kernel<'_> {
 
     pub fn kernel_page(&self) {
         kernel_registers();
-        serial_println!("ADDRESS OF KERNEL PAGE DIRECTORY: {:p}", self.kernel_page_directory.directory.as_ptr());
-        self.kernel_page_directory.switch();
+        match &*self.kernel_page_directory.read() {
+            Some(pd) => pd.switch(),
+            None => panic!("Kernel page directory not initialized"),
+        }
     }
 }
 
