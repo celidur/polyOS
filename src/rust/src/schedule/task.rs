@@ -1,8 +1,13 @@
+use core::arch::asm;
+
 use alloc::sync::Arc;
 
 use crate::{
     bindings::{self, task_return, user_registers},
-    constant::{PAGING_PAGE_SIZE, USER_CODE_SEGMENT, USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START},
+    constant::{
+        PAGING_PAGE_SIZE, USER_CODE_SEGMENT, USER_DATA_SEGMENT,
+        USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
+    },
     interrupts::InterruptFrame,
     kernel::KERNEL,
     memory::{self, PageDirectory},
@@ -60,7 +65,7 @@ impl Task {
                 cs: USER_CODE_SEGMENT,
                 flags: 0,
                 esp: USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START as u32,
-                ss: USER_CODE_SEGMENT,
+                ss: USER_DATA_SEGMENT,
             },
             state: TaskState::Runnable,
             process,
@@ -113,9 +118,6 @@ pub extern "C" fn task_next() {
         let task = current_task.read();
         Some(task.registers)
     });
-
-    serial_println!("Switching to next task");
-    serial_println!("Registers: {:?}", registers);
 
     if let Some(registers) = registers {
         unsafe { task_return((&registers) as *const _ as *mut _) };
@@ -230,3 +232,38 @@ pub fn copy_string_to_task(
 
     Ok(())
 }
+
+// pub fn user_registers() {
+//     unsafe {
+//         asm!(
+//             "mov ax, 0x23",
+//             "mov ds, ax",
+//             "mov es, ax",
+//             "mov fs, ax",
+//             "mov gs, ax",
+//             "ret",
+//             options(nostack)
+//         );
+//     }
+// }
+
+// pub fn restore_general_registers(ctx: *const Registers) {
+//     // cdecl: [esp+4] holds `ctx`
+//     unsafe {
+//         asm!(
+//             "push ebp",
+//             "mov  ebp, esp",
+//             "mov  ebx, [ebp + 8]", // ebx = ctx
+//             "mov  edi, [ebx + 0]", // edi
+//             "mov  esi, [ebx + 4]", // esi
+//             "mov  ebp, [ebx + 8]", // ebp
+//             "mov  edx, [ebx + 16]", // edx
+//             "mov  ecx, [ebx + 20]", // ecx
+//             "mov  eax, [ebx + 24]", // eax
+//             "mov  ebx, [ebx + 12]", // ebx (last since we used ebx as ctx)
+//             "add  esp, 4",         // pop arg
+//             "ret",
+//             options(noreturn)
+//         );
+//     }
+// }

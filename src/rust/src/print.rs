@@ -80,11 +80,10 @@ pub extern "C" fn clear_screen() -> ::core::ffi::c_int {
     0
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn set_color(background: u8, foreground: u8) -> ::core::ffi::c_int {
+pub fn set_color(background: Color, foreground: Color) -> ::core::ffi::c_int {
     KERNEL.with_text(|text| {
         if let Some(text) = text {
-            let color = ColorCode::new(Color::from(foreground), Color::from(background));
+            let color = ColorCode::new(foreground, background);
             text.set_color(color);
         }
     });

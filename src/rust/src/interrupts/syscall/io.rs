@@ -64,7 +64,7 @@ pub fn int80h_command1_print(_frame: &InterruptFrame) -> u32 {
 
         let mut data: Vec<u8> = Vec::with_capacity(size as usize);
 
-        let _ =copy_string_from_task(
+        let _ = copy_string_from_task(
             &current_task.read().process.page_directory,
             ptr,
             data.as_ptr() as u32,

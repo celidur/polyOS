@@ -1,7 +1,9 @@
 use core::arch::asm;
 
 use crate::{
-    bindings::paging_switch, constant::{PAGING_PAGE_SIZE, PAGING_PAGE_TABLE_SIZE}, memory::page::Page, serial
+    constant::{PAGING_PAGE_SIZE, PAGING_PAGE_TABLE_SIZE},
+    memory::page::Page,
+    serial,
 };
 
 pub mod flags {
@@ -57,23 +59,22 @@ impl PageDirectory {
             directory_raw[i] = (entry.as_ptr() as u32 | flags) as u32;
         }
 
-        Some(Self { _entries: entries, directory })
+        Some(Self {
+            _entries: entries,
+            directory,
+        })
     }
 
     pub fn switch(&self) {
-        // self.print_info();
-        let directory = self.directory.as_ptr() as *mut u32;
-        serial_println!("Switching to page directory at {:p}", directory);
-        self.print_info();
-        unsafe { paging_switch(directory) };
+        let directory = self.directory.as_ptr();
 
-        // unsafe {
-        //     asm!(
-        //         "mov cr3, eax",
-        //         in("eax") directory as u32,
-        //         options(nostack, preserves_flags)
-        //     );
-        // }
+        unsafe {
+            asm!(
+                "mov cr3, eax",
+                in("eax") directory as u32,
+                options(nostack, preserves_flags)
+            );
+        }
     }
 
     fn is_aligned(address: u32) -> bool {
@@ -93,11 +94,6 @@ impl PageDirectory {
     }
 
     pub fn set(&self, virtual_address: u32, value: u32) -> Result<(), PagingError> {
-        serial_println!(
-            "Setting page directory entry for virtual address {:x} to value {:x}",
-            virtual_address,
-            value
-        );
         if !Self::is_aligned(virtual_address) {
             return Err(PagingError::InvalidArg);
         }

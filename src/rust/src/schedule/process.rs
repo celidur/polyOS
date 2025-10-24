@@ -9,15 +9,9 @@ use alloc::{
 use spin::{Mutex, RwLock};
 
 use crate::{
-    bindings::process_argument,
-    constant::{
+    bindings::process_argument, constant::{
         PROGRAM_VIRTUAL_ADDRESS, USER_PROGRAM_STACK_SIZE, USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END,
-    },
-    error::KernelError,
-    fs::FileHandle,
-    kernel::KERNEL,
-    loader::elf::{ElfFile, PF_W},
-    memory::{self, Page, PageDirectory}, serial,
+    }, error::KernelError, fs::FileHandle, kernel::KERNEL, loader::elf::{ElfFile, PF_W}, memory::{self, Page, PageDirectory}, serial
 };
 
 use super::task::TaskId;
@@ -31,6 +25,7 @@ pub enum ProcessFileType {
 pub struct ProcessArguments {
     pub args: Vec<String>,
 }
+
 
 pub struct Process {
     pub pid: ProcessId,
@@ -214,10 +209,6 @@ impl Process {
             None => return core::ptr::null_mut(),
         };
 
-        serial_println!(
-            "{:?}", memory
-        );
-
         let mut heap = self.heap.lock();
 
         if self
@@ -248,13 +239,13 @@ impl Process {
 
         let addr = ptr as u32;
         if let Some(page) = heap.remove(&addr) {
-            let _ =self.page_directory.map_page(addr, &page, 0);
+            let _ = self.page_directory.map_page(addr, &page, 0);
         }
     }
 
     pub fn cleanup(&self) {
         for (addr, page) in self.heap.lock().iter() {
-            let _= self.page_directory.map_page(*addr, page, 0);
+            let _ = self.page_directory.map_page(*addr, page, 0);
         }
         self.heap.lock().clear();
     }

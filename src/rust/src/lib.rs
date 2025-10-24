@@ -10,10 +10,12 @@ mod macros;
 #[allow(warnings)]
 mod bindings;
 
+mod c_shims;
 mod constant;
 mod device;
 mod error;
 mod fs;
+mod gdt;
 mod interrupts;
 mod kernel;
 mod kernel_main;
@@ -23,4 +25,5 @@ mod panic;
 mod print;
 mod schedule;
 mod serial;
+mod tss;
 mod utils;

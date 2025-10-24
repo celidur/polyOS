@@ -1,14 +1,14 @@
 use crate::{
-    bindings::{init_gdt, kernel_init2},
     device::{
         keyboard::KEYBOARD,
         pci::pci_read_config,
         screen::{ScreenMode, TextMode},
     },
     entry_point,
+    gdt::GDT,
     interrupts::interrupts_init,
     kernel::KERNEL,
-    memory::{self, enable_paging, init_heap, serial_print_memory, Page, PageDirectory},
+    memory::{self, Page, PageDirectory, enable_paging, init_heap, serial_print_memory},
     schedule::task::task_next,
     serial_println,
     utils::boot_image,
@@ -39,28 +39,27 @@ fn list_pci_devices() {
 }
 
 fn kernel_main() -> ! {
-    unsafe { init_gdt() };
-
+    lazy_static::initialize(&GDT);
     init_heap();
 
     KERNEL.set_mode(ScreenMode::Text(TextMode::Text90x60));
     KERNEL.init_rootfs();
+    KERNEL.init_page();
 
     interrupts_init();
-
-    unsafe { kernel_init2() };
-
 
     KEYBOARD.lock().init();
 
     boot_image();
 
+    GDT.write().init_gdt();
+
     KERNEL.kernel_page();
     enable_paging();
 
-    serial_print_memory();
+    // serial_print_memory();
 
-    list_pci_devices();
+    // list_pci_devices();
 
     serial_println!("Kernel main: spawning shell-v2.elf");
 

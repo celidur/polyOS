@@ -72,7 +72,7 @@ macro_rules! def_interrupts {
         seq!(N in 0..$table_len {
             paste! {
                 #[unsafe(naked)]
-                pub unsafe extern "C" fn [<int N>]() {
+                unsafe extern "C" fn [<int N>]() {
                     naked_asm!(
                         concat!(
                             "pushad\n",
@@ -87,7 +87,7 @@ macro_rules! def_interrupts {
             }
         });
 
-        pub static $table_ident: [unsafe extern "C" fn(); $table_len] = {
+        static $table_ident: [unsafe extern "C" fn(); $table_len] = {
             let mut tbl: [unsafe extern "C" fn(); $table_len] = [default_handler as unsafe extern "C" fn(); $table_len];
             seq!(N in 0..$table_len {
                 paste! {

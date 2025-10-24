@@ -1,8 +1,6 @@
 [BITS 32]
 global _start
 extern kernel_main
-global kernel_registers
-global halt
 
 CODE_SEG equ 0x08
 DATA_SEG equ 0x10
@@ -31,18 +29,7 @@ _start:
     ; end remapping of the master PIC
 
     call kernel_main
-
-    jmp halt
-
-; kernel_registers:
-;     mov ax, 0x10
-;     mov ds, ax
-;     mov es, ax
-;     mov fs, ax
-;     mov gs, ax
-;     ret
-
-halt:
+ 
     hlt
     jmp $
 

@@ -1,9 +1,7 @@
 #![allow(dead_code)]
 use core::ptr::null;
 
-use crate::bindings::PROGRAM_VIRTUAL_ADDRESS;
-use crate::kernel::KERNEL;
-use crate::memory::Page;
+use crate::{constant::PROGRAM_VIRTUAL_ADDRESS, kernel::KERNEL, memory::Page};
 
 pub const PF_X: u32 = 0x1;
 pub const PF_W: u32 = 0x2;
@@ -110,7 +108,7 @@ impl ElfHeader {
             && matches!(self.e_ident[4], 0 | 1)
             && matches!(self.e_ident[5], 0 | 1)
             && self.e_type == 2
-            && self.e_entry >= PROGRAM_VIRTUAL_ADDRESS
+            && self.e_entry >= PROGRAM_VIRTUAL_ADDRESS as u32
             && self.e_phoff != 0
     }
 

@@ -3,11 +3,21 @@ extern crate alloc;
 use alloc::format;
 use core::panic::PanicInfo;
 
-use crate::bindings::kernel_panic;
+use crate::{
+    device::screen::Color,
+    interrupts::disable_interrupts,
+    print::{disable_cursor, set_color},
+    utils::halt,
+};
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    let msg = format!("rust panic: {info}\0");
-
-    unsafe { kernel_panic(msg.as_ptr() as *const i8) }
+    disable_interrupts();
+    set_color(Color::Black, Color::LightRed);
+    print!("\nKERNEL PANIC: ");
+    set_color(Color::Black, Color::Red);
+    println!("{}", info);
+    disable_cursor();
+    serial_println!("KERNEL PANIC: {}", info);
+    halt();
 }

@@ -1,10 +1,7 @@
 #ifndef TASK_H
 #define TASK_H
 
-#include <os/config.h>
-#include <os/types.h>
-#include <os/paging.h>
-#include <os/process.h>
+typedef unsigned int		u32;
 
 struct registers
 {
@@ -23,35 +20,9 @@ struct registers
     u32 ss;
 }__attribute__((packed));
 
-struct process;
-struct task
-{
-    u32 *page_directory;
-    struct registers regs;
 
-    struct process *process;
-
-    struct task *next;
-    struct task *prev;
-};
 
 void task_return(struct registers *regs) __attribute__((noreturn));
 void user_registers();
-int task_page();
-void task_run_first_ever_task() __attribute__((noreturn));
-int task_switch(struct task *task);
-struct task *task_new(struct process *process);
-struct task *task_current();
-struct task *task_get_next();
-int task_free(struct task *task);
-
-struct registers* get_register();
-
-struct interrupt_frame;
-void task_current_save_state(struct interrupt_frame *frame);
-int copy_string_from_task(uint32_t *directory, void *virt, void *phys, int max);
-int copy_string_to_task(uint32_t *directory, void* buff, void* virt, u32 size);
-void* task_virtual_address_to_physical(uint32_t *directory, void* virtual_address);
-void task_next();
 
 #endif

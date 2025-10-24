@@ -11,7 +11,6 @@ use crate::{
 
 #[unsafe(no_mangle)]
 pub extern "C" fn interrupt_handler(interrupt: u32, frame: &InterruptFrame) {
-    serial_println!("Handling interrupt: {}", interrupt);
     KERNEL.kernel_page();
     task_current_save_state(frame);
     if let InterruptSource::Plain(int) = InterruptSource::new(interrupt as u16)
@@ -26,7 +25,6 @@ pub extern "C" fn interrupt_handler(interrupt: u32, frame: &InterruptFrame) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn interrupt_handler_error(error_code: u32, interrupt: u32, frame: &InterruptFrame) {
-    serial_println!("interrupt with error code: {}, interrupt: {}", error_code, interrupt);
     KERNEL.kernel_page();
     task_current_save_state(frame);
     if let InterruptSource::Error(int) = InterruptSource::new(interrupt as u16)
@@ -41,7 +39,6 @@ pub extern "C" fn interrupt_handler_error(error_code: u32, interrupt: u32, frame
 
 #[unsafe(no_mangle)]
 pub extern "C" fn syscall_handler(frame: &mut InterruptFrame) -> u32 {
-    serial_println!("Handling syscall");
     KERNEL.kernel_page();
     task_current_save_state(frame);
     let res = syscall_handle(frame);

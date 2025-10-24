@@ -3,7 +3,6 @@ use core::ffi::c_void;
 use alloc::vec::Vec;
 
 use crate::{
-    bindings::{self},
     constant::MAX_PATH,
     fs::file::{FileStat, fclose, fopen, fread, fseek, fstat, fwrite},
     interrupts::InterruptFrame,
@@ -144,7 +143,7 @@ pub fn int80h_command17_fstat(_frame: &InterruptFrame) -> u32 {
             &current_task.read().process.page_directory,
             stat as u32,
             ptr as u32,
-            core::mem::size_of::<bindings::file_stat>() as u32,
+            core::mem::size_of::<FileStat>() as u32,
         );
 
         res as u32

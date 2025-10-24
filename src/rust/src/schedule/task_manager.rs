@@ -50,10 +50,8 @@ impl TaskManager {
             && let Some(nn_cur) = self.tasks.get(&cur)
         {
             let process = &nn_cur.read().process;
-            unsafe {
-                user_registers();
-                process.page_directory.switch();
-            };
+            unsafe { user_registers() };
+            process.page_directory.switch();
             return Ok(());
         }
         Err(KernelError::NoTasks)
@@ -72,10 +70,8 @@ impl TaskManager {
                 self.current = Some(next_id);
                 if let Some(nn_next) = self.tasks.get(&next_id) {
                     let process = &nn_next.read().process;
-                    unsafe {
-                        user_registers();
-                        process.page_directory.switch();
-                    };
+                    unsafe { user_registers() };
+                    process.page_directory.switch();
                     return Ok(());
                 }
             }
