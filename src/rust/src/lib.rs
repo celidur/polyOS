@@ -10,7 +10,7 @@ mod macros;
 #[allow(warnings)]
 mod bindings;
 
-mod allocator;
+mod constant;
 mod device;
 mod error;
 mod fs;

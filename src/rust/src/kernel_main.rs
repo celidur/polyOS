@@ -1,5 +1,4 @@
 use crate::{
-    allocator::{init_heap, serial_print_memory},
     bindings::{init_gdt, kernel_init2},
     device::{
         keyboard::KEYBOARD,
@@ -9,6 +8,7 @@ use crate::{
     entry_point,
     interrupts::interrupts_init,
     kernel::KERNEL,
+    memory::{self, enable_paging, init_heap, serial_print_memory, Page, PageDirectory},
     schedule::task::task_next,
     serial_println,
     utils::boot_image,
@@ -50,9 +50,13 @@ fn kernel_main() -> ! {
 
     unsafe { kernel_init2() };
 
+
     KEYBOARD.lock().init();
 
     boot_image();
+
+    KERNEL.kernel_page();
+    enable_paging();
 
     serial_print_memory();
 

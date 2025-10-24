@@ -3,6 +3,7 @@ use paste::paste;
 use seq_macro::seq;
 
 use crate::{
+    constant::KERNEL_CODE_SELECTOR,
     interrupts::{
         callback::{
             idt_clock, idt_general_protection_fault, idt_handle_exception,
@@ -12,7 +13,6 @@ use crate::{
         interrupt::{InterruptHandlerKind, InterruptSource},
         utils::idt_load,
     },
-    kernel::KERNEL_CODE_SELECTOR,
 };
 
 #[repr(C, packed)]

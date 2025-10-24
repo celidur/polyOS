@@ -4,10 +4,7 @@ use alloc::{
 };
 use spin::RwLock;
 
-use crate::{
-    bindings::{paging_switch, user_registers},
-    error::KernelError,
-};
+use crate::{bindings::user_registers, error::KernelError};
 
 use super::{
     process::Process,
@@ -55,7 +52,7 @@ impl TaskManager {
             let process = &nn_cur.read().process;
             unsafe {
                 user_registers();
-                paging_switch(process.page_directory as *mut u32)
+                process.page_directory.switch();
             };
             return Ok(());
         }
@@ -77,7 +74,7 @@ impl TaskManager {
                     let process = &nn_next.read().process;
                     unsafe {
                         user_registers();
-                        paging_switch(process.page_directory as *mut u32)
+                        process.page_directory.switch();
                     };
                     return Ok(());
                 }

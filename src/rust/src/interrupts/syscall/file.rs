@@ -3,10 +3,12 @@ use core::ffi::c_void;
 use alloc::vec::Vec;
 
 use crate::{
-    bindings::{self, MAX_PATH, copy_string_from_task, copy_string_to_task},
+    bindings::{self},
+    constant::MAX_PATH,
     fs::file::{FileStat, fclose, fopen, fread, fseek, fstat, fwrite},
     interrupts::InterruptFrame,
     kernel::KERNEL,
+    schedule::task::{copy_string_from_task, copy_string_to_task},
 };
 
 pub fn int80h_command13_fopen(_frame: &InterruptFrame) -> u32 {
@@ -19,15 +21,14 @@ pub fn int80h_command13_fopen(_frame: &InterruptFrame) -> u32 {
         }
 
         let mut filename: [u8; MAX_PATH as usize] = [0; MAX_PATH as usize];
-        let res = unsafe {
-            copy_string_from_task(
-                current_task.read().process.page_directory as *mut u32,
-                file_user_ptr as *mut c_void,
-                filename.as_mut_ptr() as *mut c_void,
-                filename.len() as i32,
-            )
-        };
-        if res != 0 {
+        if copy_string_from_task(
+            &current_task.read().process.page_directory,
+            file_user_ptr,
+            filename.as_mut_ptr() as u32,
+            filename.len() as u32,
+        )
+        .is_err()
+        {
             return None;
         }
 
@@ -66,14 +67,12 @@ pub fn int80h_command14_fread(_frame: &InterruptFrame) -> u32 {
         let mut data: Vec<u8> = Vec::with_capacity(size as usize);
         let res = fread(fd as i32, data.as_mut_ptr() as *mut c_void, size);
 
-        let _ = unsafe {
-            copy_string_to_task(
-                current_task.read().process.page_directory as *mut u32,
-                data.as_ptr() as *mut c_void,
-                file_user_ptr as *mut c_void,
-                size,
-            ) as *mut c_void
-        };
+        let _ = copy_string_to_task(
+            &current_task.read().process.page_directory,
+            data.as_ptr() as u32,
+            file_user_ptr,
+            size,
+        );
         res as u32
     })
 }
@@ -97,14 +96,12 @@ pub fn int80h_command15_fwrite(_frame: &InterruptFrame) -> u32 {
 
         let mut data: Vec<u8> = Vec::with_capacity(size as usize);
 
-        unsafe {
-            copy_string_from_task(
-                current_task.read().process.page_directory as *mut u32,
-                ptr as *mut c_void,
-                data.as_ptr() as *mut c_void,
-                size as i32 + 1,
-            )
-        };
+        let _ = copy_string_from_task(
+            &current_task.read().process.page_directory,
+            ptr,
+            data.as_ptr() as u32,
+            size as u32 + 1,
+        );
 
         fwrite(fd as i32, data.as_mut_ptr() as *mut c_void, size) as u32
     })
@@ -143,14 +140,12 @@ pub fn int80h_command17_fstat(_frame: &InterruptFrame) -> u32 {
         let stat = &stat as *const FileStat as *mut FileStat;
         let res = fstat(fd as i32, stat);
 
-        let _ = unsafe {
-            copy_string_to_task(
-                current_task.read().process.page_directory as *mut u32,
-                stat as *mut c_void,
-                ptr as *mut c_void,
-                core::mem::size_of::<bindings::file_stat>() as u32,
-            ) as *mut c_void
-        };
+        let _ = copy_string_to_task(
+            &current_task.read().process.page_directory,
+            stat as u32,
+            ptr as u32,
+            core::mem::size_of::<bindings::file_stat>() as u32,
+        );
 
         res as u32
     })

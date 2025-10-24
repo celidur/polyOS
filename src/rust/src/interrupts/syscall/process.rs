@@ -1,12 +1,14 @@
-use core::ffi::c_void;
-
 use alloc::string::ToString;
 
 use crate::{
-    bindings::{self, MAX_PATH, copy_string_from_task},
+    bindings::{self},
+    constant::MAX_PATH,
     interrupts::InterruptFrame,
     kernel::KERNEL,
-    schedule::{process::ProcessArguments, task::task_next},
+    schedule::{
+        process::ProcessArguments,
+        task::{copy_string_from_task, task_next},
+    },
 };
 
 pub fn int80h_command6_process_load_start(_frame: &InterruptFrame) -> u32 {
@@ -19,15 +21,15 @@ pub fn int80h_command6_process_load_start(_frame: &InterruptFrame) -> u32 {
         }
 
         let mut filename: [u8; MAX_PATH as usize] = [0; MAX_PATH as usize];
-        let res = unsafe {
-            copy_string_from_task(
-                current_task.read().process.page_directory as *mut u32,
-                file_user_ptr as *mut c_void,
-                filename.as_mut_ptr() as *mut c_void,
-                filename.len() as i32,
-            )
-        };
-        if res != 0 {
+
+        if copy_string_from_task(
+            &current_task.read().process.page_directory,
+            file_user_ptr,
+            filename.as_mut_ptr() as u32,
+            filename.len() as u32,
+        )
+        .is_err()
+        {
             return None;
         }
 
@@ -55,8 +57,8 @@ pub fn int80h_command7_invoke_system_command(_frame: &InterruptFrame) -> u32 {
 
         let ptr = current_task
             .read()
-            .virtual_address_to_physical(current_task.read().get_stack_item(0) as *mut c_void)
-            as *mut bindings::command_argument;
+            .virtual_address_to_physical(current_task.read().get_stack_item(0))
+            .unwrap_or(0) as *mut bindings::command_argument;
         if ptr.is_null() {
             return None;
         }
@@ -116,8 +118,8 @@ pub fn int80h_command8_get_program_arguments(_frame: &InterruptFrame) -> u32 {
 
         let args = current_task
             .read()
-            .virtual_address_to_physical(current_task.read().get_stack_item(0) as *mut c_void)
-            as *mut bindings::process_argument;
+            .virtual_address_to_physical(current_task.read().get_stack_item(0))
+            .unwrap_or(0) as *mut bindings::process_argument;
         if args.is_null() {
             let res = u32::MAX;
             return res;

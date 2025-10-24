@@ -1,12 +1,10 @@
-use core::ffi::c_void;
-
 use alloc::vec::Vec;
 
 use crate::{
-    bindings::copy_string_from_task,
     interrupts::InterruptFrame,
     kernel::KERNEL,
     print::{clear_screen, terminal_writechar},
+    schedule::task::copy_string_from_task,
     serial_print,
 };
 
@@ -28,14 +26,12 @@ pub fn int80h_command0_serial(_frame: &InterruptFrame) -> u32 {
 
         let mut data: Vec<u8> = Vec::with_capacity(size as usize);
 
-        unsafe {
-            copy_string_from_task(
-                current_task.read().process.page_directory as *mut u32,
-                ptr as *mut c_void,
-                data.as_ptr() as *mut c_void,
-                size,
-            )
-        };
+        let _ = copy_string_from_task(
+            &current_task.read().process.page_directory,
+            ptr,
+            data.as_ptr() as u32,
+            size,
+        );
 
         unsafe { data.set_len(size as usize) };
         data.push(0);
@@ -68,14 +64,12 @@ pub fn int80h_command1_print(_frame: &InterruptFrame) -> u32 {
 
         let mut data: Vec<u8> = Vec::with_capacity(size as usize);
 
-        unsafe {
-            copy_string_from_task(
-                current_task.read().process.page_directory as *mut u32,
-                ptr as *mut c_void,
-                data.as_ptr() as *mut c_void,
-                size,
-            )
-        };
+        let _ =copy_string_from_task(
+            &current_task.read().process.page_directory,
+            ptr,
+            data.as_ptr() as u32,
+            size,
+        );
 
         unsafe { data.set_len(size as usize) };
         data.push(0);

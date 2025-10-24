@@ -1,7 +1,6 @@
 use core::arch::asm;
 
 use crate::{
-    bindings::halt,
     device::{
         io::{inb, outb, outw},
         screen::{Bitmap, GraphicMode, ScreenMode, TextMode},
@@ -44,7 +43,7 @@ pub fn shutdown() {
 
     unsafe { outw(0x604, 0x2000) };
 
-    unsafe { halt() };
+    halt();
 }
 
 pub fn reboot() {
@@ -55,5 +54,20 @@ pub fn reboot() {
     }
     serial_println!("Rebooting...");
     unsafe { outb(0x64, 0xFE) };
-    unsafe { halt() };
+    halt();
+}
+
+pub fn halt() -> ! {
+    serial_println!("Halting CPU...");
+
+    loop {
+        unsafe {
+            asm!(
+                "
+        hlt
+        ",
+                options(nostack, nomem)
+            )
+        }
+    }
 }

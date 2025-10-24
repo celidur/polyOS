@@ -1,3 +1,5 @@
+use core::arch::asm;
+
 use lazy_static::lazy_static;
 
 use alloc::{collections::VecDeque, string::ToString, sync::Arc, vec::Vec};
@@ -12,11 +14,9 @@ use crate::{
     },
     fs::{MemFsDriver, MountOptions, Vfs, fat::FatDriver},
     interrupts,
+    memory::{self, PageDirectory},
     schedule::{process_manager::ProcessManager, task_manager::TaskManager},
 };
-
-pub const KERNEL_CODE_SELECTOR: u16 = 0x08;
-pub const KERNEL_DATA_SELECTOR: u16 = 0x10;
 
 pub struct Kernel<'a> {
     disks: RwLock<Vec<Arc<Mutex<Disk>>>>,
@@ -27,6 +27,7 @@ pub struct Kernel<'a> {
     task_manager: RwLock<TaskManager>,
     keyboard: RwLock<VecDeque<u8>>,
     pub vfs: RwLock<Vfs>,
+    pub kernel_page_directory: PageDirectory,
 }
 
 lazy_static! {
@@ -45,6 +46,13 @@ impl Kernel<'_> {
         serial_port.init();
         let serial_port = Mutex::new(serial_port);
 
+        let kernel_page_directory = match PageDirectory::new_4gb(
+            memory::WRITABLE | memory::PRESENT | memory::USER_ACCESS,
+        ) {
+            Some(pd) => pd,
+            None => panic!("Failed to create kernel page directory"),
+        };
+
         let mut kernel = Kernel {
             disks,
             vfs,
@@ -54,6 +62,7 @@ impl Kernel<'_> {
             process_manager: RwLock::new(ProcessManager::new()),
             keyboard: RwLock::new(VecDeque::new()),
             task_manager: RwLock::new(TaskManager::new()),
+            kernel_page_directory,
         };
 
         kernel.register_block_device(disk0);
@@ -216,8 +225,29 @@ impl Kernel<'_> {
             keyboard.pop_front()
         })
     }
+
+    pub fn kernel_page(&self) {
+        kernel_registers();
+        serial_println!("ADDRESS OF KERNEL PAGE DIRECTORY: {:p}", self.kernel_page_directory.directory.as_ptr());
+        self.kernel_page_directory.switch();
+    }
 }
 
 pub fn keyboard_push(c: u8) {
     KERNEL.keyboard_push(c);
+}
+
+fn kernel_registers() {
+    unsafe {
+        asm!(
+            "
+        mov ax, 0x10
+        mov ds, ax
+        mov es, ax
+        mov fs, ax
+        mov gs, ax
+        ",
+            options(nomem, nostack, preserves_flags)
+        );
+    }
 }

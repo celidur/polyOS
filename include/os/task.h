@@ -26,7 +26,7 @@ struct registers
 struct process;
 struct task
 {
-    page_t *page_directory;
+    u32 *page_directory;
     struct registers regs;
 
     struct process *process;

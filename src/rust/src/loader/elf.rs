@@ -1,12 +1,9 @@
 #![allow(dead_code)]
-
-use alloc::alloc::alloc_zeroed;
-use alloc::vec::Vec;
-use core::alloc::Layout;
 use core::ptr::null;
 
-use crate::bindings::{PAGING_PAGE_SIZE, PROGRAM_VIRTUAL_ADDRESS};
+use crate::bindings::PROGRAM_VIRTUAL_ADDRESS;
 use crate::kernel::KERNEL;
+use crate::memory::Page;
 
 pub const PF_X: u32 = 0x1;
 pub const PF_W: u32 = 0x2;
@@ -141,7 +138,7 @@ impl ElfHeader {
 
 #[derive(Debug)]
 pub struct ElfFile {
-    memory: Vec<u8>,
+    memory: Page,
     virtual_base_address: *const u8,
     virtual_end_address: *const u8,
     physical_base_address: *const u8,
@@ -156,16 +153,11 @@ impl ElfFile {
         let mut file = KERNEL.vfs.read().open(filename).map_err(|_| ElfError::Io)?;
         let stat = file.ops.stat().map_err(|_| ElfError::Io)?;
 
-        let layout = Layout::from_size_align(stat.size as usize, PAGING_PAGE_SIZE as usize)
-            .map_err(|_| ElfError::Unknown)?;
-        let ptr = unsafe { alloc_zeroed(layout) };
-        if ptr.is_null() {
-            return Err(ElfError::Io);
-        }
+        let mut memory = Page::new(stat.size as usize).ok_or(ElfError::Io)?;
 
-        let mut memory =
-            unsafe { Vec::from_raw_parts(ptr, stat.size as usize, stat.size as usize) };
-        file.ops.read(&mut memory).map_err(|_| ElfError::Io)?;
+        file.ops
+            .read(&mut memory.as_mut_slice())
+            .map_err(|_| ElfError::Io)?;
 
         let header = unsafe { &*(memory.as_ptr() as *const ElfHeader) };
         header.validate()?;

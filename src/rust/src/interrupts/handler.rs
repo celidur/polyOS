@@ -1,17 +1,18 @@
 use core::arch::naked_asm;
 
 use crate::{
-    bindings::kernel_page,
     interrupts::{
         interrupt::InterruptSource, interrupt_frame::InterruptFrame, register::RegisterInterrupt,
         syscall::syscall_handle, utils::eoi_pic1,
     },
+    kernel::KERNEL,
     schedule::task::{task_current_save_state, task_page},
 };
 
 #[unsafe(no_mangle)]
 pub extern "C" fn interrupt_handler(interrupt: u32, frame: &InterruptFrame) {
-    unsafe { kernel_page() };
+    serial_println!("Handling interrupt: {}", interrupt);
+    KERNEL.kernel_page();
     task_current_save_state(frame);
     if let InterruptSource::Plain(int) = InterruptSource::new(interrupt as u16)
         && let Some(cb) = int.get_callback()
@@ -25,7 +26,8 @@ pub extern "C" fn interrupt_handler(interrupt: u32, frame: &InterruptFrame) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn interrupt_handler_error(error_code: u32, interrupt: u32, frame: &InterruptFrame) {
-    unsafe { kernel_page() };
+    serial_println!("interrupt with error code: {}, interrupt: {}", error_code, interrupt);
+    KERNEL.kernel_page();
     task_current_save_state(frame);
     if let InterruptSource::Error(int) = InterruptSource::new(interrupt as u16)
         && let Some(cb) = int.get_callback()
@@ -39,7 +41,8 @@ pub extern "C" fn interrupt_handler_error(error_code: u32, interrupt: u32, frame
 
 #[unsafe(no_mangle)]
 pub extern "C" fn syscall_handler(frame: &mut InterruptFrame) -> u32 {
-    unsafe { kernel_page() };
+    serial_println!("Handling syscall");
+    KERNEL.kernel_page();
     task_current_save_state(frame);
     let res = syscall_handle(frame);
     frame.eax = res;

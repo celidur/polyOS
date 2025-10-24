@@ -1,6 +1,6 @@
 use core::ffi::c_void;
 
-use crate::{allocator::print_memory, interrupts::InterruptFrame, kernel::KERNEL};
+use crate::{interrupts::InterruptFrame, kernel::KERNEL, memory::print_memory};
 
 pub fn int80h_command4_malloc(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {

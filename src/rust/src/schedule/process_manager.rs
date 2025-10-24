@@ -35,6 +35,9 @@ impl ProcessManager {
 
         process.tasks.write().replace(res);
 
+        let directory = process.page_directory.directory.as_ptr() as *mut u32;
+        serial_println!("Spawned to page directory at {:p}", directory);
+
         Ok(pid)
     }
 

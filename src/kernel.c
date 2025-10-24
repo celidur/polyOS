@@ -10,7 +10,7 @@
 #include <os/idt.h>
 
 struct tss tss;
-static page_t *kernel_chunk = 0;
+// static page_t *kernel_chunk = 0;
 struct gdt gdt_real[TOTAL_GDT_SEGMENTS];
 struct gdt_struct gdt_struct[TOTAL_GDT_SEGMENTS] = {
     {.base = 0x00, .limit = 0x00, .type = 0x00},                  // NULL Segment
@@ -22,11 +22,11 @@ struct gdt_struct gdt_struct[TOTAL_GDT_SEGMENTS] = {
 
 };
 
-void kernel_page()
-{
-    kernel_registers();
-    paging_switch(kernel_chunk);
-}
+// void kernel_page()
+// {
+//     kernel_registers();
+//     paging_switch(kernel_chunk);
+// }
 
 void kernel_panic(const char *msg)
 {
@@ -59,9 +59,9 @@ void kernel_init2()
 
     tss_load(0x28);
     // Initialize paging
-    kernel_chunk = paging_new_4gb(PAGING_IS_WRITABLE | PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL);
-    paging_switch(kernel_chunk);
-    enable_paging();
+    // kernel_chunk = paging_new_4gb(PAGING_IS_WRITABLE | PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL);
+    // paging_switch(kernel_chunk);
+    // enable_paging();
 }
 
 u64 get_ticks()
