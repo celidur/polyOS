@@ -52,8 +52,8 @@ impl PageDirectory {
         for i in 0..PAGING_PAGE_TABLE_SIZE {
             let entry =
                 entries_raw[i * PAGING_PAGE_TABLE_SIZE..(i + 1) * PAGING_PAGE_TABLE_SIZE].as_mut();
-            for b in 0..PAGING_PAGE_TABLE_SIZE {
-                entry[b] = (offset + (b * PAGING_PAGE_SIZE) as u32) | flags;
+            for (b, e) in entry.iter_mut().enumerate().take(PAGING_PAGE_TABLE_SIZE) {
+                *e = (offset + (b * PAGING_PAGE_SIZE) as u32) | flags;
             }
             offset += (PAGING_PAGE_TABLE_SIZE * PAGING_PAGE_SIZE) as u32;
             directory_raw[i] = (entry.as_ptr() as u32 | flags) as u32;
@@ -78,7 +78,7 @@ impl PageDirectory {
     }
 
     fn is_aligned(address: u32) -> bool {
-        address % PAGING_PAGE_SIZE as u32 == 0
+        address.is_multiple_of(PAGING_PAGE_SIZE as u32)
     }
 
     pub fn map(
@@ -90,7 +90,7 @@ impl PageDirectory {
         if !Self::is_aligned(virtual_address) || !Self::is_aligned(physical_address) {
             return Err(PagingError::InvalidArg);
         }
-        self.set(virtual_address, physical_address as u32 | flags)
+        self.set(virtual_address, physical_address | flags)
     }
 
     pub fn set(&self, virtual_address: u32, value: u32) -> Result<(), PagingError> {
@@ -167,7 +167,7 @@ impl PageDirectory {
         if physical_address_end < physical_address {
             return Err(PagingError::InvalidArg);
         }
-        if Self::is_aligned(physical_address_end) == false {
+        if !Self::is_aligned(physical_address_end) {
             return Err(PagingError::InvalidArg);
         }
         let count = (physical_address_end - physical_address) / PAGING_PAGE_SIZE as u32;
@@ -212,7 +212,7 @@ impl PageDirectory {
     pub fn get_physical_address(&self, virtual_address: u32) -> Result<u32, PagingError> {
         let virt_addr_new = Self::align_address_down(virtual_address);
         let difference = virtual_address - virt_addr_new;
-        Ok(self.get(virt_addr_new)? & 0xFFFFF000 + difference)
+        Ok((self.get(virt_addr_new)? & 0xFFFFF000) + difference)
     }
 
     pub fn print_info(&self) {
@@ -226,8 +226,8 @@ impl PageDirectory {
                 let table_ptr = (*entry & 0xFFFFF000) as *const u32;
                 core::slice::from_raw_parts(table_ptr, PAGING_PAGE_TABLE_SIZE)
             };
-            for b in 0..PAGING_PAGE_TABLE_SIZE {
-                let flag2 = table[b] & 31;
+            for (b, f) in table.iter().enumerate().take(PAGING_PAGE_TABLE_SIZE) {
+                let flag2 = f & 31;
                 if flag2 != flag {
                     if start != 0xFFFFFFFF {
                         serial_print!("0x{:x} - 0x{:x}: ", start, end);

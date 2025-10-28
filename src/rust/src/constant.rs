@@ -25,4 +25,3 @@ pub const USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END: usize =
 
 pub const USER_DATA_SEGMENT: u32 = 0x23;
 pub const USER_CODE_SEGMENT: u32 = 0x1B;
-

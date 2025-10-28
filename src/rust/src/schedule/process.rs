@@ -9,10 +9,31 @@ use alloc::{
 use spin::{Mutex, RwLock};
 
 use crate::{
-    bindings::process_argument, constant::{
+    constant::{
         PROGRAM_VIRTUAL_ADDRESS, USER_PROGRAM_STACK_SIZE, USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END,
-    }, error::KernelError, fs::FileHandle, kernel::KERNEL, loader::elf::{ElfFile, PF_W}, memory::{self, Page, PageDirectory}, serial
+    },
+    error::KernelError,
+    fs::FileHandle,
+    kernel::KERNEL,
+    loader::elf::{ElfFile, PF_W},
+    memory::{self, Page, PageDirectory},
 };
+
+// TODO: Remove command_argument and process_argument
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct command_argument {
+    pub argument: [::core::ffi::c_char; 512usize],
+    pub next: *mut command_argument,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct process_argument {
+    pub argc: ::core::ffi::c_int,
+    pub argv: *mut *mut ::core::ffi::c_char,
+}
 
 use super::task::TaskId;
 
@@ -26,7 +47,6 @@ pub enum ProcessFileType {
 pub struct ProcessArguments {
     pub args: Vec<String>,
 }
-
 
 pub struct Process {
     pub pid: ProcessId,
@@ -135,7 +155,7 @@ impl Process {
         let mut memory = Page::new(stat.size as usize).ok_or(KernelError::Allocation)?;
 
         file.ops
-            .read(&mut memory.as_mut_slice())
+            .read(memory.as_mut_slice())
             .map_err(|_| KernelError::Io)?;
         let page_directory =
             PageDirectory::new_4gb(memory::PRESENT).ok_or(KernelError::Allocation)?;
@@ -251,6 +271,3 @@ impl Process {
         self.heap.lock().clear();
     }
 }
-
-#[unsafe(no_mangle)]
-pub extern "C" fn process_terminate() {}

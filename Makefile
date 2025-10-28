@@ -4,22 +4,8 @@ SRC_DIR = ./src
 
 RUST_DIR = ./src/rust
 RUST_TARGET = i686-polyos
-RUST_LIB = $(RUST_DIR)/target/$(RUST_TARGET)/release/librust_kernel.a
+RUST_KERNEL = $(RUST_DIR)/target/$(RUST_TARGET)/release/rust_kernel
 
-FILES_ASM = $(shell find $(SRC_DIR) -type f -name '*.asm' ! -name 'boot.asm')
-FILES_C = $(shell find $(SRC_DIR) -type f -name '*.c')
-
-# kernel.asm.o needs to be first for the kernel to be the first thing in the binary
-OBJ_FILES = $(BUILD_DIR)/kernel.asm.o \
-            $(filter-out $(BUILD_DIR)/kernel.asm.o, $(FILES_ASM:$(SRC_DIR)/%.asm=$(BUILD_DIR)/%.asm.o) \
-            $(FILES_C:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o))
-
-INCLUDES = -I./include
-FLAGS = -g -ffreestanding -falign-jumps -falign-functions -falign-labels -falign-loops -fstrength-reduce -fomit-frame-pointer -finline-functions -Wno-unused-function -fno-builtin -Werror -Wno-unused-label -Wno-cpp -Wno-unused-parameter -nostdlib -nostartfiles -nodefaultlibs -Wall -O0 -Iinc
-NASMFLAGS = -f elf -g
-# crosstoolng
-BUILDER = i686-elf-gcc
-LINKER = i686-elf-ld
 NASM = nasm
 
 DIRECTORIES = $(BIN_DIR) $(sort $(dir $(OBJ_FILES)))
@@ -56,7 +42,7 @@ endif
 $(DIRECTORIES):
 	@mkdir -p $(DIRECTORIES)
 
-$(RUST_LIB): $(RUST_DIR)/Cargo.toml
+$(RUST_KERNEL): $(RUST_DIR)/Cargo.toml
 	cd $(RUST_DIR) && cargo +nightly build --release --target $(RUST_TARGET).json
 
 $(BIN_DIR)/os.bin: $(BIN_DIR)/boot.bin $(BIN_DIR)/kernel.bin
@@ -74,18 +60,11 @@ $(BIN_DIR)/os.bin: $(BIN_DIR)/boot.bin $(BIN_DIR)/kernel.bin
 	@dd if=/dev/zero bs=1048576 count=16 >> $@
 	@echo "OS image created."
 
-$(BIN_DIR)/kernel.bin: $(BIN_DIR)/ $(OBJ_FILES) $(RUST_LIB) user_programs
-	$(LINKER) -g -relocatable $(OBJ_FILES) $(RUST_LIB) -o $(BUILD_DIR)/kernelfull.o
-	$(BUILDER) $(FLAGS) -T $(SRC_DIR)/linker.ld -o $(BIN_DIR)/kernel.bin -lgcc -ffreestanding -O0 -nostdlib $(BUILD_DIR)/kernelfull.o
+$(BIN_DIR)/kernel.bin: $(BIN_DIR)/ $(OBJ_FILES) $(RUST_KERNEL) user_programs
+	cp $(RUST_KERNEL) $(BIN_DIR)/kernel.bin
 
 $(BIN_DIR)/boot.bin: $(SRC_DIR)/boot/boot.asm
 	$(NASM) -f bin $< -o $@
-
-$(BUILD_DIR)/%.asm.o: $(SRC_DIR)/%.asm
-	$(NASM) $(NASMFLAGS) $< -o $@
-
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
-	$(BUILDER) $(INCLUDES) $(FLAGS) -std=gnu99 -c $< -o $@
 
 clean: user_programs_clean
 	rm -rf $(BIN_DIR) $(BUILD_DIR)

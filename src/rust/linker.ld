@@ -3,6 +3,11 @@ OUTPUT_FORMAT(binary)
 SECTIONS
 {
     . = 1M;
+    .start : ALIGN(4096)
+    {
+        *(.start)
+    }
+    
     .text : ALIGN(4096)
     {
         *(.text)

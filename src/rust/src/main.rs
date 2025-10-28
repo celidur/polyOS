@@ -1,20 +1,43 @@
+#![no_std]
+#![no_main]
+#![feature(str_from_raw_parts)]
+#![feature(allocator_api)]
+extern crate alloc;
+
+#[macro_use]
+mod macros;
+
+mod c_shims;
+mod constant;
+mod device;
+mod entrypoint;
+mod error;
+mod fs;
+mod gdt;
+mod interrupts;
+mod kernel;
+mod loader;
+mod memory;
+mod panic;
+mod print;
+mod schedule;
+mod serial;
+mod tss;
+mod utils;
+
 use crate::{
     device::{
         keyboard::KEYBOARD,
         pci::pci_read_config,
         screen::{ScreenMode, TextMode},
     },
-    entry_point,
     gdt::GDT,
     interrupts::interrupts_init,
     kernel::KERNEL,
-    memory::{self, Page, PageDirectory, enable_paging, init_heap, serial_print_memory},
+    memory::{enable_paging, init_heap, serial_print_memory},
     schedule::task::task_next,
-    serial_println,
     utils::boot_image,
 };
-
-entry_point!(kernel_main);
 
 fn list_pci_devices() {
     for bus in 0..=255 {
@@ -38,7 +61,7 @@ fn list_pci_devices() {
     }
 }
 
-fn kernel_main() -> ! {
+pub fn kernel_main() -> ! {
     lazy_static::initialize(&GDT);
     init_heap();
 
@@ -54,7 +77,6 @@ fn kernel_main() -> ! {
 
     KERNEL.kernel_page();
     enable_paging();
-
 
     boot_image();
 

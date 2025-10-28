@@ -1,6 +1,6 @@
 use crate::{
     interrupts::{interrupt_frame::InterruptFrame, utils::get_cr2},
-    schedule::{process::process_terminate, task::task_next},
+    schedule::{process_manager::process_terminate, task::task_next},
 };
 
 pub fn idt_handle_exception(_frame: &InterruptFrame) {

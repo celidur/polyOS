@@ -4,7 +4,7 @@ use alloc::{
 };
 use spin::RwLock;
 
-use crate::{bindings::user_registers, error::KernelError};
+use crate::{error::KernelError, schedule::task::user_registers};
 
 use super::{
     process::Process,
@@ -50,7 +50,7 @@ impl TaskManager {
             && let Some(nn_cur) = self.tasks.get(&cur)
         {
             let process = &nn_cur.read().process;
-            unsafe { user_registers() };
+            user_registers();
             process.page_directory.switch();
             return Ok(());
         }
@@ -70,7 +70,7 @@ impl TaskManager {
                 self.current = Some(next_id);
                 if let Some(nn_next) = self.tasks.get(&next_id) {
                     let process = &nn_next.read().process;
-                    unsafe { user_registers() };
+                    user_registers();
                     process.page_directory.switch();
                     return Ok(());
                 }

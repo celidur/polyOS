@@ -1,5 +1,3 @@
-use alloc::format;
-
 use crate::{
     device::screen::{Color, ColorCode, ScreenChar},
     kernel::KERNEL,

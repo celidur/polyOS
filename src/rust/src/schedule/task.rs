@@ -1,7 +1,7 @@
 use alloc::sync::Arc;
+use core::arch::{asm, naked_asm};
 
 use crate::{
-    bindings::{self, task_return, user_registers},
     constant::{
         PAGING_PAGE_SIZE, USER_CODE_SEGMENT, USER_DATA_SEGMENT,
         USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
@@ -88,7 +88,7 @@ impl Task {
     }
 
     pub fn page_task(&self) {
-        unsafe { user_registers() };
+        user_registers();
         self.process.page_directory.switch();
     }
 
@@ -117,7 +117,7 @@ pub fn task_next() {
     });
 
     if let Some(registers) = registers {
-        unsafe { task_return((&registers) as *const _ as *mut _) };
+        unsafe { task_return(&registers) };
     }
     panic!("Failed to return to task");
 }
@@ -138,18 +138,6 @@ pub fn task_current_save_state(frame: &InterruptFrame) {
         let mut task = current_task.write();
         task.set_state(frame);
     });
-}
-
-pub fn get_register() -> *mut bindings::registers {
-    KERNEL.with_task_manager(|tm| {
-        let current_task = if let Some(t) = tm.get_current() {
-            t
-        } else {
-            return core::ptr::null_mut();
-        };
-        let task = current_task.read();
-        &task.registers as *const Registers as *mut bindings::registers
-    })
 }
 
 pub fn copy_string_from_task(
@@ -206,7 +194,7 @@ pub fn copy_string_to_task(
         directory
             .map_page(
                 phs_addr,
-                &memory::Page::new(PAGING_PAGE_SIZE as usize).ok_or(())?,
+                &memory::Page::new(PAGING_PAGE_SIZE).ok_or(())?,
                 flags,
             )
             .map_err(|_| ())?;
@@ -228,37 +216,48 @@ pub fn copy_string_to_task(
     Ok(())
 }
 
-// pub fn user_registers() {
-//     unsafe {
-//         asm!(
-//             "mov ax, 0x23",
-//             "mov ds, ax",
-//             "mov es, ax",
-//             "mov fs, ax",
-//             "mov gs, ax",
-//             "ret",
-//             options(nostack)
-//         );
-//     }
-// }
+pub fn user_registers() {
+    unsafe {
+        asm!(
+            "mov ds, ax",
+            "mov es, ax",
+            "mov fs, ax",
+            "mov gs, ax",
+            in("ax") 0x23u16,
+            options(nostack, preserves_flags)
+        );
+    }
+}
 
-// pub fn restore_general_registers(ctx: *const Registers) {
-//     // cdecl: [esp+4] holds `ctx`
-//     unsafe {
-//         asm!(
-//             "push ebp",
-//             "mov  ebp, esp",
-//             "mov  ebx, [ebp + 8]", // ebx = ctx
-//             "mov  edi, [ebx + 0]", // edi
-//             "mov  esi, [ebx + 4]", // esi
-//             "mov  ebp, [ebx + 8]", // ebp
-//             "mov  edx, [ebx + 16]", // edx
-//             "mov  ecx, [ebx + 20]", // ecx
-//             "mov  eax, [ebx + 24]", // eax
-//             "mov  ebx, [ebx + 12]", // ebx (last since we used ebx as ctx)
-//             "add  esp, 4",         // pop arg
-//             "ret",
-//             options(noreturn)
-//         );
-//     }
-// }
+#[unsafe(naked)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn task_return(regs: &Registers) -> ! {
+    naked_asm!(
+        // Get &Registers from the stack (cdecl: at [esp+4])
+        "mov  ebp, esp",
+        "mov  ebx, [ebp + 4]",
+        // Stack frame for iret: SS, ESP, EFLAGS, CS, EIP
+        "push dword ptr [ebx + 44]", // SS
+        "push dword ptr [ebx + 40]", // ESP
+        "mov  eax, [ebx + 36]",      // EFLAGS
+        "or   eax, 0x200",           // ensure IF=1
+        "push eax",
+        "push dword ptr [ebx + 32]", // CS
+        "push dword ptr [ebx + 28]", // EIP
+        // Load data segments from SS (your code uses [ebx+44])
+        "mov  ax, [ebx + 44]",
+        "mov  ds, ax",
+        "mov  es, ax",
+        "mov  fs, ax",
+        "mov  gs, ax",
+        "mov  edi, [ebx + 0]",
+        "mov  esi, [ebx + 4]",
+        "mov  ebp, [ebx + 8]", // after this, avoid using EBP
+        "mov  edx, [ebx + 16]",
+        "mov  ecx, [ebx + 20]",
+        "mov  eax, [ebx + 24]",
+        "mov  ebx, [ebx + 12]", // restore EBX last
+        "sti",
+        "iretd", // 32-bit: assembles to IRETD
+    );
+}

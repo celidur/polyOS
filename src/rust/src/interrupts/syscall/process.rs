@@ -1,12 +1,12 @@
 use alloc::string::ToString;
 
 use crate::{
-    bindings::{self},
     constant::MAX_PATH,
     interrupts::InterruptFrame,
     kernel::KERNEL,
     schedule::{
-        process::ProcessArguments,
+        process::{ProcessArguments, command_argument, process_argument},
+        process_manager::process_terminate,
         task::{copy_string_from_task, task_next},
     },
 };
@@ -20,7 +20,7 @@ pub fn int80h_command6_process_load_start(_frame: &InterruptFrame) -> u32 {
             return None;
         }
 
-        let mut filename: [u8; MAX_PATH as usize] = [0; MAX_PATH as usize];
+        let mut filename: [u8; MAX_PATH] = [0; MAX_PATH];
 
         if copy_string_from_task(
             &current_task.read().process.page_directory,
@@ -58,7 +58,7 @@ pub fn int80h_command7_invoke_system_command(_frame: &InterruptFrame) -> u32 {
         let ptr = current_task
             .read()
             .virtual_address_to_physical(current_task.read().get_stack_item(0))
-            .unwrap_or(0) as *mut bindings::command_argument;
+            .unwrap_or(0) as *mut command_argument;
         if ptr.is_null() {
             return None;
         }
@@ -73,7 +73,7 @@ pub fn int80h_command7_invoke_system_command(_frame: &InterruptFrame) -> u32 {
         };
         args.push(str.to_string());
         while !command.next.is_null() {
-            command = unsafe { &*(command.next as *const bindings::command_argument) };
+            command = unsafe { &*(command.next as *const command_argument) };
             let str = unsafe {
                 core::ffi::CStr::from_ptr(command.argument.as_ptr())
                     .to_str()
@@ -119,7 +119,7 @@ pub fn int80h_command8_get_program_arguments(_frame: &InterruptFrame) -> u32 {
         let args = current_task
             .read()
             .virtual_address_to_physical(current_task.read().get_stack_item(0))
-            .unwrap_or(0) as *mut bindings::process_argument;
+            .unwrap_or(0) as *mut process_argument;
         if args.is_null() {
             let res = u32::MAX;
             return res;
@@ -134,14 +134,9 @@ pub fn int80h_command8_get_program_arguments(_frame: &InterruptFrame) -> u32 {
 }
 
 pub fn int80h_command9_exit(_frame: &InterruptFrame) -> u32 {
-    let res = KERNEL.with_task_manager(|tm| tm.get_current().map(|t| t.read().process.pid));
+    process_terminate();
 
-    if res.is_none() {
-        let res = u32::MAX;
-        return res;
-    }
-    let pid = res.unwrap();
-    KERNEL.with_process_manager(|pm| pm.remove(pid));
+    serial_println!("Process terminated");
 
     task_next();
 

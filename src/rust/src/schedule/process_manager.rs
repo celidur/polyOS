@@ -1,6 +1,6 @@
 use alloc::{collections::BTreeMap, sync::Arc};
 
-use crate::{error::KernelError, kernel::KERNEL};
+use crate::{error::KernelError, kernel::KERNEL, schedule::task_manager::TaskManager};
 
 use super::process::{Process, ProcessArguments, ProcessId};
 
@@ -59,4 +59,18 @@ impl ProcessManager {
             });
         }
     }
+}
+
+pub fn process_terminate() {
+    let pid = match KERNEL.with_task_manager(|tm: &mut TaskManager| {
+        tm.get_current()
+            .map(|current_task| current_task.read().process.pid)
+    }) {
+        Some(pid) => pid,
+        None => return,
+    };
+
+    KERNEL.with_process_manager(|pm: &mut ProcessManager| {
+        pm.remove(pid);
+    });
 }

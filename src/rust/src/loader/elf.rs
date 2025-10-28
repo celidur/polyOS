@@ -154,7 +154,7 @@ impl ElfFile {
         let mut memory = Page::new(stat.size as usize).ok_or(ElfError::Io)?;
 
         file.ops
-            .read(&mut memory.as_mut_slice())
+            .read(memory.as_mut_slice())
             .map_err(|_| ElfError::Io)?;
 
         let header = unsafe { &*(memory.as_ptr() as *const ElfHeader) };

@@ -8,5 +8,9 @@ void c_start(){
     polyos_process_get_args(&args);
 
     int res = main(args.argc, args.argv);
-    serial_printf("%s: exited with code %d\n", args.argv[0], res);
+    if (args.argc > 0) {
+        serial_printf("%s: exited with code %d\n", args.argv[0], res);
+    } else {
+        serial_printf("process exited with code %d\n", res);
+    }
 }

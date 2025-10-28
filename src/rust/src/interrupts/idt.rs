@@ -116,7 +116,7 @@ def_interrupts! {
 }
 
 fn idt_set(interrupt_no: usize, address: unsafe extern "C" fn()) {
-    let addr = address as u32;
+    let addr = address as usize;
     let desc: &mut IdtDesc = unsafe { &mut IDT_DESCRIPTORS[interrupt_no] };
     desc.offset_1 = (addr & 0xFFFF) as u16;
     desc.offset_2 = ((addr >> 16) & 0xFFFF) as u16;

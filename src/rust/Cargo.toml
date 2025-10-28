@@ -3,20 +3,13 @@ name = "rust_kernel"
 version = "0.1.0"
 edition = "2024"
 
-[lib]
-crate-type = ["staticlib"]
-
-[build-dependencies]
-bindgen = "0.71.0"
-walkdir = "2.3"
-
 [dependencies]
-bitflags = "2.9.0"
+bitflags = "2.10.0"
 lazy_static = { version = "1.5.0", features = ["spin_no_std"] }
 linked_list_allocator = "0.10.5"
 spin = "0.10.0"
-uart_16550 = "0.3.2"
-bytemuck = "1.23"
+uart_16550 = "0.4.0"
+bytemuck = "1.24"
 fatfs = { git = "https://github.com/rafalh/rust-fatfs.git" , rev = "4eccb50d011146fbed20e133d33b22f3c27292e7", default-features = false, features = ["lfn", "unicode"] }
 paste = "1.0.15"
 seq-macro = "0.3.6"
@@ -24,4 +17,4 @@ seq-macro = "0.3.6"
 [profile.release]
 panic = "abort"
 lto = true
-codegen-units = 3
+codegen-units = 1

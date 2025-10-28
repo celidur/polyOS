@@ -19,7 +19,7 @@ pub fn int80h_command13_fopen(_frame: &InterruptFrame) -> u32 {
             return None;
         }
 
-        let mut filename: [u8; MAX_PATH as usize] = [0; MAX_PATH as usize];
+        let mut filename: [u8; MAX_PATH] = [0; MAX_PATH];
         if copy_string_from_task(
             &current_task.read().process.page_directory,
             file_user_ptr,
@@ -99,7 +99,7 @@ pub fn int80h_command15_fwrite(_frame: &InterruptFrame) -> u32 {
             &current_task.read().process.page_directory,
             ptr,
             data.as_ptr() as u32,
-            size as u32 + 1,
+            size + 1,
         );
 
         fwrite(fd as i32, data.as_mut_ptr() as *mut c_void, size) as u32
@@ -142,7 +142,7 @@ pub fn int80h_command17_fstat(_frame: &InterruptFrame) -> u32 {
         let _ = copy_string_to_task(
             &current_task.read().process.page_directory,
             stat as u32,
-            ptr as u32,
+            ptr,
             core::mem::size_of::<FileStat>() as u32,
         );
 

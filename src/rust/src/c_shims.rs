@@ -5,9 +5,7 @@ pub unsafe extern "C" fn memmove(dst: *mut u8, src: *const u8, n: usize) -> *mut
     let dst_slice = unsafe { core::slice::from_raw_parts_mut(dst, n) };
     let src_slice = unsafe { core::slice::from_raw_parts(src, n) };
     if dst_slice.as_ptr() < src_slice.as_ptr() {
-        for i in 0..n {
-            dst_slice[i] = src_slice[i];
-        }
+        dst_slice[..n].copy_from_slice(&src_slice[..n]);
     } else {
         for i in (0..n).rev() {
             dst_slice[i] = src_slice[i];
@@ -20,9 +18,7 @@ pub unsafe extern "C" fn memmove(dst: *mut u8, src: *const u8, n: usize) -> *mut
 pub unsafe extern "C" fn memcpy(dst: *mut u8, src: *const u8, n: usize) -> *mut u8 {
     let dst = unsafe { core::slice::from_raw_parts_mut(dst, n) };
     let src = unsafe { core::slice::from_raw_parts(src, n) };
-    for i in 0..n {
-        dst[i] = src[i];
-    }
+    dst[..n].copy_from_slice(&src[..n]);
     dst.as_mut_ptr()
 }
 

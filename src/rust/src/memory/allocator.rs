@@ -1,4 +1,7 @@
-use crate::{constant::{HEAP_ADDRESS, HEAP_SIZE_BYTES}, serial_println};
+use crate::{
+    constant::{HEAP_ADDRESS, HEAP_SIZE_BYTES},
+    serial_println,
+};
 use alloc::format;
 use alloc::string::String;
 use core::{
