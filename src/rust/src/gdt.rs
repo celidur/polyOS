@@ -16,8 +16,8 @@ const TYPE_TSS: u8 = 0xE9;
 // selectors (index * 8) | RPL
 const KERNEL_CODE_SELECTOR: u16 = (1 * 8) | 0;
 const KERNEL_DATA_SELECTOR: u16 = (2 * 8) | 0;
-const USER_CODE_SELECTOR: u16 = (3 * 8) | 3;
-const USER_DATA_SELECTOR: u16 = (4 * 8) | 3;
+// const USER_CODE_SELECTOR: u16 = (3 * 8) | 3;
+// const USER_DATA_SELECTOR: u16 = (4 * 8) | 3;
 const TSS_SELECTOR: u16 = (5 * 8) | 0;
 
 lazy_static! {

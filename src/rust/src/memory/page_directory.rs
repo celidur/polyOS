@@ -3,9 +3,9 @@ use core::arch::asm;
 use crate::{
     constant::{PAGING_PAGE_SIZE, PAGING_PAGE_TABLE_SIZE},
     memory::page::Page,
-    serial,
 };
 
+#[allow(dead_code)]
 pub mod flags {
     pub const PRESENT: u32 = 1 << 0;
     pub const WRITABLE: u32 = 1 << 1;

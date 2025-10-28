@@ -1,6 +1,5 @@
 extern crate alloc;
 
-use alloc::format;
 use core::panic::PanicInfo;
 
 use crate::{

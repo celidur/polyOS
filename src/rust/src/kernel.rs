@@ -13,7 +13,6 @@ use crate::{
         screen::{GraphicVga, ScreenMode, TextMode, TextVga, Vga},
     },
     fs::{MemFsDriver, MountOptions, Vfs, fat::FatDriver},
-    gdt::Gdt,
     interrupts,
     memory::{self, PageDirectory},
     schedule::{process_manager::ProcessManager, task_manager::TaskManager},
@@ -48,8 +47,6 @@ impl Kernel<'_> {
         serial_port.init();
         let serial_port = Mutex::new(serial_port);
 
-        // let gdt = Gdt::new();
-
         let mut kernel = Kernel {
             disks,
             vfs,
@@ -60,7 +57,6 @@ impl Kernel<'_> {
             keyboard: RwLock::new(VecDeque::new()),
             task_manager: RwLock::new(TaskManager::new()),
             kernel_page_directory: RwLock::new(None),
-            // gdt,
         };
 
         kernel.register_block_device(disk0);

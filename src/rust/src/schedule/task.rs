@@ -1,5 +1,3 @@
-use core::arch::asm;
-
 use alloc::sync::Arc;
 
 use crate::{

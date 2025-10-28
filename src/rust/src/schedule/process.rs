@@ -22,6 +22,7 @@ pub enum ProcessFileType {
     Binary(Page),
 }
 
+#[derive(Debug)]
 pub struct ProcessArguments {
     pub args: Vec<String>,
 }

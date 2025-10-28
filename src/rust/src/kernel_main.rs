@@ -50,16 +50,17 @@ fn kernel_main() -> ! {
 
     KEYBOARD.lock().init();
 
-    boot_image();
-
     GDT.write().init_gdt();
 
     KERNEL.kernel_page();
     enable_paging();
 
-    // serial_print_memory();
 
-    // list_pci_devices();
+    boot_image();
+
+    serial_print_memory();
+
+    list_pci_devices();
 
     serial_println!("Kernel main: spawning shell-v2.elf");
 

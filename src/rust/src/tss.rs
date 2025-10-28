@@ -1,7 +1,5 @@
 use core::arch::asm;
 
-use lazy_static::lazy_static;
-
 use crate::constant::{KERNEL_CODE_SELECTOR, KERNEL_DATA_SELECTOR};
 
 #[repr(C, packed)]
