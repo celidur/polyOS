@@ -7,7 +7,6 @@ extern crate alloc;
 #[macro_use]
 mod macros;
 
-mod c_shims;
 mod constant;
 mod device;
 mod entrypoint;
