@@ -45,8 +45,7 @@ fn c_str_to_str(ptr: *const c_char) -> Option<&'static str> {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn fopen(filename: *const c_char, _mode: *const c_char) -> i32 {
+pub fn fopen(filename: *const c_char, _mode: *const c_char) -> i32 {
     let Some(path) = c_str_to_str(filename) else {
         return -1;
     };
@@ -70,8 +69,7 @@ pub extern "C" fn fopen(filename: *const c_char, _mode: *const c_char) -> i32 {
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn fread(fd: i32, ptr: *mut c_void, size: u32) -> i32 {
+pub fn fread(fd: i32, ptr: *mut c_void, size: u32) -> i32 {
     let fd = fd - 1;
     if fd < 0 || fd as usize >= MAX_FD {
         return -1;
@@ -92,8 +90,7 @@ pub extern "C" fn fread(fd: i32, ptr: *mut c_void, size: u32) -> i32 {
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn fseek(fd: i32, offset: u32, mode: u32) -> i32 {
+pub fn fseek(fd: i32, offset: u32, mode: u32) -> i32 {
     let fd = fd - 1;
     if fd < 0 || fd as usize >= MAX_FD {
         return -1;
@@ -117,8 +114,7 @@ pub extern "C" fn fseek(fd: i32, offset: u32, mode: u32) -> i32 {
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn fstat(fd: i32, stat: *mut FileStat) -> i32 {
+pub fn fstat(fd: i32, stat: *mut FileStat) -> i32 {
     let fd = fd - 1;
     if fd < 0 || fd as usize >= MAX_FD || stat.is_null() {
         return -1;
@@ -145,8 +141,7 @@ pub extern "C" fn fstat(fd: i32, stat: *mut FileStat) -> i32 {
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn fwrite(fd: i32, ptr: *mut c_void, size: u32) -> i32 {
+pub fn fwrite(fd: i32, ptr: *mut c_void, size: u32) -> i32 {
     let fd = fd - 1;
     if fd < 0 || fd as usize >= MAX_FD {
         return -1;
@@ -166,9 +161,7 @@ pub extern "C" fn fwrite(fd: i32, ptr: *mut c_void, size: u32) -> i32 {
         }
     })
 }
-
-#[unsafe(no_mangle)]
-pub extern "C" fn fclose(fd: i32) -> i32 {
+pub fn fclose(fd: i32) -> i32 {
     let fd = fd - 1;
     if fd < 0 || fd as usize >= 128 {
         return -1;

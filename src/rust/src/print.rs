@@ -19,34 +19,7 @@ pub fn _print(args: ::core::fmt::Arguments) {
     });
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn print(buf: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    print!("{}", unsafe {
-        core::ffi::CStr::from_ptr(buf).to_string_lossy()
-    });
-
-    0
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn print_c(buf: *const ::core::ffi::c_char, color: u8) -> ::core::ffi::c_int {
-    let res = format!("{}", unsafe {
-        core::ffi::CStr::from_ptr(buf).to_string_lossy()
-    });
-
-    KERNEL.with_text(|text| {
-        if let Some(text) = text {
-            text.write_str_color(res.as_str(), color.into());
-        } else {
-            serial_println!("Terminal print not supported in this mode");
-        }
-    });
-
-    0
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn terminal_writechar(c: u8, color: u8) -> ::core::ffi::c_int {
+pub fn terminal_writechar(c: u8, color: u8) {
     KERNEL.with_text(|text| {
         if let Some(text) = text {
             text.write_char_color(c, color.into());
@@ -54,21 +27,9 @@ pub extern "C" fn terminal_writechar(c: u8, color: u8) -> ::core::ffi::c_int {
             serial_println!("Terminal write char not supported in this mode");
         }
     });
-    0
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn terminal_backspace() -> ::core::ffi::c_int {
-    KERNEL.with_text(|text| {
-        if let Some(text) = text {
-            text.backspace();
-        }
-    });
-    0
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clear_screen() -> ::core::ffi::c_int {
+pub fn clear_screen() {
     KERNEL.with_text(|text| {
         if let Some(text) = text {
             text.clear(ScreenChar::new(
@@ -77,24 +38,30 @@ pub extern "C" fn clear_screen() -> ::core::ffi::c_int {
             ));
         }
     });
-    0
 }
 
-pub fn set_color(background: Color, foreground: Color) -> ::core::ffi::c_int {
+pub fn set_color(background: Color, foreground: Color) {
     KERNEL.with_text(|text| {
         if let Some(text) = text {
             let color = ColorCode::new(foreground, background);
             text.set_color(color);
         }
     });
-    0
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn disable_cursor() -> ::core::ffi::c_int {
+pub fn disable_cursor() {
     KERNEL.with_text(|text| {
         if let Some(text) = text {
             text.disable_cursor();
+        }
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn terminal_backspace() -> ::core::ffi::c_int {
+    KERNEL.with_text(|text| {
+        if let Some(text) = text {
+            text.backspace();
         }
     });
     0

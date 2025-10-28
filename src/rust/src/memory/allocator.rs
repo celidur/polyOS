@@ -1,4 +1,4 @@
-use crate::serial_println;
+use crate::{constant::{HEAP_ADDRESS, HEAP_SIZE_BYTES}, serial_println};
 use alloc::format;
 use alloc::string::String;
 use core::{
@@ -6,9 +6,6 @@ use core::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 use linked_list_allocator::LockedHeap;
-
-pub const HEAP_START: usize = 0x1_000_000;
-pub const HEAP_SIZE: usize = 100 * 1024 * 1024; // 100MB
 
 pub struct TrackingAllocator {
     inner: LockedHeap,
@@ -50,16 +47,14 @@ unsafe impl GlobalAlloc for TrackingAllocator {
 }
 
 pub fn init_heap() {
-    ALLOCATOR.init(HEAP_START as *mut u8, HEAP_SIZE);
+    ALLOCATOR.init(HEAP_ADDRESS as *mut u8, HEAP_SIZE_BYTES);
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn serial_print_memory() {
+pub fn serial_print_memory() {
     serial_println!("{}", memory_usage());
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn print_memory() {
+pub fn print_memory() {
     serial_println!("{}", memory_usage());
 }
 
@@ -80,7 +75,7 @@ fn format_file_size(size: u64) -> String {
 
 fn memory_usage() -> String {
     let allocated = ALLOCATOR.total_allocated();
-    let total = HEAP_SIZE;
+    let total = HEAP_SIZE_BYTES;
     let left = total - allocated;
 
     format!(

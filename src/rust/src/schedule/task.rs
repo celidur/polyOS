@@ -108,8 +108,7 @@ impl Task {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn task_next() {
+pub fn task_next() {
     let registers = KERNEL.with_task_manager(|tm| {
         let _ = tm.schedule();
         let current_task = tm.get_current()?;
@@ -123,8 +122,7 @@ pub extern "C" fn task_next() {
     panic!("Failed to return to task");
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn task_page() {
+pub fn task_page() {
     KERNEL.with_task_manager(|tm| {
         let _ = tm.task_page();
     });
@@ -142,8 +140,7 @@ pub fn task_current_save_state(frame: &InterruptFrame) {
     });
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn get_register() -> *mut bindings::registers {
+pub fn get_register() -> *mut bindings::registers {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t

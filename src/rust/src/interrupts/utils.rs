@@ -2,8 +2,7 @@ use core::arch::asm;
 
 use crate::{device::io::outb, interrupts::idt::Idtr};
 
-#[unsafe(no_mangle)]
-pub extern "C" fn idt_load(idtr: &Idtr) {
+pub fn idt_load(idtr: &Idtr) {
     unsafe {
         asm!(
             "lidt [{0}]",
@@ -13,8 +12,7 @@ pub extern "C" fn idt_load(idtr: &Idtr) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn get_cr2() -> u32 {
+pub fn get_cr2() -> u32 {
     let cr2: u32;
     unsafe {
         asm!("mov {}, cr2", out(reg) cr2);
@@ -26,8 +24,7 @@ pub fn enable_interrupts() {
     unsafe { asm!("sti", options(nostack)) }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn disable_interrupts() {
+pub fn disable_interrupts() {
     unsafe { asm!("cli", options(nostack)) }
 }
 
