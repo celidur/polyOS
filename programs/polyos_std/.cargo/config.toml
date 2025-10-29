@@ -6,10 +6,6 @@ build-std = ["core", "alloc", "compiler_builtins"]
 target = "i686-polyos.json"
 
 [target.i686-polyos]
-linker = "i686-elf-gcc"
 rustflags = [
-    "-C", "link-arg=-T../stdlib/linker/linker.ld", 
-    "-C", "link-arg=-nostdlib",
-    "-C", "link-arg=-ffreestanding",
-    "-C", "link-arg=-O3"
+    "-C", "link-arg=-T../stdlib/linker/linker.ld",
 ]

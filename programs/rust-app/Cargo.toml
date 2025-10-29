@@ -13,3 +13,4 @@ panic = "abort"
 panic = "abort"
 lto = true
 codegen-units = 3
+opt-level = 3

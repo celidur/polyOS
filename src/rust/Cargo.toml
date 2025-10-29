@@ -18,3 +18,7 @@ seq-macro = "0.3.6"
 panic = "abort"
 lto = true
 codegen-units = 1
+opt-level = "z"
+debug = false
+split-debuginfo = "off"
+strip = "symbols"

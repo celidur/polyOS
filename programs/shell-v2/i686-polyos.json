@@ -7,7 +7,7 @@
     "features": "",
     "executables": true,
     "linker-flavor": "ld.lld",
-    "linker": "i686-elf-ld",
+    "linker": "rust-lld",
     "panic-strategy": "abort",
     "target-pointer-width": 32,
     "target-endian": "little",
