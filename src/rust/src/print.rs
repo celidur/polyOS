@@ -54,13 +54,3 @@ pub fn disable_cursor() {
         }
     });
 }
-
-#[unsafe(no_mangle)]
-pub extern "C" fn terminal_backspace() -> ::core::ffi::c_int {
-    KERNEL.with_text(|text| {
-        if let Some(text) = text {
-            text.backspace();
-        }
-    });
-    0
-}

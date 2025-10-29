@@ -89,11 +89,6 @@ impl Drop for Page {
             let layout = Layout::from_size_align_unchecked(self.size, PAGING_PAGE_SIZE);
             dealloc(self.ptr.as_ptr(), layout);
         }
-        serial_println!(
-            "Page dropped: ptr={:p}, size={}",
-            self.ptr.as_ptr(),
-            self.size
-        );
     }
 }
 

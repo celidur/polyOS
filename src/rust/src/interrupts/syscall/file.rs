@@ -11,6 +11,7 @@ use crate::{
 };
 
 pub fn int80h_command13_fopen(_frame: &InterruptFrame) -> u32 {
+    let mut filename: [u8; MAX_PATH] = [0; MAX_PATH];
     let res = KERNEL.with_task_manager(|tm| {
         let current_task = tm.get_current()?;
 
@@ -19,7 +20,6 @@ pub fn int80h_command13_fopen(_frame: &InterruptFrame) -> u32 {
             return None;
         }
 
-        let mut filename: [u8; MAX_PATH] = [0; MAX_PATH];
         if copy_string_from_task(
             &current_task.read().process.page_directory,
             file_user_ptr,
@@ -38,11 +38,12 @@ pub fn int80h_command13_fopen(_frame: &InterruptFrame) -> u32 {
         let res = u32::MAX;
         return res;
     }
-    let filename = res.unwrap();
 
     let mode = "r";
+    let filename = unsafe { core::ffi::CStr::from_ptr(res.unwrap() as *const i8) };
+    let filename = filename.to_str().unwrap_or("");
 
-    fopen(filename as *const i8, mode.as_ptr() as *const i8) as u32
+    fopen(filename, mode) as u32
 }
 
 // TODO: Update this function to be more clean
@@ -63,8 +64,8 @@ pub fn int80h_command14_fread(_frame: &InterruptFrame) -> u32 {
         }
         let size = current_task.read().get_stack_item(2);
 
-        let mut data: Vec<u8> = Vec::with_capacity(size as usize);
-        let res = fread(fd as i32, data.as_mut_ptr() as *mut c_void, size);
+        let mut data: Vec<u8> = vec![0; size as usize];
+        let res = fread(fd as i32, data.as_mut_slice());
 
         let _ = copy_string_to_task(
             &current_task.read().process.page_directory,

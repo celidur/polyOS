@@ -31,31 +31,13 @@ lazy_static! {
         Mutex::new([const { None }; MAX_FD]);
 }
 
-// Converts C `char*` to Rust `&str`
-fn c_str_to_str(ptr: *const c_char) -> Option<&'static str> {
-    if ptr.is_null() {
-        return None;
-    }
-    unsafe {
-        let mut len = 0;
-        while *ptr.add(len) != 0 {
-            len += 1;
-        }
-        core::str::from_utf8(core::slice::from_raw_parts(ptr as *const u8, len)).ok()
-    }
-}
-
-pub fn fopen(filename: *const c_char, _mode: *const c_char) -> i32 {
-    let Some(path) = c_str_to_str(filename) else {
-        return -1;
-    };
-
+pub fn fopen(filename: &str, _mode: &str) -> i32 {
     interrupts::without_interrupts(|| {
         let mut table = FILE_TABLE.lock();
 
         for (fd, slot) in table.iter_mut().enumerate() {
             if slot.is_none() {
-                let handle = KERNEL.vfs.read().open(path);
+                let handle = KERNEL.vfs.read().open(filename);
                 if let Ok(file) = handle {
                     *slot = Some(file);
                     return (fd + 1) as i32;
@@ -69,13 +51,11 @@ pub fn fopen(filename: *const c_char, _mode: *const c_char) -> i32 {
     })
 }
 
-pub fn fread(fd: i32, ptr: *mut c_void, size: u32) -> i32 {
+pub fn fread(fd: i32, buf: &mut [u8]) -> i32 {
     let fd = fd - 1;
     if fd < 0 || fd as usize >= MAX_FD {
         return -1;
     }
-
-    let buf = unsafe { core::slice::from_raw_parts_mut(ptr as *mut u8, size as usize) };
 
     interrupts::without_interrupts(|| {
         let mut table = FILE_TABLE.lock();

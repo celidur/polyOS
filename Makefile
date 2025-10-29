@@ -36,8 +36,11 @@ else
 	sudo cp -r ./file/* ./mnt/d
 
 	sudo umount ./mnt/d
-	rm -rf ./mnt
 endif
+	rm -rf ./mnt
+
+$(BIN_DIR)/:
+	@mkdir -p $@
 
 $(DIRECTORIES):
 	@mkdir -p $(DIRECTORIES)

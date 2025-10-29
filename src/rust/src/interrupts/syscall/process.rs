@@ -136,8 +136,6 @@ pub fn int80h_command8_get_program_arguments(_frame: &InterruptFrame) -> u32 {
 pub fn int80h_command9_exit(_frame: &InterruptFrame) -> u32 {
     process_terminate();
 
-    serial_println!("Process terminated");
-
     task_next();
 
     panic!("No more tasks to run\n");

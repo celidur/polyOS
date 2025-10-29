@@ -81,6 +81,14 @@ struct command_argument* polyos_parse_command(char *command, int max){
     return root_command;
 }
 
+void polyos_free_command(struct command_argument* command){
+    while(command){
+        struct command_argument* next = command->next;
+        polyos_free(command);
+        command = next;
+    }
+}
+
 int polyos_system_run(const char *command){
     char buff[1024];
     strncpy(buff, command, sizeof(buff));
@@ -88,5 +96,7 @@ int polyos_system_run(const char *command){
     if (!root_command){
         return -1;
     }
-    return polyos_system(root_command);
+    int res = polyos_system(root_command);
+    polyos_free_command(root_command);
+    return res;
 }

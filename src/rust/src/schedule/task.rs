@@ -191,21 +191,17 @@ pub fn copy_string_to_task(
     while remain > 0 {
         let phs_addr = PageDirectory::align_address_down(buff);
         let old_entry = directory.get(phs_addr).map_err(|_| ())?;
-        directory
-            .map_page(
-                phs_addr,
-                &memory::Page::new(PAGING_PAGE_SIZE).ok_or(())?,
-                flags,
-            )
-            .map_err(|_| ())?;
+
+        directory.set(phs_addr, phs_addr | flags).map_err(|_| ())?;
+
         let offset = buff - phs_addr;
         let to_copy = (PAGING_PAGE_SIZE as u32 - offset).min(remain);
         let buffer = unsafe { core::slice::from_raw_parts_mut(virt as *mut u8, to_copy as usize) };
         let buffer2 = unsafe {
-            core::slice::from_raw_parts_mut((phs_addr + offset) as *mut u8, to_copy as usize)
+            core::slice::from_raw_parts((phs_addr + offset) as *mut u8, to_copy as usize)
         };
         directory.switch();
-        buffer2[..to_copy as usize].copy_from_slice(&buffer[..to_copy as usize]);
+        buffer[..to_copy as usize].copy_from_slice(&buffer2[..to_copy as usize]);
         KERNEL.kernel_page();
         directory.set(phs_addr, old_entry).map_err(|_| ())?;
         remain -= to_copy;
