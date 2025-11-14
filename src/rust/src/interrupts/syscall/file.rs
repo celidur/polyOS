@@ -1,5 +1,3 @@
-use core::ffi::c_void;
-
 use alloc::vec::Vec;
 
 use crate::{
@@ -10,7 +8,7 @@ use crate::{
     schedule::task::{copy_string_from_task, copy_string_to_task},
 };
 
-pub fn int80h_command13_fopen(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_fopen(_frame: &InterruptFrame) -> u32 {
     let mut filename: [u8; MAX_PATH] = [0; MAX_PATH];
     let res = KERNEL.with_task_manager(|tm| {
         let current_task = tm.get_current()?;
@@ -47,7 +45,7 @@ pub fn int80h_command13_fopen(_frame: &InterruptFrame) -> u32 {
 }
 
 // TODO: Update this function to be more clean
-pub fn int80h_command14_fread(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_fread(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
@@ -77,7 +75,7 @@ pub fn int80h_command14_fread(_frame: &InterruptFrame) -> u32 {
     })
 }
 
-pub fn int80h_command15_fwrite(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_fwrite(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
@@ -94,20 +92,20 @@ pub fn int80h_command15_fwrite(_frame: &InterruptFrame) -> u32 {
         }
         let size = current_task.read().get_stack_item(2);
 
-        let mut data: Vec<u8> = Vec::with_capacity(size as usize);
+        let mut data: Vec<u8> = vec![0; size as usize];
 
         let _ = copy_string_from_task(
             &current_task.read().process.page_directory,
             ptr,
-            data.as_ptr() as u32,
+            data.as_mut_ptr() as u32,
             size + 1,
         );
 
-        fwrite(fd as i32, data.as_mut_ptr() as *mut c_void, size) as u32
+        fwrite(fd as i32, data.as_slice()) as u32
     })
 }
 
-pub fn int80h_command16_fseek(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_fseek(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
@@ -124,7 +122,7 @@ pub fn int80h_command16_fseek(_frame: &InterruptFrame) -> u32 {
     })
 }
 
-pub fn int80h_command17_fstat(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_fstat(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
@@ -136,13 +134,12 @@ pub fn int80h_command17_fstat(_frame: &InterruptFrame) -> u32 {
         let fd = current_task.read().get_stack_item(0);
         let ptr = current_task.read().get_stack_item(1);
 
-        let stat: FileStat = unsafe { core::mem::zeroed() };
-        let stat = &stat as *const FileStat as *mut FileStat;
-        let res = fstat(fd as i32, stat);
+        let mut stat: FileStat = FileStat::default();
+        let res = fstat(fd as i32, &mut stat);
 
         let _ = copy_string_to_task(
             &current_task.read().process.page_directory,
-            stat as u32,
+            &stat as *const FileStat as u32,
             ptr,
             core::mem::size_of::<FileStat>() as u32,
         );
@@ -151,7 +148,7 @@ pub fn int80h_command17_fstat(_frame: &InterruptFrame) -> u32 {
     })
 }
 
-pub fn int80h_command18_fclose(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_fclose(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t

@@ -50,21 +50,9 @@ impl FileOps for FatFile {
 
     fn write(&mut self, buf: &[u8]) -> Result<usize, FsError> {
         let res = self.file.lock().write(buf).map_err(|_| FsError::IoError);
+        self.file.lock().truncate().map_err(|_| FsError::IoError)?;
+        self.file.lock().flush().map_err(|_| FsError::IoError)?;
 
-        drop(self.file.lock());
-
-        let fs = self.fs.lock();
-        let root_dir = fs.root_dir();
-        // SAFETY HACK: Extend lifetime
-        let file: fatfs::File<'static, _, _, _> = unsafe {
-            core::mem::transmute(
-                root_dir
-                    .open_file(&self.path)
-                    .map_err(|_| FsError::NotFound)?,
-            )
-        };
-
-        self.file = Mutex::new(file);
         res
     }
 

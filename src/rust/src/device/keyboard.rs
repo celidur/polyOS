@@ -2,7 +2,7 @@ use spin::Mutex;
 
 use crate::{
     interrupts::{InterruptFrame, InterruptHandlerKind, InterruptSource},
-    kernel::keyboard_push,
+    kernel::KERNEL,
 };
 
 use super::io::{inb, outb};
@@ -77,7 +77,7 @@ impl Keyboard {
 
         let ch = self.scancode_to_char(scancode);
         if ch != 0 {
-            keyboard_push(ch);
+            KERNEL.keyboard_push(ch);
         }
     }
 

@@ -11,7 +11,7 @@ use crate::{
     },
 };
 
-pub fn int80h_command6_process_load_start(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_process_load_start(_frame: &InterruptFrame) -> u32 {
     let res = KERNEL.with_task_manager(|tm| {
         let current_task = tm.get_current()?;
 
@@ -51,7 +51,7 @@ pub fn int80h_command6_process_load_start(_frame: &InterruptFrame) -> u32 {
     0
 }
 
-pub fn int80h_command7_invoke_system_command(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_exec(_frame: &InterruptFrame) -> u32 {
     let res = KERNEL.with_task_manager(|tm| {
         let current_task = tm.get_current()?;
 
@@ -107,7 +107,7 @@ pub fn int80h_command7_invoke_system_command(_frame: &InterruptFrame) -> u32 {
     0
 }
 
-pub fn int80h_command8_get_program_arguments(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_get_program_arguments(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
@@ -133,7 +133,7 @@ pub fn int80h_command8_get_program_arguments(_frame: &InterruptFrame) -> u32 {
     })
 }
 
-pub fn int80h_command9_exit(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_exit(_frame: &InterruptFrame) -> u32 {
     process_terminate();
 
     task_next();

@@ -1,5 +1,4 @@
 use crate::interrupts;
-use core::ffi::{c_char, c_void};
 use core::str;
 use lazy_static::lazy_static;
 use spin::Mutex;
@@ -9,6 +8,7 @@ use crate::kernel::KERNEL;
 use super::vfs::FileHandle;
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct FileStat {
     pub size: u32,
     pub flags: u32,
@@ -94,9 +94,9 @@ pub fn fseek(fd: i32, offset: u32, mode: u32) -> i32 {
     })
 }
 
-pub fn fstat(fd: i32, stat: *mut FileStat) -> i32 {
+pub fn fstat(fd: i32, stat: &mut FileStat) -> i32 {
     let fd = fd - 1;
-    if fd < 0 || fd as usize >= MAX_FD || stat.is_null() {
+    if fd < 0 || fd as usize >= MAX_FD {
         return -1;
     }
 
@@ -110,10 +110,8 @@ pub fn fstat(fd: i32, stat: *mut FileStat) -> i32 {
 
         match result {
             Ok(meta) => {
-                unsafe {
-                    (*stat).size = meta.size as u32;
-                    (*stat).flags = 0;
-                }
+                stat.size = meta.size as u32;
+                stat.flags = 0;
                 0
             }
             Err(_) => -3,
@@ -121,13 +119,11 @@ pub fn fstat(fd: i32, stat: *mut FileStat) -> i32 {
     })
 }
 
-pub fn fwrite(fd: i32, ptr: *mut c_void, size: u32) -> i32 {
+pub fn fwrite(fd: i32, buf: &[u8]) -> i32 {
     let fd = fd - 1;
     if fd < 0 || fd as usize >= MAX_FD {
         return -1;
     }
-
-    let buf = unsafe { core::slice::from_raw_parts(ptr as *const u8, size as usize) };
 
     interrupts::without_interrupts(|| {
         let mut table = FILE_TABLE.lock();

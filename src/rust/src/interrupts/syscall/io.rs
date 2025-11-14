@@ -8,7 +8,7 @@ use crate::{
     serial_print,
 };
 
-pub fn int80h_command0_serial(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_serial(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
@@ -46,7 +46,7 @@ pub fn int80h_command0_serial(_frame: &InterruptFrame) -> u32 {
     })
 }
 
-pub fn int80h_command1_print(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_print(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
@@ -84,7 +84,7 @@ pub fn int80h_command1_print(_frame: &InterruptFrame) -> u32 {
     })
 }
 
-pub fn int80h_command2_getkey(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_getkey(_frame: &InterruptFrame) -> u32 {
     let c = KERNEL.keyboard_pop();
     if let Some(c) = c {
         return c as u32;
@@ -93,7 +93,7 @@ pub fn int80h_command2_getkey(_frame: &InterruptFrame) -> u32 {
     0
 }
 
-pub fn int80h_command3_putchar(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_putchar(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
@@ -109,12 +109,12 @@ pub fn int80h_command3_putchar(_frame: &InterruptFrame) -> u32 {
     })
 }
 
-pub fn int80h_command11_remove_last_char(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_remove_last_char(_frame: &InterruptFrame) -> u32 {
     terminal_writechar(0x08, 15);
     0
 }
 
-pub fn int80h_command12_clear_screen(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_clear_screen(_frame: &InterruptFrame) -> u32 {
     clear_screen();
     0
 }

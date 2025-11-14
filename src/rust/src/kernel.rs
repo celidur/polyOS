@@ -28,7 +28,6 @@ pub struct Kernel<'a> {
     keyboard: RwLock<VecDeque<u8>>,
     pub vfs: RwLock<Vfs>,
     kernel_page_directory: RwLock<Option<PageDirectory>>,
-    // pub gdt: Gdt,
 }
 
 lazy_static! {
@@ -231,29 +230,25 @@ impl Kernel<'_> {
     }
 
     pub fn kernel_page(&self) {
-        kernel_registers();
+        self.kernel_registers();
         match &*self.kernel_page_directory.read() {
             Some(pd) => pd.switch(),
             None => panic!("Kernel page directory not initialized"),
         }
     }
-}
 
-pub fn keyboard_push(c: u8) {
-    KERNEL.keyboard_push(c);
-}
-
-fn kernel_registers() {
-    unsafe {
-        asm!(
-            "
-        mov ax, 0x10
-        mov ds, ax
-        mov es, ax
-        mov fs, ax
-        mov gs, ax
-        ",
-            options(nomem, nostack, preserves_flags)
-        );
+    fn kernel_registers(&self) {
+        unsafe {
+            asm!(
+                "
+                mov ax, 0x10
+                mov ds, ax
+                mov es, ax
+                mov fs, ax
+                mov gs, ax
+                ",
+                options(nomem, nostack, preserves_flags)
+            );
+        }
     }
 }

@@ -10,10 +10,6 @@ use crate::{
     serial_print, serial_println,
 };
 
-pub fn sync() {
-    KERNEL.sync();
-}
-
 pub fn boot_image() {
     KERNEL.set_mode(ScreenMode::Graphic(GraphicMode::GRAPHIC640x480x2));
 
@@ -63,8 +59,8 @@ pub fn halt() -> ! {
         unsafe {
             asm!(
                 "
-        hlt
-        ",
+                hlt
+                ",
                 options(nostack, nomem)
             )
         }

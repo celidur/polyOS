@@ -15,7 +15,6 @@ mod fs;
 mod gdt;
 mod interrupts;
 mod kernel;
-mod loader;
 mod memory;
 mod panic;
 mod print;

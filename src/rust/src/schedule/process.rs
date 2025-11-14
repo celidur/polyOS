@@ -15,8 +15,8 @@ use crate::{
     error::KernelError,
     fs::FileHandle,
     kernel::KERNEL,
-    loader::elf::{ElfFile, PF_W},
     memory::{self, Page, PageDirectory},
+    schedule::loader::elf::{ElfFile, PF_W},
 };
 
 // TODO: Remove command_argument and process_argument
