@@ -1,7 +1,6 @@
 use crate::{
     device::screen::{Color, ColorCode, ScreenChar},
     kernel::KERNEL,
-    serial_println,
 };
 
 #[doc(hidden)]

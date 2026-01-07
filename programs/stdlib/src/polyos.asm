@@ -10,7 +10,6 @@ global polyos_malloc:function
 global polyos_free:function
 global polyos_process_load_start:function
 global polyos_system:function
-global polyos_process_get_args:function
 global polyos_exit:function
 global print_memory:function
 global remove_last_char:function
@@ -106,17 +105,6 @@ polyos_system:
     push ebp
     mov ebp, esp
     mov eax, 7 ; Command system
-    push dword [ebp+8] ; args
-    int 0x80
-    add esp, 4
-    pop ebp
-    ret
-
-; void polyos_process_get_args(struct process_arguments *args)
-polyos_process_get_args:
-    push ebp
-    mov ebp, esp
-    mov eax, 8 ; Command process_get_args
     push dword [ebp+8] ; args
     int 0x80
     add esp, 4

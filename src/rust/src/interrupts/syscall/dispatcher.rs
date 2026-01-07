@@ -17,10 +17,6 @@ pub fn syscall_init() {
     syscall_register(SyscallId::Free, syscall_free);
     syscall_register(SyscallId::ProcessLoadStart, syscall_process_load_start);
     syscall_register(SyscallId::Exec, syscall_exec);
-    syscall_register(
-        SyscallId::GetProcessArguments,
-        syscall_get_program_arguments,
-    );
     syscall_register(SyscallId::Exit, syscall_exit);
     syscall_register(SyscallId::PrintMemory, syscall_print_memory);
     syscall_register(SyscallId::RemoveLastChar, syscall_remove_last_char);

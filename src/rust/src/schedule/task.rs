@@ -4,7 +4,6 @@ use core::arch::{asm, naked_asm};
 use crate::{
     constant::{
         PAGING_PAGE_SIZE, USER_CODE_SEGMENT, USER_DATA_SEGMENT,
-        USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
     },
     interrupts::InterruptFrame,
     kernel::KERNEL,
@@ -62,7 +61,7 @@ impl Task {
                 ip: process.entrypoint,
                 cs: USER_CODE_SEGMENT,
                 flags: 0,
-                esp: USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START as u32,
+                esp: process.start_stack as u32,
                 ss: USER_DATA_SEGMENT,
             },
             state: TaskState::Runnable,

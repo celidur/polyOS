@@ -9,7 +9,7 @@ pub enum SyscallId {
     Free = 0x05,
     ProcessLoadStart = 0x06,
     Exec = 0x07,
-    GetProcessArguments = 0x08,
+    // 0x08
     Exit = 0x09,
     PrintMemory = 0x0A,
     RemoveLastChar = 0x0B,
@@ -35,7 +35,6 @@ impl SyscallId {
             0x05 => Some(Self::Free),
             0x06 => Some(Self::ProcessLoadStart),
             0x07 => Some(Self::Exec),
-            0x08 => Some(Self::GetProcessArguments),
             0x09 => Some(Self::Exit),
             0x0A => Some(Self::PrintMemory),
             0x0B => Some(Self::RemoveLastChar),

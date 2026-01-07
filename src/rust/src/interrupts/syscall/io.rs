@@ -5,7 +5,6 @@ use crate::{
     kernel::KERNEL,
     print::{clear_screen, terminal_writechar},
     schedule::task::copy_string_from_task,
-    serial_print,
 };
 
 pub fn syscall_serial(_frame: &InterruptFrame) -> u32 {

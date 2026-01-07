@@ -1,4 +1,4 @@
-use core::{ffi::c_void, ptr::null_mut};
+use core::ffi::c_void;
 
 use alloc::{
     collections::btree_map::BTreeMap,
@@ -10,29 +10,20 @@ use spin::{Mutex, RwLock};
 
 use crate::{
     constant::{
-        PROGRAM_VIRTUAL_ADDRESS, USER_PROGRAM_STACK_SIZE, USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END,
+        PROGRAM_VIRTUAL_ADDRESS, USER_PROGRAM_STACK_SIZE, USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END, USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
     },
     error::KernelError,
     fs::FileHandle,
     kernel::KERNEL,
     memory::{self, Page, PageDirectory},
-    schedule::loader::elf::{ElfFile, PF_W},
+    schedule::{loader::elf::{ElfFile, PF_W}},
 };
-
-// TODO: Remove command_argument and process_argument
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct command_argument {
     pub argument: [::core::ffi::c_char; 512usize],
     pub next: *mut command_argument,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct process_argument {
-    pub argc: ::core::ffi::c_int,
-    pub argv: *mut *mut ::core::ffi::c_char,
 }
 
 use super::task::TaskId;
@@ -53,13 +44,12 @@ pub struct Process {
     pub fd_table: Vec<Option<Arc<FileHandle>>>,
     pub children: Mutex<Vec<ProcessId>>,
     pub parent: Option<ProcessId>,
-    // pub memory_map:     MemoryMap,
     pub entrypoint: u32,
     pub tasks: RwLock<Option<TaskId>>,
     pub filetype: ProcessFileType,
-    pub args: process_argument,
     pub page_directory: PageDirectory,
     pub stack: Page,
+    pub start_stack: usize,
     pub heap: Mutex<BTreeMap<u32, Page>>,
 }
 
@@ -92,32 +82,38 @@ impl Process {
             }
         };
 
-        let mut process_args = process_argument {
-            argv: null_mut(),
-            argc: 0,
-        };
+        let stack = process.stack.as_mut_slice();
+        let mut stack_pointer = stack.len();
 
-        process_args.argc = args.args.len() as i32;
-        process_args.argv = process
-            .malloc((args.args.len() + 1) * core::mem::size_of::<*const i8>())
-            as *mut *mut i8;
-        let mut args_ptr = process_args.argv;
-        for arg in args.args.iter() {
-            let arg_ptr = process.malloc(arg.len() + 1) as *mut i8;
-            unsafe {
-                core::ptr::copy_nonoverlapping(arg.as_ptr() as *const i8, arg_ptr, arg.len());
-                // write null terminator at the end the size is len + 1
-                let last = arg_ptr.add(arg.len());
-                *last = 0;
-                *args_ptr = arg_ptr;
-                args_ptr = args_ptr.add(1);
-            }
-        }
-        unsafe {
-            *args_ptr = null_mut();
+        let mut addr = vec![0];
+        for arg in args.args.iter().rev() {
+            let bytes = arg.as_bytes();
+            stack_pointer -= bytes.len() + 1; // +1 for null terminator
+            stack[stack_pointer..stack_pointer + bytes.len()]
+                .copy_from_slice(bytes);
+            stack[stack_pointer + bytes.len()] = 0; // null terminator
+            addr.push(USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END + stack_pointer);
         }
 
-        process.args = process_args;
+        // store argv
+        addr.reverse();
+        for &arg_addr in addr.iter().rev() {
+            stack_pointer -= core::mem::size_of::<*const i8>();
+            stack[stack_pointer..stack_pointer + core::mem::size_of::<*const i8>()]
+                .copy_from_slice(&arg_addr.to_ne_bytes());
+        }
+
+        let argv_ptr = USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END + stack_pointer;
+        stack_pointer -= core::mem::size_of::<*const *const i8>();
+        stack[stack_pointer..stack_pointer + core::mem::size_of::<*const *const i8>()]
+            .copy_from_slice(&argv_ptr.to_ne_bytes());
+
+        // store argc
+        stack_pointer -= core::mem::size_of::<i32>();
+        stack[stack_pointer..stack_pointer + core::mem::size_of::<i32>()]
+            .copy_from_slice(&(args.args.len() as i32).to_ne_bytes());
+
+        process.start_stack = USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END + stack_pointer;
 
         Ok(process)
     }
@@ -133,12 +129,9 @@ impl Process {
             parent: None,
             tasks: RwLock::new(None),
             filetype: ProcessFileType::Elf(elf),
-            args: process_argument {
-                argv: null_mut(),
-                argc: 0,
-            },
             page_directory,
             stack: Page::new(USER_PROGRAM_STACK_SIZE)?,
+            start_stack: USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
             entrypoint,
             heap: Mutex::new(BTreeMap::new()),
         })
@@ -166,12 +159,9 @@ impl Process {
             parent: None,
             tasks: RwLock::new(None),
             filetype: ProcessFileType::Binary(memory),
-            args: process_argument {
-                argv: null_mut(),
-                argc: 0,
-            },
             page_directory,
             stack: Page::new(USER_PROGRAM_STACK_SIZE).ok_or(KernelError::Allocation)?,
+            start_stack: USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
             entrypoint: PROGRAM_VIRTUAL_ADDRESS as u32,
             heap: Mutex::new(BTreeMap::new()),
         })

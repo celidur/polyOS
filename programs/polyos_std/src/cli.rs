@@ -1,7 +1,6 @@
 use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use core::ffi::CStr;
 
 #[derive(Debug)]
 pub enum ArgValue {
@@ -194,22 +193,8 @@ impl Cli {
     }
 
     pub fn get_matches(&self) -> Result<CliMatches, String> {
-        let mut arg: crate::bindings::process_arguments = crate::bindings::process_arguments {
-            argc: 0,
-            argv: core::ptr::null_mut(),
-        };
-
-        unsafe {
-            crate::bindings::polyos_process_get_args(&mut arg);
-        };
-
-        let mut input = Vec::with_capacity((arg.argc - 1) as usize);
-        for i in 1..arg.argc {
-            let ptr = unsafe { *arg.argv.offset(i as isize) };
-            let cstr = unsafe { CStr::from_ptr(ptr) };
-            let str = cstr.to_str().unwrap();
-            input.push(str);
-        }
+        let args: &'static [&'static str] = crate::process::args();
+        let input = &args[1..];
 
         let mut global = ArgMatches::new();
         let mut command_match: Option<CommandMatches> = None;

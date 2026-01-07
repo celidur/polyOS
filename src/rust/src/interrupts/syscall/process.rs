@@ -5,7 +5,7 @@ use crate::{
     interrupts::InterruptFrame,
     kernel::KERNEL,
     schedule::{
-        process::{ProcessArguments, command_argument, process_argument},
+        process::{ProcessArguments, command_argument},
         process_manager::process_terminate,
         task::{copy_string_from_task, task_next},
     },
@@ -105,32 +105,6 @@ pub fn syscall_exec(_frame: &InterruptFrame) -> u32 {
     task_next();
 
     0
-}
-
-pub fn syscall_get_program_arguments(_frame: &InterruptFrame) -> u32 {
-    KERNEL.with_task_manager(|tm| {
-        let current_task = if let Some(t) = tm.get_current() {
-            t
-        } else {
-            let res = u32::MAX;
-            return res;
-        };
-
-        let args = current_task
-            .read()
-            .virtual_address_to_physical(current_task.read().get_stack_item(0))
-            .unwrap_or(0) as *mut process_argument;
-        if args.is_null() {
-            let res = u32::MAX;
-            return res;
-        }
-
-        let root_command = unsafe { &mut *args };
-        root_command.argc = current_task.read().process.args.argc;
-        root_command.argv = current_task.read().process.args.argv;
-
-        0
-    })
 }
 
 pub fn syscall_exit(_frame: &InterruptFrame) -> u32 {

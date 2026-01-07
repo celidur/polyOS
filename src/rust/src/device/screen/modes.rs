@@ -1,7 +1,4 @@
-use crate::{
-    device::io::{inb, outb},
-    serial_println,
-};
+use crate::device::io::{inb, outb};
 const VGA_AC_INDEX: u16 = 0x3C0;
 const VGA_AC_WRITE: u16 = 0x3C0;
 const VGA_AC_READ: u16 = 0x3C1;

@@ -7,7 +7,6 @@ use crate::{
     },
     interrupts::disable_interrupts,
     kernel::KERNEL,
-    serial_print, serial_println,
 };
 
 pub fn boot_image() {
