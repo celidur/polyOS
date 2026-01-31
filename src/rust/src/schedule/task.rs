@@ -2,9 +2,7 @@ use alloc::sync::Arc;
 use core::arch::{asm, naked_asm};
 
 use crate::{
-    constant::{
-        PAGING_PAGE_SIZE, USER_CODE_SEGMENT, USER_DATA_SEGMENT,
-    },
+    constant::{PAGING_PAGE_SIZE, USER_CODE_SEGMENT, USER_DATA_SEGMENT},
     interrupts::InterruptFrame,
     kernel::KERNEL,
     memory::{self, PageDirectory},
@@ -153,7 +151,7 @@ pub fn copy_string_from_task(
 
     while remain > 0 {
         let to_copy = remain.min(PAGING_PAGE_SIZE as u32);
-        let mut page = memory::Page::new(to_copy as usize).ok_or(())?;
+        let page = memory::Page::new(to_copy as usize).ok_or(())?;
         let page_addr = page.as_ptr() as u32;
         let old_entry = directory.get(page_addr).map_err(|_| ())?;
         directory

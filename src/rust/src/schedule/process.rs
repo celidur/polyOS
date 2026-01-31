@@ -10,13 +10,14 @@ use spin::{Mutex, RwLock};
 
 use crate::{
     constant::{
-        PROGRAM_VIRTUAL_ADDRESS, USER_PROGRAM_STACK_SIZE, USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END, USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
+        PROGRAM_VIRTUAL_ADDRESS, USER_PROGRAM_STACK_SIZE, USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END,
+        USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
     },
     error::KernelError,
     fs::FileHandle,
     kernel::KERNEL,
     memory::{self, Page, PageDirectory},
-    schedule::{loader::elf::{ElfFile, PF_W}},
+    schedule::loader::elf::{ElfFile, PF_W},
 };
 
 #[repr(C)]
@@ -31,7 +32,7 @@ use super::task::TaskId;
 pub type ProcessId = u32;
 pub enum ProcessFileType {
     Elf(ElfFile),
-    Binary(Page),
+    Binary(Page<u8>),
 }
 
 #[derive(Debug)]
@@ -48,9 +49,9 @@ pub struct Process {
     pub tasks: RwLock<Option<TaskId>>,
     pub filetype: ProcessFileType,
     pub page_directory: PageDirectory,
-    pub stack: Page,
+    pub stack: Page<u8>,
     pub start_stack: usize,
-    pub heap: Mutex<BTreeMap<u32, Page>>,
+    pub heap: Mutex<BTreeMap<u32, Page<u8>>>,
 }
 
 unsafe impl Send for Process {}
@@ -89,8 +90,7 @@ impl Process {
         for arg in args.args.iter().rev() {
             let bytes = arg.as_bytes();
             stack_pointer -= bytes.len() + 1; // +1 for null terminator
-            stack[stack_pointer..stack_pointer + bytes.len()]
-                .copy_from_slice(bytes);
+            stack[stack_pointer..stack_pointer + bytes.len()].copy_from_slice(bytes);
             stack[stack_pointer + bytes.len()] = 0; // null terminator
             addr.push(USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END + stack_pointer);
         }
@@ -145,7 +145,7 @@ impl Process {
             .map_err(|_| KernelError::Io)?;
         let stat = file.ops.stat().map_err(|_| KernelError::Io)?;
 
-        let mut memory = Page::new(stat.size as usize).ok_or(KernelError::Allocation)?;
+        let memory = Page::new(stat.size as usize).ok_or(KernelError::Allocation)?;
 
         file.ops
             .read(memory.as_mut_slice())

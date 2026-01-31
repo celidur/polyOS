@@ -72,7 +72,8 @@ $(BIN_DIR)/boot.bin: $(SRC_DIR)/boot/boot.asm
 clean: user_programs_clean
 	rm -rf $(BIN_DIR) $(BUILD_DIR)
 	rm -rf ./file/bin/*.elf
-	cd $(RUST_DIR) && cargo clean
+	rm -rf $(RUST_KERNEL)
+# 	cd $(RUST_DIR) && cargo clean
 
 user_programs: ./file/bin $(PROGRAM_NAMES)
 

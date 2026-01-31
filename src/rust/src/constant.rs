@@ -4,8 +4,10 @@ pub const KERNEL_DATA_SELECTOR: u16 = 0x10;
 pub const HEAP_SIZE_BYTES: usize = 1024 * 1024 * 100; // 100MB
 pub const HEAP_ADDRESS: usize = 0x01000000;
 
-pub const PAGING_PAGE_SIZE: usize = 4096;
-pub const PAGING_PAGE_TABLE_SIZE: usize = 1024;
+pub const PAGING_PAGE_SIZE_BIT: usize = 12;
+pub const PAGING_PAGE_SIZE: usize = 1 << PAGING_PAGE_SIZE_BIT;
+pub const PAGING_PAGE_TABLE_SIZE_BIT: usize = 10;
+pub const PAGING_PAGE_TABLE_SIZE: usize = 1 << PAGING_PAGE_TABLE_SIZE_BIT;
 
 pub const SECTOR_SIZE: usize = 512;
 

@@ -136,7 +136,7 @@ impl ElfHeader {
 
 #[derive(Debug)]
 pub struct ElfFile {
-    memory: Page,
+    memory: Page<u8>,
     virtual_base_address: *const u8,
     virtual_end_address: *const u8,
     physical_base_address: *const u8,
@@ -151,7 +151,7 @@ impl ElfFile {
         let mut file = KERNEL.vfs.read().open(filename).map_err(|_| ElfError::Io)?;
         let stat = file.ops.stat().map_err(|_| ElfError::Io)?;
 
-        let mut memory = Page::new(stat.size as usize).ok_or(ElfError::Io)?;
+        let memory = Page::new(stat.size as usize).ok_or(ElfError::Io)?;
 
         file.ops
             .read(memory.as_mut_slice())

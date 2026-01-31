@@ -1,7 +1,9 @@
 use core::arch::asm;
 
 use crate::{
-    constant::{PAGING_PAGE_SIZE, PAGING_PAGE_TABLE_SIZE},
+    constant::{
+        PAGING_PAGE_SIZE, PAGING_PAGE_SIZE_BIT, PAGING_PAGE_TABLE_SIZE, PAGING_PAGE_TABLE_SIZE_BIT,
+    },
     memory::page::Page,
 };
 
@@ -12,6 +14,7 @@ pub mod flags {
     pub const USER_ACCESS: u32 = 1 << 2; // ACCESS_FROM_ALL
     pub const WRITE_THROUGH: u32 = 1 << 3;
     pub const CACHE_DISABLED: u32 = 1 << 4;
+    pub const COW: u32 = 1 << 9; // Copy on write
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,8 +24,8 @@ pub enum PagingError {
 
 #[derive(Debug)]
 pub struct PageDirectory {
-    pub directory: Page,
-    _entries: Page,
+    pub directory: Page<u32>,
+    _entries: Page<u32>,
 }
 
 unsafe impl Send for PageDirectory {}
@@ -30,23 +33,11 @@ unsafe impl Sync for PageDirectory {}
 
 impl PageDirectory {
     pub fn new_4gb(flags: u32) -> Option<Self> {
-        let mut directory = Page::new(core::mem::size_of::<u32>() * PAGING_PAGE_TABLE_SIZE)?;
-        let mut entries = Page::new(
-            core::mem::size_of::<u32>() * PAGING_PAGE_TABLE_SIZE * PAGING_PAGE_TABLE_SIZE,
-        )?;
+        let directory = Page::new(PAGING_PAGE_TABLE_SIZE)?;
+        let entries = Page::new(PAGING_PAGE_TABLE_SIZE * PAGING_PAGE_TABLE_SIZE)?;
 
-        let directory_raw = unsafe {
-            core::slice::from_raw_parts_mut(
-                directory.as_mut_ptr() as *mut u32,
-                PAGING_PAGE_TABLE_SIZE,
-            )
-        };
-        let entries_raw = unsafe {
-            core::slice::from_raw_parts_mut(
-                entries.as_mut_ptr() as *mut u32,
-                PAGING_PAGE_TABLE_SIZE * PAGING_PAGE_TABLE_SIZE,
-            )
-        };
+        let directory_raw = directory.as_mut_slice();
+        let entries_raw = entries.as_mut_slice();
 
         let mut offset = 0;
         for i in 0..PAGING_PAGE_TABLE_SIZE {
@@ -65,6 +56,39 @@ impl PageDirectory {
         })
     }
 
+    pub fn cow_copy(&self) -> Option<Self> {
+        let new_directory = self.directory.copy()?;
+        let new_entries = self._entries.copy()?;
+
+        // iterate over all entries and set COW flag when PRESENT and WRITABLE
+        let directory_raw = new_directory.as_mut_slice();
+        let entries_raw = new_entries.as_mut_slice();
+
+        for i in 0..PAGING_PAGE_TABLE_SIZE {
+            if directory_raw[i] & flags::PRESENT == 0 || directory_raw[i] & flags::WRITABLE == 0 {
+                continue;
+            }
+
+            let entry =
+                entries_raw[i * PAGING_PAGE_TABLE_SIZE..(i + 1) * PAGING_PAGE_TABLE_SIZE].as_mut();
+
+            let mut flags = 0;
+            for e in entry.iter_mut().take(PAGING_PAGE_TABLE_SIZE) {
+                if (*e & flags::PRESENT != 0) && (*e & flags::WRITABLE != 0) {
+                    *e &= !flags::WRITABLE;
+                    *e |= flags::COW;
+                }
+                flags |= *e & 0xFFF;
+            }
+            directory_raw[i] = (directory_raw[i] & 0xFFFFF000) | flags;
+        }
+
+        Some(Self {
+            _entries: new_entries,
+            directory: new_directory,
+        })
+    }
+
     pub fn switch(&self) {
         let directory = self.directory.as_ptr();
 
@@ -78,7 +102,7 @@ impl PageDirectory {
     }
 
     fn is_aligned(address: u32) -> bool {
-        address.is_multiple_of(PAGING_PAGE_SIZE as u32)
+        address & (PAGING_PAGE_SIZE as u32 - 1) == 0
     }
 
     pub fn map(
@@ -100,18 +124,11 @@ impl PageDirectory {
 
         let (directory_index, table_index) = self.get_index(virtual_address)?;
 
-        let entry = unsafe {
-            let directory_raw = core::slice::from_raw_parts_mut(
-                self.directory.as_ptr() as *mut u32,
-                PAGING_PAGE_TABLE_SIZE,
-            );
-            &mut directory_raw[directory_index as usize]
-        };
+        let entry = &mut self.directory.as_mut_slice()[directory_index as usize];
 
-        let table = unsafe {
-            let table_ptr = (*entry & 0xFFFFF000) as *mut u32;
-            core::slice::from_raw_parts_mut(table_ptr, PAGING_PAGE_TABLE_SIZE)
-        };
+        let table = &mut self._entries.as_mut_slice()[directory_index as usize
+            * PAGING_PAGE_TABLE_SIZE
+            ..(directory_index as usize + 1) * PAGING_PAGE_TABLE_SIZE];
 
         table[table_index as usize] = value;
         let flags = self.get_highest_flag(table);
@@ -125,17 +142,17 @@ impl PageDirectory {
             return Err(PagingError::InvalidArg);
         }
 
-        let directory_index_out = virtual_addr / (PAGING_PAGE_SIZE * PAGING_PAGE_TABLE_SIZE) as u32;
-        let table_index_out = virtual_addr % (PAGING_PAGE_SIZE * PAGING_PAGE_TABLE_SIZE) as u32
-            / PAGING_PAGE_SIZE as u32;
-
+        let directory_index_out =
+            virtual_addr >> (PAGING_PAGE_SIZE_BIT + PAGING_PAGE_TABLE_SIZE_BIT) as u32;
+        let table_index_out =
+            (virtual_addr >> PAGING_PAGE_SIZE_BIT as u32) & (PAGING_PAGE_TABLE_SIZE as u32 - 1);
         Ok((directory_index_out, table_index_out))
     }
 
     fn get_highest_flag(&self, table: &[u32]) -> u32 {
         let mut flags = 0;
         for &entry in table.iter() {
-            flags |= entry & 7;
+            flags |= entry & 0xFFF;
         }
         flags
     }
@@ -193,18 +210,8 @@ impl PageDirectory {
 
         let (directory_index, table_index) = self.get_index(virtual_address)?;
 
-        let entry = unsafe {
-            let directory_raw = core::slice::from_raw_parts_mut(
-                self.directory.as_ptr() as *mut u32,
-                PAGING_PAGE_TABLE_SIZE,
-            );
-            &directory_raw[directory_index as usize]
-        };
-
-        let table = unsafe {
-            let table_ptr = (*entry & 0xFFFFF000) as *const u32;
-            core::slice::from_raw_parts(table_ptr, PAGING_PAGE_TABLE_SIZE)
-        };
+        let table = &self._entries.as_slice()[directory_index as usize * PAGING_PAGE_TABLE_SIZE
+            ..(directory_index as usize + 1) * PAGING_PAGE_TABLE_SIZE];
 
         Ok(table[table_index as usize])
     }
@@ -279,10 +286,10 @@ impl PageDirectory {
         }
     }
 
-    pub fn map_page(
+    pub fn map_page<T>(
         &self,
         virtual_address: u32,
-        page: &Page,
+        page: &Page<T>,
         flags: u32,
     ) -> Result<(), PagingError> {
         self.map_range(
