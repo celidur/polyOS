@@ -83,6 +83,8 @@ impl Process {
             }
         };
 
+        serial_println!("Process {} args: {:?}", pid, args.args);
+
         let stack = process.stack.as_mut_slice();
         let mut stack_pointer = stack.len();
 

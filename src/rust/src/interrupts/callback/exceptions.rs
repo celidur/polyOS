@@ -61,7 +61,10 @@ pub fn idt_page_fault(frame: &InterruptFrame, code_error: u32) {
     serial_println!("Register:");
     serial_println!("{:?}", frame);
 
-    panic!("Page fault");
+    process_terminate();
+    task_next();
+
+    panic!("No more tasks to run\n");
 }
 
 pub fn idt_general_protection_fault(_frame: &InterruptFrame, code_error: u32) {
