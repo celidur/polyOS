@@ -3,14 +3,41 @@ use core::arch::{asm, naked_asm};
 
 use crate::{
     constant::{PAGING_PAGE_SIZE, USER_CODE_SEGMENT, USER_DATA_SEGMENT},
-    interrupts::InterruptFrame,
+    interrupts::{InterruptFrame, enable_interrupts},
     kernel::KERNEL,
     memory::{self, PageDirectory},
+    utils::halt,
 };
 
 use super::process::Process;
 
 pub type TaskId = usize;
+
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WaitReason {
+    Io,
+    Process(usize),
+    Semaphore(usize),
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TaskState {
+    Runnable,
+    Sleeping { wake_tick: u64 },
+    Blocked { reason: WaitReason },
+}
+
+impl TaskState {
+    pub fn is_runnable(self) -> bool {
+        matches!(self, Self::Runnable)
+    }
+
+    pub fn is_waiting(self) -> bool {
+        matches!(self, Self::Sleeping { .. } | Self::Blocked { .. })
+    }
+}
 
 #[repr(C, packed)]
 #[derive(Clone, Copy, Debug)]
@@ -29,44 +56,67 @@ pub struct Registers {
     pub ss: u32,
 }
 
-pub enum TaskState {
-    Runnable,
-    // Waiting,
-    // Terminated,
-}
-
 pub struct Task {
     pub id: TaskId,
     pub registers: Registers,
-    pub state: TaskState,
     pub process: Arc<Process>,
     pub priority: usize,
+    #[allow(dead_code)]
     pub time_slice: u32,
+    pub state: TaskState,
 }
 
 impl Task {
     pub fn new(id: TaskId, process: Arc<Process>, priority: usize) -> Self {
         Self {
             id,
-            registers: Registers {
-                edi: 0,
-                esi: 0,
-                ebp: 0,
-                ebx: 0,
-                edx: 0,
-                ecx: 0,
-                eax: 0,
-                ip: process.entrypoint,
-                cs: USER_CODE_SEGMENT,
-                flags: 0,
-                esp: process.start_stack as u32,
-                ss: USER_DATA_SEGMENT,
-            },
-            state: TaskState::Runnable,
+            registers: Self::entry_registers(&process),
             process,
             priority,
             time_slice: 0,
+            state: TaskState::Runnable,
         }
+    }
+
+    pub fn from_registers(
+        id: TaskId,
+        process: Arc<Process>,
+        priority: usize,
+        registers: Registers,
+    ) -> Self {
+        Self {
+            id,
+            registers,
+            process,
+            priority,
+            time_slice: 0,
+            state: TaskState::Runnable,
+        }
+    }
+
+    pub fn entry_registers(process: &Process) -> Registers {
+        Registers {
+            edi: 0,
+            esi: 0,
+            ebp: 0,
+            ebx: 0,
+            edx: 0,
+            ecx: 0,
+            eax: 0,
+            ip: process.entrypoint,
+            cs: USER_CODE_SEGMENT,
+            flags: 0,
+            esp: process.start_stack as u32,
+            ss: USER_DATA_SEGMENT,
+        }
+    }
+
+    pub fn is_runnable(&self) -> bool {
+        self.state.is_runnable()
+    }
+
+    pub fn is_waiting(&self) -> bool {
+        self.state.is_waiting()
     }
 
     pub fn set_state(&mut self, state: &InterruptFrame) {
@@ -97,6 +147,7 @@ impl Task {
         res
     }
 
+    #[allow(dead_code)]
     pub fn virtual_address_to_physical(&self, virtual_address: u32) -> Option<u32> {
         self.process
             .page_directory
@@ -105,18 +156,42 @@ impl Task {
     }
 }
 
-pub fn task_next() {
-    let registers = KERNEL.with_task_manager(|tm| {
-        let _ = tm.schedule();
-        let current_task = tm.get_current()?;
-        let task = current_task.read();
-        Some(task.registers)
-    });
+enum TaskSwitch {
+    Run(Registers),
+    Idle,
+    NoTasks,
+}
 
-    if let Some(registers) = registers {
-        unsafe { task_return(&registers) };
+pub fn task_next() -> ! {
+    loop {
+        let next_task = KERNEL.with_task_manager(|tm| {
+            use super::task_manager::ScheduleOutcome;
+
+            match tm.schedule() {
+                ScheduleOutcome::Switched => {
+                    let Some(current_task) = tm.get_current() else {
+                        return TaskSwitch::NoTasks;
+                    };
+                    let task = current_task.read();
+                    TaskSwitch::Run(task.registers)
+                }
+                ScheduleOutcome::Idle => TaskSwitch::Idle,
+                ScheduleOutcome::NoTasks => TaskSwitch::NoTasks,
+            }
+        });
+
+        match next_task {
+            TaskSwitch::Run(registers) => unsafe { task_return(&registers) },
+            TaskSwitch::Idle => {
+                // No runnable task yet: wait for an interrupt to wake a sleeper.
+                enable_interrupts();
+                halt();
+            },
+            TaskSwitch::NoTasks => {
+                panic!("scheduler stopped: no runnable tasks and no sleeping/blocked tasks")
+            }
+        }
     }
-    panic!("Failed to return to task");
 }
 
 pub fn task_page() {
@@ -134,6 +209,16 @@ pub fn task_current_save_state(frame: &InterruptFrame) {
         };
         let mut task = current_task.write();
         task.set_state(frame);
+    });
+}
+
+pub fn task_current_set_return_value(value: u32) {
+    KERNEL.with_task_manager(|tm| {
+        let Some(current_task) = tm.get_current() else {
+            return;
+        };
+
+        current_task.write().registers.eax = value;
     });
 }
 

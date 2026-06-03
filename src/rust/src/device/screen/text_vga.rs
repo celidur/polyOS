@@ -182,10 +182,12 @@ impl TextVga<'_> {
         self.write_char_color(ascii_character, self.current_color);
     }
 
-    pub fn write_str_color(&mut self, s: &str, color_code: ColorCode) {
-        for byte in s.bytes() {
-            self.write_char_color(byte, color_code);
-        }
+    pub fn cols(&self) -> usize {
+        self.cols
+    }
+
+    pub fn rows(&self) -> usize {
+        self.rows
     }
 
     pub fn write_str(&mut self, s: &str) {

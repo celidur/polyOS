@@ -4,15 +4,13 @@ use crate::{
 };
 
 pub fn idt_handle_exception(_frame: &InterruptFrame) {
-    process_terminate();
+    process_terminate(1);
     task_next();
-    panic!("No more tasks to run\n");
 }
 
 pub fn idt_handle_exception_error(_frame: &InterruptFrame, _error_code: u32) {
-    process_terminate();
+    process_terminate(1);
     task_next();
-    panic!("No more tasks to run\n");
 }
 
 pub fn idt_page_fault(frame: &InterruptFrame, code_error: u32) {
@@ -26,6 +24,17 @@ pub fn idt_page_fault(frame: &InterruptFrame, code_error: u32) {
     let pk = (code_error >> 5) & 0x1;
     let ss = (code_error >> 6) & 0x1;
     let sgx = (code_error >> 15) & 0x1;
+
+    if p != 0 && w != 0 {
+        let handled = crate::kernel::KERNEL
+            .with_task_manager(|tm| tm.get_current().map(|t| t.read().process.clone()))
+            .and_then(|process| process.handle_cow_fault(faulting_address).ok())
+            .unwrap_or(false);
+
+        if handled {
+            return;
+        }
+    }
 
     serial_print!("Page fault( ");
     if p != 0 {
@@ -58,13 +67,26 @@ pub fn idt_page_fault(frame: &InterruptFrame, code_error: u32) {
     }
     serial_println!(") at 0x{:x}", faulting_address);
 
-    serial_println!("Register:");
-    serial_println!("{:?}", frame);
+    let (ip, esp, eax, ebx, ecx, edx, esi, edi, ebp) = (
+        frame.ip, frame.esp, frame.eax, frame.ebx, frame.ecx, frame.edx, frame.esi, frame.edi,
+        frame.ebp,
+    );
+    serial_println!("EIP: 0x{:x}  ESP: 0x{:x}", ip, esp);
+    serial_println!(
+        "EAX: 0x{:x}  EBX: 0x{:x}  ECX: 0x{:x}  EDX: 0x{:x}",
+        eax,
+        ebx,
+        ecx,
+        edx
+    );
+    serial_println!("ESI: 0x{:x}  EDI: 0x{:x}  EBP: 0x{:x}", esi, edi, ebp);
 
-    process_terminate();
+    let pid = crate::kernel::KERNEL
+        .with_task_manager(|tm| tm.get_current().map(|t| t.read().process.pid));
+    serial_println!("Faulting process PID: {:?}", pid);
+
+    process_terminate(1);
     task_next();
-
-    panic!("No more tasks to run\n");
 }
 
 pub fn idt_general_protection_fault(_frame: &InterruptFrame, code_error: u32) {

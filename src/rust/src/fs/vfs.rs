@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use core::{default, fmt::Debug};
+use core::fmt::Debug;
 
 use alloc::{
     boxed::Box,
@@ -10,6 +10,8 @@ use alloc::{
     vec::Vec,
 };
 use spin::RwLock;
+
+use crate::memory::PageDirectory;
 
 #[derive(Debug)]
 pub enum FsError {
@@ -62,6 +64,14 @@ pub trait FileOps {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, FsError>;
     fn write(&mut self, buf: &[u8]) -> Result<usize, FsError>;
     fn seek(&mut self, pos: usize) -> Result<usize, FsError>;
+    fn ioctl(
+        &mut self,
+        _request: u32,
+        _arg: u32,
+        _directory: &PageDirectory,
+    ) -> Result<u32, FsError> {
+        Err(FsError::Unsupported)
+    }
     fn stat(&self) -> Result<FileMetadata, FsError>;
 }
 
@@ -124,7 +134,7 @@ impl Vfs {
         let mut best_match: Option<(Arc<dyn FileSystem>, usize)> = None;
         for entry in mounts.iter() {
             let mp_len = entry.mount_point.len();
-            if path.starts_with(&entry.mount_point)
+            if mount_matches(path, &entry.mount_point)
                 && (best_match.is_none() || mp_len > best_match.as_ref().unwrap().1)
             {
                 best_match = Some((entry.filesystem.clone(), mp_len));
@@ -181,4 +191,15 @@ impl Vfs {
         let (fs, subpath) = self.resolve_path(path)?;
         fs.chown(&subpath, uid, gid)
     }
+}
+
+fn mount_matches(path: &str, mount_point: &str) -> bool {
+    if mount_point == "/" {
+        return path.starts_with('/');
+    }
+
+    path == mount_point
+        || path
+            .strip_prefix(mount_point)
+            .is_some_and(|suffix| suffix.starts_with('/'))
 }

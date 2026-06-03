@@ -9,13 +9,7 @@ pub const PAGING_PAGE_SIZE: usize = 1 << PAGING_PAGE_SIZE_BIT;
 pub const PAGING_PAGE_TABLE_SIZE_BIT: usize = 10;
 pub const PAGING_PAGE_TABLE_SIZE: usize = 1 << PAGING_PAGE_TABLE_SIZE_BIT;
 
-pub const SECTOR_SIZE: usize = 512;
-
 pub const MAX_PATH: usize = 256;
-pub const MAX_FILENAME: usize = 256;
-
-pub const MAX_FILESYSTEMS: usize = 12;
-pub const MAX_FILE_DESCRIPTORS: usize = 512;
 
 pub const TOTAL_GDT_SEGMENTS: usize = 6;
 
@@ -27,3 +21,6 @@ pub const USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END: usize =
 
 pub const USER_DATA_SEGMENT: u32 = 0x23;
 pub const USER_CODE_SEGMENT: u32 = 0x1B;
+
+pub const PIT_BASE_FREQUENCY_HZ: u32 = 1_193_182;
+pub const TIMER_HZ: u32 = 1000;

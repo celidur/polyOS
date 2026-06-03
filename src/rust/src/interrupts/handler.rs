@@ -13,6 +13,9 @@ use crate::{
 pub extern "C" fn interrupt_handler(interrupt: u32, frame: &InterruptFrame) {
     KERNEL.kernel_page();
     task_current_save_state(frame);
+
+    eoi_pic1();
+
     if let InterruptSource::Plain(int) = InterruptSource::new(interrupt as u16)
         && let Some(cb) = int.get_callback()
     {
@@ -20,7 +23,6 @@ pub extern "C" fn interrupt_handler(interrupt: u32, frame: &InterruptFrame) {
     }
 
     task_page();
-    eoi_pic1();
 }
 
 #[unsafe(no_mangle)]

@@ -39,10 +39,18 @@ macro_rules! __gen_dispatch {
             "push eax\n",
             "call interrupt_handler_error\n",
             "add esp, 12\n",
+            "popad\n",
+            "add esp, 4\n",
+            "iretd\n",
         )
     };
     ($num:literal, false) => {
-        concat!("call interrupt_handler\n", "add esp, 8\n",)
+        concat!(
+            "call interrupt_handler\n",
+            "add esp, 8\n",
+            "popad\n",
+            "iretd\n",
+        )
     };
 }
 
@@ -79,8 +87,6 @@ macro_rules! def_interrupts {
                             "push esp\n",
                             "push ", stringify!(N), "\n",
                             [<__dispatch_ $table_ident>]!(N),
-                            "popad\n",
-                            "iretd\n",
                         ),
                     );
                 }

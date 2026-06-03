@@ -1,7 +1,10 @@
 pub mod block_dev;
 pub mod bufstream;
+pub mod control;
 pub mod disk;
 pub mod io;
 pub mod keyboard;
+pub mod network;
 pub mod pci;
 pub mod screen;
+pub mod timer;

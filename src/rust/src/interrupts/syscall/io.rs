@@ -1,119 +1,64 @@
-use alloc::vec::Vec;
-
 use crate::{
+    constant::TIMER_HZ,
     interrupts::InterruptFrame,
     kernel::KERNEL,
-    print::{clear_screen, terminal_writechar},
-    schedule::task::copy_string_from_task,
+    schedule::task::{task_current_set_return_value, task_next},
 };
 
-pub fn syscall_serial(_frame: &InterruptFrame) -> u32 {
-    KERNEL.with_task_manager(|tm| {
-        let current_task = if let Some(t) = tm.get_current() {
-            t
-        } else {
-            let res = u32::MAX;
-            return res;
-        };
+use super::abi;
 
-        let ptr = current_task.read().get_stack_item(0);
-        if ptr == 0 {
-            let res = u32::MAX;
-            return res;
-        }
-        let size = 1025;
+pub fn syscall_sleep(_frame: &InterruptFrame) -> u32 {
+    let duration_ms = KERNEL.with_task_manager(|tm| {
+        let current_task = tm.get_current()?;
+        Some(current_task.read().get_stack_item(0) as u64)
+    });
 
-        let mut data: Vec<u8> = Vec::with_capacity(size as usize);
+    let Some(duration_ms) = duration_ms else {
+        return abi::error();
+    };
 
-        let _ = copy_string_from_task(
-            &current_task.read().process.page_directory,
-            ptr,
-            data.as_ptr() as u32,
-            size,
-        );
-
-        unsafe { data.set_len(size as usize) };
-        data.push(0);
-
-        let data = unsafe { core::slice::from_raw_parts(data.as_ptr(), size as usize) };
-        let data = unsafe { core::ffi::CStr::from_ptr(data.as_ptr() as *const i8) };
-        let data = data.to_str().unwrap_or("");
-
-        serial_print!("{}", data);
-
-        0
-    })
-}
-
-pub fn syscall_print(_frame: &InterruptFrame) -> u32 {
-    KERNEL.with_task_manager(|tm| {
-        let current_task = if let Some(t) = tm.get_current() {
-            t
-        } else {
-            let res = u32::MAX;
-            return res;
-        };
-
-        let ptr = current_task.read().get_stack_item(0);
-        if ptr == 0 {
-            let res = u32::MAX;
-            return res;
-        }
-        let size = 1025;
-
-        let mut data: Vec<u8> = Vec::with_capacity(size as usize);
-
-        let _ = copy_string_from_task(
-            &current_task.read().process.page_directory,
-            ptr,
-            data.as_ptr() as u32,
-            size,
-        );
-
-        unsafe { data.set_len(size as usize) };
-        data.push(0);
-
-        let data = unsafe { core::slice::from_raw_parts(data.as_ptr(), size as usize) };
-        let data = unsafe { core::ffi::CStr::from_ptr(data.as_ptr() as *const i8) };
-        let data = data.to_str().unwrap_or("");
-
-        print!("{}", data);
-
-        0
-    })
-}
-
-pub fn syscall_getkey(_frame: &InterruptFrame) -> u32 {
-    let c = KERNEL.keyboard_pop();
-    if let Some(c) = c {
-        return c as u32;
+    if duration_ms == 0 {
+        return 0;
     }
 
-    0
+    let sleep_ticks = duration_ms
+        .saturating_mul(TIMER_HZ as u64)
+        .saturating_add(999)
+        / 1000;
+
+    let sleep_set = KERNEL.with_task_manager(|tm| {
+        let now = tm.get_tick();
+        tm.sleep_current_until(now.saturating_add(sleep_ticks.max(1)))
+            .is_ok()
+    });
+
+    if !sleep_set {
+        return abi::error();
+    }
+
+    task_current_set_return_value(0);
+    task_next();
 }
 
-pub fn syscall_putchar(_frame: &InterruptFrame) -> u32 {
-    KERNEL.with_task_manager(|tm| {
-        let current_task = if let Some(t) = tm.get_current() {
-            t
-        } else {
-            let res = u32::MAX;
-            return res;
-        };
+pub fn syscall_ioctl(_frame: &InterruptFrame) -> u32 {
+    let Some((process, fd, request, arg)) = KERNEL.with_task_manager(|tm| {
+        let current_task = tm.get_current()?;
+        let task = current_task.read();
+        Some((
+            task.process.clone(),
+            task.get_stack_item(0) as i32,
+            task.get_stack_item(1),
+            task.get_stack_item(2),
+        ))
+    }) else {
+        return abi::error();
+    };
 
-        let c = current_task.read().get_stack_item(0) as u8;
-        terminal_writechar(c, 15);
-
-        0
-    })
-}
-
-pub fn syscall_remove_last_char(_frame: &InterruptFrame) -> u32 {
-    terminal_writechar(0x08, 15);
-    0
-}
-
-pub fn syscall_clear_screen(_frame: &InterruptFrame) -> u32 {
-    clear_screen();
-    0
+    match process.get_fd(fd) {
+        Some(descriptor) => match descriptor.ioctl(request, arg, &process.page_directory) {
+            Ok(result) => result,
+            Err(_) => abi::error(),
+        },
+        _ => abi::error(),
+    }
 }

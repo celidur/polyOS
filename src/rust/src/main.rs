@@ -1,7 +1,5 @@
 #![no_std]
 #![no_main]
-#![feature(str_from_raw_parts)]
-#![feature(allocator_api)]
 extern crate alloc;
 
 #[macro_use]
@@ -16,6 +14,7 @@ mod gdt;
 mod interrupts;
 mod kernel;
 mod memory;
+mod net;
 mod panic;
 mod print;
 mod schedule;
@@ -26,8 +25,10 @@ mod utils;
 use crate::{
     device::{
         keyboard::KEYBOARD,
+        network,
         pci::pci_read_config,
         screen::{ScreenMode, TextMode},
+        timer,
     },
     gdt::GDT,
     interrupts::interrupts_init,
@@ -36,6 +37,8 @@ use crate::{
     schedule::task::task_next,
     utils::boot_image,
 };
+
+use alloc::format;
 
 fn list_pci_devices() {
     for bus in 0..=255 {
@@ -68,6 +71,7 @@ pub fn kernel_main() -> ! {
     KERNEL.init_page();
 
     interrupts_init();
+    timer::init();
 
     KEYBOARD.lock().init();
 
@@ -81,12 +85,15 @@ pub fn kernel_main() -> ! {
     serial_print_memory();
 
     list_pci_devices();
+    network::init();
 
-    serial_println!("Kernel main: spawning shell-v2.elf");
+    let start_path = "/bin/shell-v2.elf";
 
-    let _ = KERNEL.with_process_manager(|pm| pm.spawn("/bin/shell-v2.elf", None, None));
+    serial_println!("Kernel main: spawning {}", start_path);
+
+    KERNEL
+        .with_process_manager(|pm| pm.spawn(start_path, None, None))
+        .expect(&format!("failed to spawn {}", start_path));
 
     task_next();
-
-    panic!("No more tasks to run\n");
 }

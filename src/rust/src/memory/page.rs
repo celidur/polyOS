@@ -65,12 +65,6 @@ impl<T> Page<T> {
         self.ptr.as_ptr()
     }
 
-    /// Raw mutable pointer for FFI. Caller must not free it; it's still owned by `self`.
-    #[inline]
-    pub fn as_mut_ptr(&self) -> *mut T {
-        self.ptr.as_ptr()
-    }
-
     pub fn copy(&self) -> Option<Self>
     where
         T: Copy,

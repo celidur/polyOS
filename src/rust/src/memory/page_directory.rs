@@ -60,27 +60,39 @@ impl PageDirectory {
         let new_directory = self.directory.copy()?;
         let new_entries = self._entries.copy()?;
 
-        // iterate over all entries and set COW flag when PRESENT and WRITABLE
+        // Writable user pages become read-only COW in both address spaces.
+        // The actual page copy is delayed until a write page fault.
+        let parent_directory_raw = self.directory.as_mut_slice();
+        let parent_entries_raw = self._entries.as_mut_slice();
         let directory_raw = new_directory.as_mut_slice();
         let entries_raw = new_entries.as_mut_slice();
 
         for i in 0..PAGING_PAGE_TABLE_SIZE {
-            if directory_raw[i] & flags::PRESENT == 0 || directory_raw[i] & flags::WRITABLE == 0 {
+            if directory_raw[i] & flags::PRESENT == 0 {
                 continue;
             }
 
-            let entry =
+            let parent_entry = parent_entries_raw
+                [i * PAGING_PAGE_TABLE_SIZE..(i + 1) * PAGING_PAGE_TABLE_SIZE]
+                .as_mut();
+            let child_entry =
                 entries_raw[i * PAGING_PAGE_TABLE_SIZE..(i + 1) * PAGING_PAGE_TABLE_SIZE].as_mut();
 
-            let mut flags = 0;
-            for e in entry.iter_mut().take(PAGING_PAGE_TABLE_SIZE) {
-                if (*e & flags::PRESENT != 0) && (*e & flags::WRITABLE != 0) {
-                    *e &= !flags::WRITABLE;
-                    *e |= flags::COW;
+            for b in 0..PAGING_PAGE_TABLE_SIZE {
+                let parent_page = &mut parent_entry[b];
+                let child_page = &mut child_entry[b];
+                if (*child_page & flags::PRESENT != 0)
+                    && (*child_page & flags::WRITABLE != 0)
+                    && (*child_page & flags::USER_ACCESS != 0)
+                {
+                    *parent_page = (*parent_page & !flags::WRITABLE) | flags::COW;
+                    *child_page = (*child_page & !flags::WRITABLE) | flags::COW;
                 }
-                flags |= *e & 0xFFF;
             }
-            directory_raw[i] = (directory_raw[i] & 0xFFFFF000) | flags;
+
+            parent_directory_raw[i] =
+                (parent_directory_raw[i] & 0xFFFFF000) | Self::highest_flags(parent_entry);
+            directory_raw[i] = (child_entry.as_ptr() as u32) | Self::highest_flags(child_entry);
         }
 
         Some(Self {
@@ -131,7 +143,7 @@ impl PageDirectory {
             ..(directory_index as usize + 1) * PAGING_PAGE_TABLE_SIZE];
 
         table[table_index as usize] = value;
-        let flags = self.get_highest_flag(table);
+        let flags = Self::highest_flags(table);
         *entry = (*entry & 0xFFFFF000) | flags;
 
         Ok(())
@@ -149,7 +161,7 @@ impl PageDirectory {
         Ok((directory_index_out, table_index_out))
     }
 
-    fn get_highest_flag(&self, table: &[u32]) -> u32 {
+    fn highest_flags(table: &[u32]) -> u32 {
         let mut flags = 0;
         for &entry in table.iter() {
             flags |= entry & 0xFFF;
@@ -222,6 +234,7 @@ impl PageDirectory {
         Ok((self.get(virt_addr_new)? & 0xFFFFF000) + difference)
     }
 
+    #[allow(dead_code)]
     pub fn print_info(&self) {
         serial_println!("Paging info: ");
         let mut flag = 0;

@@ -134,7 +134,7 @@ impl ElfHeader {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ElfFile {
     memory: Page<u8>,
     virtual_base_address: *const u8,

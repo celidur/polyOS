@@ -12,7 +12,7 @@ use crate::{
         disk::Disk,
         screen::{GraphicVga, ScreenMode, TextMode, TextVga, Vga},
     },
-    fs::{MemFsDriver, MountOptions, Vfs, fat::FatDriver},
+    fs::{DevFsDriver, MemFsDriver, MountOptions, Vfs, fat::FatDriver},
     interrupts,
     memory::{self, PageDirectory},
     schedule::{process_manager::ProcessManager, task_manager::TaskManager},
@@ -70,6 +70,10 @@ impl Kernel<'_> {
 
         self.vfs
             .write()
+            .register_fs_driver("devfs", Arc::new(DevFsDriver));
+
+        self.vfs
+            .write()
             .register_fs_driver("fat", Arc::new(FatDriver));
 
         self.vfs
@@ -82,6 +86,17 @@ impl Kernel<'_> {
                 },
             )
             .expect("Failed to mount fat at /");
+
+        self.vfs
+            .read()
+            .mount(
+                "/dev",
+                &MountOptions {
+                    fs_name: "devfs".to_string(),
+                    block_device_id: None,
+                },
+            )
+            .expect("Failed to mount devfs at /dev");
 
         self.vfs
             .read()
@@ -164,6 +179,16 @@ impl Kernel<'_> {
                 .write_fmt(args)
                 .expect("Printing to serial failed")
         });
+    }
+
+    pub fn serial_write_byte(&self, byte: u8) {
+        interrupts::without_interrupts(|| {
+            self.serial_port.lock().send(byte);
+        });
+    }
+
+    pub fn serial_read_byte(&self) -> Option<u8> {
+        interrupts::without_interrupts(|| self.serial_port.lock().try_receive().ok())
     }
 
     pub fn set_mode(&self, mode: ScreenMode) {
