@@ -10,11 +10,18 @@ use spin::RwLock;
 pub type InterruptHandler = fn(&InterruptFrame);
 pub type InterruptErrorHandler = fn(&InterruptFrame, u32);
 
+pub trait InterruptDevice: Sync {
+    fn interrupt(&self);
+}
+
 lazy_static! {
     static ref INT_CALLBACKS: Arc<RwLock<[Option<InterruptHandler>; IDT_TOTAL_INTERRUPTS]>> =
         Arc::new(RwLock::new([None; IDT_TOTAL_INTERRUPTS]));
     static ref INT_ERR_CALLBACKS: Arc<RwLock<[Option<InterruptErrorHandler>; IDT_TOTAL_INTERRUPTS]>> =
         Arc::new(RwLock::new([None; IDT_TOTAL_INTERRUPTS]));
+    static ref INT_DEVICE_CALLBACKS: Arc<
+        RwLock<[Option<&'static dyn InterruptDevice>; IDT_TOTAL_INTERRUPTS]>,
+    > = Arc::new(RwLock::new([None; IDT_TOTAL_INTERRUPTS]));
 }
 
 pub trait RegisterInterrupt {
@@ -49,5 +56,17 @@ impl RegisterInterrupt for InterruptNumber {
     fn get_callback(&self) -> Option<InterruptHandler> {
         let int_callbacks = INT_CALLBACKS.read();
         int_callbacks[self.index()]
+    }
+}
+
+impl InterruptNumber {
+    pub fn register_device(self, device: &'static dyn InterruptDevice) {
+        let mut int_device_callbacks = INT_DEVICE_CALLBACKS.write();
+        int_device_callbacks[self.index()] = Some(device);
+    }
+
+    pub fn get_device_callback(&self) -> Option<&'static dyn InterruptDevice> {
+        let int_device_callbacks = INT_DEVICE_CALLBACKS.read();
+        int_device_callbacks[self.index()]
     }
 }

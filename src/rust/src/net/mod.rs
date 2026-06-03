@@ -15,7 +15,11 @@ use self::packet::{ETHERTYPE_ARP, ETHERTYPE_IPV4, IP_PROTOCOL_ICMP, ethertype, i
 
 pub type DeviceId = usize;
 pub type InterfaceId = usize;
-pub type SendFrame = fn(DeviceId, &[u8]) -> Result<(), NetworkError>;
+
+pub trait NetworkDevice: Sync {
+    fn read(&self) -> Option<Vec<u8>>;
+    fn write(&self, frame: &[u8]) -> Result<(), NetworkError>;
+}
 
 pub const AF_INET: u32 = 2;
 pub const SOCK_DGRAM: u32 = 2;
@@ -72,7 +76,7 @@ struct NetworkInterface {
     name: &'static str,
     device_id: DeviceId,
     mac: [u8; 6],
-    send: SendFrame,
+    device: &'static dyn NetworkDevice,
     packets_rx: u64,
     packets_tx: u64,
     dhcp: DhcpClient,
@@ -178,7 +182,7 @@ pub fn register_interface(
     name: &'static str,
     device_id: DeviceId,
     mac: [u8; 6],
-    send: SendFrame,
+    device: &'static dyn NetworkDevice,
 ) -> InterfaceId {
     let mut stack = STACK.lock();
     let id = stack.interfaces.len();
@@ -186,7 +190,7 @@ pub fn register_interface(
         name,
         device_id,
         mac,
-        send,
+        device,
         packets_rx: 0,
         packets_tx: 0,
         dhcp: DhcpClient::default(),
@@ -351,7 +355,7 @@ pub fn socket_recv_from(socket_id: u32, max_len: usize) -> Result<SocketPacket, 
 }
 
 pub fn send_dhcp_discover() -> Result<(), NetworkError> {
-    let (interface_id, device_id, send, frame) = {
+    let (interface_id, device, frame) = {
         let mut stack = STACK.lock();
         let interface_id = 0;
         let interface = stack
@@ -367,13 +371,12 @@ pub fn send_dhcp_discover() -> Result<(), NetworkError> {
 
         (
             interface_id,
-            interface.device_id,
-            interface.send,
+            interface.device,
             dhcp::build_discover(interface.mac, interface.dhcp.xid),
         )
     };
 
-    send(device_id, &frame)?;
+    device.write(&frame)?;
     notify_tx(interface_id);
 
     serial_println!(
@@ -412,7 +415,7 @@ fn send_ping_ipv4(
     target_name: Option<String>,
     socket_id: Option<u32>,
 ) -> Result<(), NetworkError> {
-    let (interface_id, device_id, send, frame) = {
+    let (interface_id, device, frame) = {
         let mut stack = STACK.lock();
         let interface_id = 0;
         let interface = stack
@@ -421,10 +424,14 @@ fn send_ping_ipv4(
             .ok_or(NetworkError::NoInterface)?;
 
         let frame = prepare_ping_frame(interface_id, interface, target_ip, target_name, socket_id)?;
-        (interface_id, interface.device_id, interface.send, frame)
+        (
+            interface_id,
+            interface.device,
+            frame,
+        )
     };
 
-    send(device_id, &frame)?;
+    device.write(&frame)?;
     notify_tx(interface_id);
 
     Ok(())
@@ -444,7 +451,7 @@ fn send_dns_request(name: &str, action: DnsAction) -> Result<(), NetworkError> {
         return Err(NetworkError::InvalidInput);
     }
 
-    let (interface_id, device_id, send, frame, name, server_ip, next_hop_ip, arp_needed) = {
+    let (interface_id, device, frame, name, server_ip, next_hop_ip, arp_needed) = {
         let mut stack = STACK.lock();
         let interface_id = 0;
         let interface = stack
@@ -481,8 +488,7 @@ fn send_dns_request(name: &str, action: DnsAction) -> Result<(), NetworkError> {
             interface.dns_tx += 1;
             (
                 interface_id,
-                interface.device_id,
-                interface.send,
+                interface.device,
                 udp::build_ipv4_frame(
                     interface.mac,
                     next_hop_mac,
@@ -501,8 +507,7 @@ fn send_dns_request(name: &str, action: DnsAction) -> Result<(), NetworkError> {
         } else {
             (
                 interface_id,
-                interface.device_id,
-                interface.send,
+                interface.device,
                 arp::build_request(interface.mac, interface.dhcp.config.address, next_hop_ip),
                 request_name,
                 server_ip,
@@ -512,7 +517,7 @@ fn send_dns_request(name: &str, action: DnsAction) -> Result<(), NetworkError> {
         }
     };
 
-    send(device_id, &frame)?;
+    device.write(&frame)?;
     notify_tx(interface_id);
 
     if arp_needed {

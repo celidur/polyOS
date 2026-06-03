@@ -1,13 +1,13 @@
 use crate::{
     device::screen::{Color, ColorCode, ScreenChar},
-    kernel::KERNEL,
+    device::screen::SCREEN_DRIVER,
 };
 
 #[doc(hidden)]
 pub fn _print(args: ::core::fmt::Arguments) {
     use core::fmt::Write;
 
-    KERNEL.with_text(|text| {
+    SCREEN_DRIVER.with_text(|text| {
         if let Some(text) = text {
             text.write_fmt(args).expect("Printing to screen failed");
         } else {
@@ -17,7 +17,7 @@ pub fn _print(args: ::core::fmt::Arguments) {
 }
 
 pub fn terminal_writechar(c: u8, color: u8) {
-    KERNEL.with_text(|text| {
+    SCREEN_DRIVER.with_text(|text| {
         if let Some(text) = text {
             text.write_char_color(c, color.into());
         } else {
@@ -27,7 +27,7 @@ pub fn terminal_writechar(c: u8, color: u8) {
 }
 
 pub fn clear_screen() {
-    KERNEL.with_text(|text| {
+    SCREEN_DRIVER.with_text(|text| {
         if let Some(text) = text {
             text.clear(ScreenChar::new(
                 b' ',
@@ -38,7 +38,7 @@ pub fn clear_screen() {
 }
 
 pub fn set_color(background: Color, foreground: Color) {
-    KERNEL.with_text(|text| {
+    SCREEN_DRIVER.with_text(|text| {
         if let Some(text) = text {
             let color = ColorCode::new(foreground, background);
             text.set_color(color);
@@ -47,7 +47,7 @@ pub fn set_color(background: Color, foreground: Color) {
 }
 
 pub fn disable_cursor() {
-    KERNEL.with_text(|text| {
+    SCREEN_DRIVER.with_text(|text| {
         if let Some(text) = text {
             text.disable_cursor();
         }

@@ -1,6 +1,13 @@
 use core::arch::asm;
 
-use crate::{device::io::outb, interrupts::idt::Idtr};
+use crate::{
+    constant::{
+        PIC_MASTER_COMMAND_PORT, PIC_MASTER_VECTOR_OFFSET, PIC_SLAVE_COMMAND_PORT,
+        PIC_SLAVE_VECTOR_OFFSET,
+    },
+    device::io::outb,
+    interrupts::idt::Idtr,
+};
 
 pub fn idt_load(idtr: &Idtr) {
     unsafe {
@@ -30,7 +37,25 @@ pub fn disable_interrupts() {
 
 #[inline(always)]
 pub fn eoi_pic1() {
-    unsafe { outb(0x20, 0x20) };
+    unsafe { outb(PIC_MASTER_COMMAND_PORT, 0x20) };
+}
+
+#[inline(always)]
+pub fn eoi_pic2() {
+    unsafe { outb(PIC_SLAVE_COMMAND_PORT, 0x20) };
+}
+
+#[inline(always)]
+pub fn eoi_irq(interrupt: u32) {
+    if interrupt >= PIC_SLAVE_VECTOR_OFFSET as u32 {
+        eoi_pic2();
+    }
+
+    if interrupt >= PIC_MASTER_VECTOR_OFFSET as u32
+        && interrupt < PIC_MASTER_VECTOR_OFFSET as u32 + 16
+    {
+        eoi_pic1();
+    }
 }
 
 #[inline]

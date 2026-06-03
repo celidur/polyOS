@@ -1,6 +1,4 @@
-use crate::kernel::KERNEL;
-
 #[doc(hidden)]
 pub fn _serial(args: ::core::fmt::Arguments) {
-    KERNEL.serial(args);
+    crate::device::serial::SERIAL_DRIVER.write(args);
 }

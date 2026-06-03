@@ -1,6 +1,6 @@
 use crate::interrupts::{
     irq_numbers::{InterruptErrorNumber, InterruptNumber},
-    register::{InterruptErrorHandler, InterruptHandler, RegisterInterrupt},
+    register::{InterruptDevice, InterruptErrorHandler, InterruptHandler, RegisterInterrupt},
 };
 
 pub enum InterruptSource {
@@ -27,6 +27,13 @@ impl InterruptSource {
             (Self::Plain(v), InterruptHandlerKind::Plain(f)) => v.register(f),
             (Self::Error(e), InterruptHandlerKind::Error(f)) => e.register(f),
             _ => panic!("mismatched interrupt handler type"),
+        }
+    }
+
+    pub fn register_device(self, device: &'static dyn InterruptDevice) {
+        match self {
+            Self::Plain(v) => v.register_device(device),
+            Self::Error(_) => panic!("mismatched interrupt handler type"),
         }
     }
 }

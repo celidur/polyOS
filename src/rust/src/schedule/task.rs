@@ -3,7 +3,7 @@ use core::arch::{asm, naked_asm};
 
 use crate::{
     constant::{PAGING_PAGE_SIZE, USER_CODE_SEGMENT, USER_DATA_SEGMENT},
-    interrupts::{InterruptFrame, enable_interrupts},
+    interrupts::{InterruptFrame, enable_interrupts, without_interrupts},
     kernel::KERNEL,
     memory::{self, PageDirectory},
     utils::halt,
@@ -135,8 +135,10 @@ impl Task {
     }
 
     pub fn page_task(&self) {
-        user_registers();
-        self.process.page_directory.switch();
+        without_interrupts(|| {
+            user_registers();
+            self.process.page_directory.switch();
+        });
     }
 
     pub fn get_stack_item(&self, index: usize) -> u32 {
@@ -228,34 +230,40 @@ pub fn copy_string_from_task(
     phys: u32,
     size: u32,
 ) -> Result<(), ()> {
-    let mut remain = size;
-    let flags = memory::PRESENT | memory::USER_ACCESS | memory::WRITABLE;
+    without_interrupts(|| {
+        let mut remain = size;
+        let flags = memory::PRESENT | memory::USER_ACCESS | memory::WRITABLE;
 
-    let mut virt = virt;
-    let mut phys = phys;
+        let mut virt = virt;
+        let mut phys = phys;
 
-    while remain > 0 {
-        let to_copy = remain.min(PAGING_PAGE_SIZE as u32);
-        let page = memory::Page::new(to_copy as usize).ok_or(())?;
-        let page_addr = page.as_ptr() as u32;
-        let old_entry = directory.get(page_addr).map_err(|_| ())?;
-        directory
-            .map_page(page_addr, &page, flags)
-            .map_err(|_| ())?;
-        let buffer = unsafe { core::slice::from_raw_parts_mut(virt as *mut u8, to_copy as usize) };
-        let buffer2 = page.as_mut_slice();
-        directory.switch();
-        buffer2[..to_copy as usize].copy_from_slice(&buffer[..to_copy as usize]);
-        KERNEL.kernel_page();
-        directory.set(page_addr, old_entry).map_err(|_| ())?;
-        remain -= to_copy;
-        let buffer = unsafe { core::slice::from_raw_parts_mut(phys as *mut u8, to_copy as usize) };
-        buffer[..to_copy as usize].copy_from_slice(&buffer2[..to_copy as usize]);
-        virt += to_copy;
-        phys += to_copy;
-    }
+        while remain > 0 {
+            let to_copy = remain.min(PAGING_PAGE_SIZE as u32);
+            let page = memory::Page::new(to_copy as usize).ok_or(())?;
+            let page_addr = page.as_ptr() as u32;
+            let old_entry = directory.get(page_addr).map_err(|_| ())?;
+            directory
+                .map_page(page_addr, &page, flags)
+                .map_err(|_| ())?;
+            let buffer = unsafe {
+                core::slice::from_raw_parts_mut(virt as *mut u8, to_copy as usize)
+            };
+            let buffer2 = page.as_mut_slice();
+            directory.switch();
+            buffer2[..to_copy as usize].copy_from_slice(&buffer[..to_copy as usize]);
+            KERNEL.kernel_page();
+            directory.set(page_addr, old_entry).map_err(|_| ())?;
+            remain -= to_copy;
+            let buffer = unsafe {
+                core::slice::from_raw_parts_mut(phys as *mut u8, to_copy as usize)
+            };
+            buffer[..to_copy as usize].copy_from_slice(&buffer2[..to_copy as usize]);
+            virt += to_copy;
+            phys += to_copy;
+        }
 
-    Ok(())
+        Ok(())
+    })
 }
 
 pub fn copy_string_to_task(
@@ -264,34 +272,38 @@ pub fn copy_string_to_task(
     virt: u32,
     size: u32,
 ) -> Result<(), ()> {
-    let mut remain = size;
-    let flags = memory::PRESENT | memory::USER_ACCESS | memory::WRITABLE;
+    without_interrupts(|| {
+        let mut remain = size;
+        let flags = memory::PRESENT | memory::USER_ACCESS | memory::WRITABLE;
 
-    let mut virt = virt;
-    let mut buff = buff;
+        let mut virt = virt;
+        let mut buff = buff;
 
-    while remain > 0 {
-        let phs_addr = PageDirectory::align_address_down(buff);
-        let old_entry = directory.get(phs_addr).map_err(|_| ())?;
+        while remain > 0 {
+            let phs_addr = PageDirectory::align_address_down(buff);
+            let old_entry = directory.get(phs_addr).map_err(|_| ())?;
 
-        directory.set(phs_addr, phs_addr | flags).map_err(|_| ())?;
+            directory.set(phs_addr, phs_addr | flags).map_err(|_| ())?;
 
-        let offset = buff - phs_addr;
-        let to_copy = (PAGING_PAGE_SIZE as u32 - offset).min(remain);
-        let buffer = unsafe { core::slice::from_raw_parts_mut(virt as *mut u8, to_copy as usize) };
-        let buffer2 = unsafe {
-            core::slice::from_raw_parts((phs_addr + offset) as *mut u8, to_copy as usize)
-        };
-        directory.switch();
-        buffer[..to_copy as usize].copy_from_slice(&buffer2[..to_copy as usize]);
-        KERNEL.kernel_page();
-        directory.set(phs_addr, old_entry).map_err(|_| ())?;
-        remain -= to_copy;
-        virt += to_copy;
-        buff += to_copy;
-    }
+            let offset = buff - phs_addr;
+            let to_copy = (PAGING_PAGE_SIZE as u32 - offset).min(remain);
+            let buffer = unsafe {
+                core::slice::from_raw_parts_mut(virt as *mut u8, to_copy as usize)
+            };
+            let buffer2 = unsafe {
+                core::slice::from_raw_parts((phs_addr + offset) as *const u8, to_copy as usize)
+            };
+            directory.switch();
+            buffer[..to_copy as usize].copy_from_slice(&buffer2[..to_copy as usize]);
+            KERNEL.kernel_page();
+            directory.set(phs_addr, old_entry).map_err(|_| ())?;
+            remain -= to_copy;
+            virt += to_copy;
+            buff += to_copy;
+        }
 
-    Ok(())
+        Ok(())
+    })
 }
 
 pub fn user_registers() {

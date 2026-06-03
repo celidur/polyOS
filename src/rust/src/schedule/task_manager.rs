@@ -5,7 +5,7 @@ use alloc::{
 };
 use spin::RwLock;
 
-use crate::{error::KernelError, schedule::task::user_registers};
+use crate::{error::KernelError, interrupts::without_interrupts, schedule::task::user_registers};
 
 use super::{
     process::Process,
@@ -72,8 +72,10 @@ impl TaskManager {
             && let Some(nn_cur) = self.tasks.get(&cur)
         {
             let process = &nn_cur.read().process;
-            user_registers();
-            process.page_directory.switch();
+            without_interrupts(|| {
+                user_registers();
+                process.page_directory.switch();
+            });
             return Ok(());
         }
         Err(KernelError::NoTasks)
@@ -108,8 +110,10 @@ impl TaskManager {
                 };
 
                 self.current = Some(next_id);
-                user_registers();
-                process.page_directory.switch();
+                without_interrupts(|| {
+                    user_registers();
+                    process.page_directory.switch();
+                });
                 return ScheduleOutcome::Switched;
             }
         }
@@ -118,8 +122,10 @@ impl TaskManager {
 
         if let Some((task_id, process)) = self.find_runnable_task() {
             self.current = Some(task_id);
-            user_registers();
-            process.page_directory.switch();
+            without_interrupts(|| {
+                user_registers();
+                process.page_directory.switch();
+            });
             return ScheduleOutcome::Switched;
         }
 

@@ -4,6 +4,7 @@ use crate::{
     constant::{
         PAGING_PAGE_SIZE, PAGING_PAGE_SIZE_BIT, PAGING_PAGE_TABLE_SIZE, PAGING_PAGE_TABLE_SIZE_BIT,
     },
+    interrupts::without_interrupts,
     memory::page::Page,
 };
 
@@ -102,15 +103,21 @@ impl PageDirectory {
     }
 
     pub fn switch(&self) {
-        let directory = self.directory.as_ptr();
+        let directory = self.directory.as_ptr() as u32;
 
-        unsafe {
+        assert_eq!(
+            directory & (PAGING_PAGE_SIZE as u32 - 1),
+            0,
+            "Page directory address must be 4KiB aligned: {directory:#X}"
+        );
+
+        without_interrupts(|| unsafe {
             asm!(
                 "mov cr3, eax",
-                in("eax") directory as u32,
+                in("eax") directory,
                 options(nostack, preserves_flags)
             );
-        }
+        });
     }
 
     fn is_aligned(address: u32) -> bool {

@@ -2,10 +2,13 @@
 
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 use bytemuck::cast_slice;
+use core::sync::atomic::{AtomicUsize, Ordering};
 use spin::Mutex;
 
 use super::{
-    block_dev::{BlockDevice, BlockDeviceError},
+    block_dev::{register_block_device, BlockDevice, BlockDeviceError},
+    driver::{DeviceDriver, DeviceProbeStage},
+    managed::ManagedDevice,
     io::{inb, inw, outb, outw},
 };
 
@@ -33,7 +36,7 @@ impl Disk {
         Self {
             base,
             cache: BTreeMap::new(),
-            cache_size: 16,
+            cache_size: 128,
         }
     }
 
@@ -177,26 +180,100 @@ impl Disk {
     }
 }
 
-impl BlockDevice for Disk {
+pub struct DiskDriver {
+    device: ManagedDevice<Disk>,
+    block_device_id: AtomicUsize,
+}
+
+impl core::fmt::Debug for DiskDriver {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("DiskDriver")
+            .field("block_device_id", &self.block_device_id())
+            .finish()
+    }
+}
+
+impl DiskDriver {
+    pub const fn new() -> Self {
+        Self {
+            device: ManagedDevice::new(),
+            block_device_id: AtomicUsize::new(usize::MAX),
+        }
+    }
+
+    pub fn block_device_id(&self) -> Option<usize> {
+        let id = self.block_device_id.load(Ordering::Acquire);
+        if id == usize::MAX {
+            None
+        } else {
+            Some(id)
+        }
+    }
+}
+
+pub static DISK_DRIVER: DiskDriver = DiskDriver::new();
+
+impl BlockDevice for DiskDriver {
     fn read_sectors(
-        &mut self,
+        &self,
         lba: u64,
         count: usize,
         buf: &mut [u8],
     ) -> Result<usize, BlockDeviceError> {
-        self.read_sectors_internal(lba, count, buf)
-            .map_err(|_| BlockDeviceError::IoError)?;
-        Ok(count)
+        self.device
+            .with_mut(|disk| {
+                disk.read_sectors_internal(lba, count, buf)
+                    .map_err(|_| BlockDeviceError::IoError)?;
+                Ok(count)
+            })
+            .ok_or(BlockDeviceError::NotFound)?
     }
 
     fn write_sectors(
-        &mut self,
+        &self,
         lba: u64,
         count: usize,
         buf: &[u8],
     ) -> Result<usize, BlockDeviceError> {
-        self.write_sectors_internal(lba, count, buf)
-            .map_err(|_| BlockDeviceError::IoError)?;
-        Ok(count)
+        self.device
+            .with_mut(|disk| {
+                disk.write_sectors_internal(lba, count, buf)
+                    .map_err(|_| BlockDeviceError::IoError)?;
+                Ok(count)
+            })
+            .ok_or(BlockDeviceError::NotFound)?
+    }
+
+    fn sync(&self) -> Result<(), BlockDeviceError> {
+        self.device
+            .with_mut(|disk| disk.sync().map_err(|_| BlockDeviceError::IoError))
+            .ok_or(BlockDeviceError::NotFound)?
     }
 }
+
+impl DeviceDriver for DiskDriver {
+    fn name(&self) -> &'static str {
+        "disk"
+    }
+
+    fn stage(&self) -> DeviceProbeStage {
+        DeviceProbeStage::Early
+    }
+
+    fn probe(&self) {
+        self.device
+            .probe(Disk::new(0x1F0))
+            .expect("disk device already probed");
+        let id = register_block_device(&DISK_DRIVER);
+        self.block_device_id.store(id, Ordering::Release);
+    }
+
+    fn remove(&self) {
+        if let Some(mut disk) = self.device.remove() {
+            let _ = disk.sync();
+        }
+        self.block_device_id.store(usize::MAX, Ordering::Release);
+    }
+}
+
+crate::register_device_driver!(DISK_DRIVER_REG, DISK_DRIVER);

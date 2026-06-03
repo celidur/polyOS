@@ -25,16 +25,13 @@ mod utils;
 
 use crate::{
     device::{
-        keyboard::KEYBOARD,
-        network,
         pci::pci_read_config,
-        screen::{ScreenMode, TextMode},
-        timer,
+        screen::{ScreenMode, TextMode, SCREEN_DRIVER},
     },
     gdt::GDT,
     interrupts::interrupts_init,
     kernel::KERNEL,
-    memory::{enable_paging, init_heap, serial_print_memory},
+    memory::{enable_paging, serial_print_memory},
     schedule::task::task_next,
     utils::boot_image,
 };
@@ -64,19 +61,13 @@ fn list_pci_devices() {
 }
 
 pub fn kernel_main() -> ! {
-    lazy_static::initialize(&GDT);
-    init_heap();
+    lazy_static::initialize(&KERNEL);
 
-    KERNEL.set_mode(ScreenMode::Text(TextMode::Text90x60));
-    KERNEL.init_rootfs();
-    KERNEL.init_page();
+    SCREEN_DRIVER.set_mode(ScreenMode::Text(TextMode::Text90x60));
 
     interrupts_init();
-    timer::init();
 
-    KEYBOARD.lock().init();
-
-    GDT.write().init_gdt();
+    GDT.init_gdt();
 
     KERNEL.kernel_page();
     enable_paging();
@@ -86,7 +77,6 @@ pub fn kernel_main() -> ! {
     serial_print_memory();
 
     list_pci_devices();
-    network::init();
 
     let start_path = "/bin/shell-v2.elf";
 

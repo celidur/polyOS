@@ -1,16 +1,17 @@
 #![allow(dead_code)]
 
 use alloc::vec::Vec;
-use lazy_static::lazy_static;
-use spin::Mutex;
 
 use crate::{
+    constant::{irq_to_vector, PIC_MASTER_DATA_PORT, PIC_SLAVE_DATA_PORT, PIC_SLAVE_IRQ_MASK},
     device::{
         io::{inb as port_inb, inw as port_inw, outb, outl, outw},
-        pci::{PciBar, PciDevice, find_device},
+        pci::{find_device, PciBar, PciDevice},
+        DeviceDriver, DeviceProbeStage, ManagedDevice,
     },
+    interrupts::{InterruptDevice, InterruptSource},
     memory::Page,
-    net::{self, InterfaceId, NetworkError},
+    net::{self, InterfaceId, NetworkDevice, NetworkError},
 };
 
 const RTL8139_VENDOR_ID: u16 = 0x10EC;
@@ -42,6 +43,9 @@ const ISR_TX_ERR: u16 = 1 << 3;
 const ISR_RX_OVERFLOW: u16 = 1 << 4;
 const ISR_RX_FIFO_OVERFLOW: u16 = 1 << 6;
 const ISR_SYSTEM_ERR: u16 = 1 << 15;
+const IMR_DEFAULT: u16 =
+    ISR_RX_OK | ISR_RX_ERR | ISR_TX_OK | ISR_TX_ERR | ISR_RX_OVERFLOW | ISR_RX_FIFO_OVERFLOW
+        | ISR_SYSTEM_ERR;
 
 const RX_STATUS_OK: u16 = 1 << 0;
 
@@ -85,53 +89,116 @@ pub struct Rtl8139 {
 
 unsafe impl Send for Rtl8139 {}
 
-lazy_static! {
-    static ref RTL8139: Mutex<Option<Rtl8139>> = Mutex::new(None);
+pub struct Rtl8139Driver {
+    device: ManagedDevice<Rtl8139>,
 }
 
-pub fn init() {
-    match Rtl8139::new() {
-        Ok(mut device) => {
-            let interface_id = net::register_interface("rtl8139", 0, device.mac, rtl8139_send);
-            device.interface_id = interface_id;
-
-            serial_println!(
-                "rtl8139: initialized PCI {}:{}:{} io=0x{:x} irq={} net{}",
-                device.pci.bus,
-                device.pci.device,
-                device.pci.function,
-                device.io_base,
-                device.pci.interrupt_line(),
-                interface_id,
-            );
-            *RTL8139.lock() = Some(device);
-        }
-        Err(Rtl8139Error::DeviceNotFound) => {
-            serial_println!("rtl8139: no QEMU RTL8139 device found");
-        }
-        Err(error) => {
-            serial_println!("rtl8139: init failed: {:?}", error);
+impl Rtl8139Driver {
+    pub const fn new() -> Self {
+        Self {
+            device: ManagedDevice::new(),
         }
     }
 }
 
-pub fn poll() {
-    if let Some(device) = RTL8139.lock().as_mut() {
-        device.poll_receive();
+pub static RTL8139_DRIVER: Rtl8139Driver = Rtl8139Driver::new();
+
+impl DeviceDriver for Rtl8139Driver {
+    fn name(&self) -> &'static str {
+        "rtl8139"
+    }
+
+    fn stage(&self) -> DeviceProbeStage {
+        DeviceProbeStage::Normal
+    }
+
+    fn probe(&self) {
+        match Rtl8139::new() {
+            Ok(mut device) => {
+                let irq_line = device.pci.interrupt_line();
+                let pci_bus = device.pci.bus;
+                let pci_device = device.pci.device;
+                let pci_function = device.pci.function;
+                let io_base = device.io_base;
+
+                let interface_id = net::register_interface(
+                    "rtl8139",
+                    0,
+                    device.mac,
+                    &RTL8139_DRIVER,
+                );
+                device.interface_id = interface_id;
+                RTL8139_DRIVER
+                    .device
+                    .probe(device)
+                    .expect("rtl8139 device already probed");
+
+                if let Some(irq_vector) = irq_to_vector(irq_line) {
+                    InterruptSource::new(irq_vector)
+                        .register_device(&RTL8139_DRIVER);
+                    enable_irq_line(irq_line);
+                } else {
+                    serial_println!(
+                        "rtl8139: cannot register interrupt handler for PCI {}:{}:{}: invalid IRQ line {}",
+                        pci_bus, pci_device, pci_function,
+                        irq_line
+                    );
+                }
+
+                serial_println!(
+                    "rtl8139: initialized PCI {}:{}:{} io=0x{:x} irq={} net{}",
+                    pci_bus,
+                    pci_device,
+                    pci_function,
+                    io_base,
+                    irq_line,
+                    interface_id,
+                );
+            }
+            Err(Rtl8139Error::DeviceNotFound) => {
+                serial_println!("rtl8139: no QEMU RTL8139 device found");
+            }
+            Err(error) => {
+                serial_println!("rtl8139: init failed: {:?}", error);
+            }
+        }
+    }
+
+    fn remove(&self) {
+        let _ = RTL8139_DRIVER.device.remove();
     }
 }
 
-fn rtl8139_send(device_id: usize, frame: &[u8]) -> Result<(), NetworkError> {
-    if device_id != 0 {
-        return Err(NetworkError::NoInterface);
+crate::register_device_driver!(RTL8139_DRIVER_REG, RTL8139_DRIVER);
+
+impl NetworkDevice for Rtl8139Driver {
+    fn read(&self) -> Option<Vec<u8>> {
+        self.device.with_mut(|device| device.read_packet()).flatten()
     }
 
-    RTL8139
-        .lock()
-        .as_mut()
-        .ok_or(NetworkError::NoInterface)?
-        .send(frame)
-        .map_err(|_| NetworkError::DeviceError)
+    fn write(&self, frame: &[u8]) -> Result<(), NetworkError> {
+        self.device
+            .with_mut(|device| device.send(frame))
+            .ok_or(NetworkError::NoInterface)?
+            .map_err(|_| NetworkError::DeviceError)
+    }
+}
+
+impl InterruptDevice for Rtl8139Driver {
+    fn interrupt(&self) {
+        let Some(interface_id) = self.device.with(|device| device.interface_id) else {
+            return;
+        };
+
+        while let Some(packet) = self.read() {
+            if let Some(response) = net::receive(interface_id, packet.as_slice()) {
+                match self.write(response.as_slice()) {
+                    Ok(()) => net::notify_tx(interface_id),
+                    Err(error) => serial_println!("rtl8139: tx response failed: {:?}", error),
+                }
+            }
+        }
+    }
 }
 
 impl Rtl8139 {
@@ -188,7 +255,7 @@ impl Rtl8139 {
 
     fn configure(&self) {
         self.outl(REG_RBSTART, self.rx_buffer.as_ptr() as u32);
-        self.outw(REG_IMR, 0);
+        self.outw(REG_IMR, IMR_DEFAULT);
         self.outw(REG_ISR, u16::MAX);
         self.outl(REG_MPC, 0);
         self.outl(
@@ -235,34 +302,39 @@ impl Rtl8139 {
         Ok(())
     }
 
-    fn poll_receive(&mut self) {
-        let mut handled = 0;
-        while self.inb(REG_COMMAND) & COMMAND_RX_BUFFER_EMPTY == 0 && handled < 32 {
-            match self.read_packet() {
-                Ok(packet) => {
-                    if let Some(response) = net::receive(self.interface_id, packet.as_slice()) {
-                        match self.send(response.as_slice()) {
-                            Ok(()) => net::notify_tx(self.interface_id),
-                            Err(error) => {
-                                serial_println!("rtl8139: tx response failed: {:?}", error)
-                            }
-                        }
-                    }
-                }
-                Err(()) => {
-                    self.rx_errors += 1;
-                    if self.rx_errors <= 4 {
-                        serial_println!("rtl8139: rx error at offset {}", self.rx_offset);
-                    }
-                    self.outw(
-                        REG_ISR,
-                        ISR_RX_ERR | ISR_RX_OVERFLOW | ISR_RX_FIFO_OVERFLOW | ISR_SYSTEM_ERR,
-                    );
-                    break;
-                }
+    fn read_packet(&mut self) -> Option<Vec<u8>> {
+        if self.inb(REG_COMMAND) & COMMAND_RX_BUFFER_EMPTY != 0 {
+            let status = self.inw(REG_ISR);
+            if status != 0 {
+                self.outw(
+                    REG_ISR,
+                    status
+                        & (ISR_RX_OK
+                            | ISR_RX_ERR
+                            | ISR_TX_OK
+                            | ISR_TX_ERR
+                            | ISR_RX_OVERFLOW
+                            | ISR_RX_FIFO_OVERFLOW
+                            | ISR_SYSTEM_ERR),
+                );
             }
-            handled += 1;
+            return None;
         }
+
+        let packet = match self.read_packet_inner() {
+            Ok(packet) => Some(packet),
+            Err(()) => {
+                self.rx_errors += 1;
+                if self.rx_errors <= 4 {
+                    serial_println!("rtl8139: rx error at offset {}", self.rx_offset);
+                }
+                self.outw(
+                    REG_ISR,
+                    ISR_RX_ERR | ISR_RX_OVERFLOW | ISR_RX_FIFO_OVERFLOW | ISR_SYSTEM_ERR,
+                );
+                None
+            }
+        };
 
         let status = self.inw(REG_ISR);
         if status != 0 {
@@ -278,9 +350,11 @@ impl Rtl8139 {
                         | ISR_SYSTEM_ERR),
             );
         }
+
+        packet
     }
 
-    fn read_packet(&mut self) -> Result<Vec<u8>, ()> {
+    fn read_packet_inner(&mut self) -> Result<Vec<u8>, ()> {
         let header_offset = self.rx_offset;
         let status = self.rx_read_u16(header_offset);
         let size = self.rx_read_u16(header_offset + 2) as usize;
@@ -343,5 +417,28 @@ impl Rtl8139 {
 
     fn outl(&self, offset: u16, value: u32) {
         unsafe { outl(self.io_base + offset, value) };
+    }
+}
+
+fn enable_irq_line(irq_line: u8) {
+    if irq_line >= 16 {
+        return;
+    }
+
+    let mut master_mask = unsafe { port_inb(PIC_MASTER_DATA_PORT) };
+    let mut slave_mask = unsafe { port_inb(PIC_SLAVE_DATA_PORT) };
+
+    if irq_line < 8 {
+        master_mask &= !1u8.wrapping_shl(irq_line as u32);
+        unsafe { outb(PIC_MASTER_DATA_PORT, master_mask) };
+        return;
+    }
+
+    master_mask &= !PIC_SLAVE_IRQ_MASK;
+    slave_mask &= !1u8.wrapping_shl((irq_line - 8) as u32);
+
+    unsafe {
+        outb(PIC_MASTER_DATA_PORT, master_mask);
+        outb(PIC_SLAVE_DATA_PORT, slave_mask);
     }
 }

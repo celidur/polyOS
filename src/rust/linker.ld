@@ -23,6 +23,20 @@ SECTIONS
         *(.rodata)
     }
 
+    .device_drivers : ALIGN(4)
+    {
+        __device_drivers_start = .;
+        KEEP(*(.device_drivers))
+        __device_drivers_end = .;
+    }
+
+    .device_nodes : ALIGN(4)
+    {
+        __device_nodes_start = .;
+        KEEP(*(.device_nodes))
+        __device_nodes_end = .;
+    }
+
     .data : ALIGN(4096)
     {
         *(.data)

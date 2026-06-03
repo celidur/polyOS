@@ -1,5 +1,6 @@
 use alloc::vec::Vec;
 
+use crate::device::screen::SCREEN_DRIVER;
 use crate::kernel::KERNEL;
 
 use super::GraphicVga;
@@ -91,7 +92,7 @@ impl Bitmap {
 
         let pixel_data = &self.image_bytes;
 
-        KERNEL.with_graphic(|graphic: Option<&mut GraphicVga>| {
+        SCREEN_DRIVER.with_graphic(|graphic: Option<&mut GraphicVga>| {
             let graphic = if let Some(g) = graphic {
                 g
             } else {

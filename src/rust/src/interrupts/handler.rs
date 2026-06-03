@@ -3,7 +3,7 @@ use core::arch::naked_asm;
 use crate::{
     interrupts::{
         interrupt::InterruptSource, interrupt_frame::InterruptFrame, register::RegisterInterrupt,
-        syscall::syscall_handle, utils::eoi_pic1,
+        syscall::syscall_handle, utils::eoi_irq,
     },
     kernel::KERNEL,
     schedule::task::{task_current_save_state, task_page},
@@ -13,13 +13,14 @@ use crate::{
 pub extern "C" fn interrupt_handler(interrupt: u32, frame: &InterruptFrame) {
     KERNEL.kernel_page();
     task_current_save_state(frame);
+    eoi_irq(interrupt);
 
-    eoi_pic1();
-
-    if let InterruptSource::Plain(int) = InterruptSource::new(interrupt as u16)
-        && let Some(cb) = int.get_callback()
-    {
-        cb(frame);
+    if let InterruptSource::Plain(int) = InterruptSource::new(interrupt as u16) {
+        if let Some(cb) = int.get_device_callback() {
+            cb.interrupt();
+        } else if let Some(cb) = int.get_callback() {
+            cb(frame);
+        }
     }
 
     task_page();
@@ -36,7 +37,6 @@ pub extern "C" fn interrupt_handler_error(error_code: u32, interrupt: u32, frame
     }
 
     task_page();
-    eoi_pic1();
 }
 
 #[unsafe(no_mangle)]

@@ -3,14 +3,13 @@ use core::arch::asm;
 use crate::{
     device::{
         io::{inb, outb, outw},
-        screen::{Bitmap, GraphicMode, ScreenMode, TextMode},
+        screen::{Bitmap, GraphicMode, ScreenMode, TextMode, SCREEN_DRIVER},
     },
     interrupts::disable_interrupts,
-    kernel::KERNEL,
 };
 
 pub fn boot_image() {
-    KERNEL.set_mode(ScreenMode::Graphic(GraphicMode::GRAPHIC640x480x2));
+    SCREEN_DRIVER.set_mode(ScreenMode::Graphic(GraphicMode::GRAPHIC640x480x2));
 
     let b = Bitmap::new("/load.bmp");
     if let Some(bitmap) = b {
@@ -29,7 +28,7 @@ pub fn boot_image() {
     }
     serial_println!("Done");
 
-    KERNEL.set_mode(ScreenMode::Text(TextMode::Text90x60));
+    SCREEN_DRIVER.set_mode(ScreenMode::Text(TextMode::Text90x60));
 }
 
 pub fn shutdown() {

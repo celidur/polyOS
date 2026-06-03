@@ -3,7 +3,7 @@ use paste::paste;
 use seq_macro::seq;
 
 use crate::{
-    constant::KERNEL_CODE_SELECTOR,
+    constant::{irq_to_vector, KERNEL_CODE_SELECTOR},
     interrupts::{
         callback::{
             idt_clock, idt_general_protection_fault, idt_handle_exception,
@@ -121,6 +121,8 @@ def_interrupts! {
     size: 512,
 }
 
+const CLOCK_IRQ_LINE: u8 = 0;
+
 fn idt_set(interrupt_no: usize, address: unsafe extern "C" fn()) {
     let addr = address as usize;
     let desc: &mut IdtDesc = unsafe { &mut IDT_DESCRIPTORS[interrupt_no] };
@@ -155,7 +157,10 @@ pub fn idt_init() {
         }
     }
 
-    InterruptSource::new(0x20).register(InterruptHandlerKind::Plain(idt_clock));
+    InterruptSource::new(
+        irq_to_vector(CLOCK_IRQ_LINE).expect("clock IRQ line must map to an interrupt vector"),
+    )
+    .register(InterruptHandlerKind::Plain(idt_clock));
 
     InterruptSource::new(0xE).register(InterruptHandlerKind::Error(idt_page_fault));
     InterruptSource::new(0xD).register(InterruptHandlerKind::Error(idt_general_protection_fault));

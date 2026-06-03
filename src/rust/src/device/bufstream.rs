@@ -1,4 +1,4 @@
-use crate::kernel::KERNEL;
+use crate::device::block_dev::{read_sectors, sync_all, write_sectors};
 use fatfs::{IoBase, Read, Seek, SeekFrom, Write};
 
 use super::block_dev::BlockDeviceError;
@@ -32,7 +32,7 @@ impl Read for BufStream {
 
             let mut block_buf = [0u8; BLOCK_SIZE];
 
-            match KERNEL.read_sectors(self.id, block_index as u64, 1, &mut block_buf) {
+            match read_sectors(self.id, block_index as u64, 1, &mut block_buf) {
                 Ok(_) => {
                     buf[total_read..total_read + to_read]
                         .copy_from_slice(&block_buf[offset_in_block..offset_in_block + to_read]);
@@ -63,7 +63,7 @@ impl Write for BufStream {
 
             // Only read the block first if we're doing a partial write
             if offset_in_block != 0 || to_write < BLOCK_SIZE {
-                match KERNEL.read_sectors(self.id, block_index as u64, 1, &mut block_buf) {
+                match read_sectors(self.id, block_index as u64, 1, &mut block_buf) {
                     Ok(_) => {}
                     Err(_) => {
                         return Err(BlockDeviceError::IoError);
@@ -75,7 +75,7 @@ impl Write for BufStream {
             block_buf[offset_in_block..offset_in_block + to_write]
                 .copy_from_slice(&buf[total_written..total_written + to_write]);
 
-            match KERNEL.write_sectors(self.id, block_index as u64, 1, &block_buf) {
+            match write_sectors(self.id, block_index as u64, 1, &block_buf) {
                 Ok(_) => {
                     self.pos += to_write;
                     total_written += to_write;
@@ -90,7 +90,7 @@ impl Write for BufStream {
     }
 
     fn flush(&mut self) -> Result<(), BlockDeviceError> {
-        KERNEL.sync();
+        sync_all();
         Ok(())
     }
 }

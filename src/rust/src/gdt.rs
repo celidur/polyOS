@@ -1,6 +1,5 @@
 use core::arch::asm;
 use lazy_static::lazy_static;
-use spin::RwLock;
 
 use crate::{
     constant::TOTAL_GDT_SEGMENTS,
@@ -21,35 +20,39 @@ const KERNEL_DATA_SELECTOR: u16 = (2 * 8) | 0;
 const TSS_SELECTOR: u16 = (5 * 8) | 0;
 
 lazy_static! {
-    pub static ref GDT: RwLock<Gdt> = RwLock::new(Gdt::new());
+    pub static ref GDT: Gdt = Gdt::new();
+}
+
+lazy_static! {
+    pub static ref TSS: Tss = Tss::new_with_kernel_stack(0x600000, KERNEL_DATA_SELECTOR as u32);
 }
 
 #[derive(Debug)]
 pub struct Gdt {
     pub entries: [GdtEntryRaw; TOTAL_GDT_SEGMENTS],
-    tss: Tss,
 }
 
 impl Gdt {
     pub fn new() -> Self {
-        let tss = Tss::new_with_kernel_stack(0x600000, KERNEL_DATA_SELECTOR as u32);
+        lazy_static::initialize(&TSS);
+        let tss_base = (&*TSS as *const _ as usize) as u32;
+        let tss_limit = tss_base + core::mem::size_of::<Tss>() as u32;
+
+        let entries = [
+            GdtEntryRaw::encode_from(0x00, 0x00, 0x00, 0x00),             // null segment
+            GdtEntryRaw::encode_from(0x00, 0xFFFFFFFF, TYPE_KCODE, 0xCF), // kernel code segment
+            GdtEntryRaw::encode_from(0x00, 0xFFFFFFFF, TYPE_KDATA, 0xCF), // kernel data segment
+            GdtEntryRaw::encode_from(0x00, 0xFFFFFFFF, TYPE_UCODE, 0xCF), // user code segment
+            GdtEntryRaw::encode_from(0x00, 0xFFFFFFFF, TYPE_UDATA, 0xCF), // user data segment
+            GdtEntryRaw::encode_from(tss_base, tss_limit, TYPE_TSS, 0x00),            // TSS segment
+        ];
 
         Self {
-            entries: [GdtEntryRaw::encode_from(0x00, 0x00, 0x00, 0x00); TOTAL_GDT_SEGMENTS],
-            tss,
+            entries,
         }
     }
 
-    pub fn init_gdt(&mut self) {
-        self.entries[1] = GdtEntryRaw::encode_from(0x00, 0xFFFFFFFF, TYPE_KCODE, 0xCF); // kernel code segment
-        self.entries[2] = GdtEntryRaw::encode_from(0x00, 0xFFFFFFFF, TYPE_KDATA, 0xCF); // kernel data segment
-        self.entries[3] = GdtEntryRaw::encode_from(0x00, 0xFFFFFFFF, TYPE_UCODE, 0xCF); // user code segment
-        self.entries[4] = GdtEntryRaw::encode_from(0x00, 0xFFFFFFFF, TYPE_UDATA, 0xCF); // user data segment
-
-        let tss_base = (&self.tss as *const _ as usize) as u32;
-        let tss_limit = tss_base + core::mem::size_of::<Tss>() as u32;
-        self.entries[5] = GdtEntryRaw::encode_from(tss_base, tss_limit, TYPE_TSS, 0x00); // TSS segment
-
+    pub fn init_gdt(&self) {
         let gdt_ptr = GdtDescriptor {
             limit: (core::mem::size_of::<GdtEntryRaw>() * self.entries.len() - 1) as u16,
             base: &self.entries as *const _ as u32,

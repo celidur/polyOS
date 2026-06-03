@@ -1,14 +1,15 @@
 #![allow(unused)]
 
-use alloc::{sync::Arc, vec::Vec};
+use alloc::vec::Vec;
 use core::{fmt::Debug, result::Result};
-use spin::Mutex;
+use lazy_static::lazy_static;
+use spin::{Mutex, RwLock};
 
 pub trait BlockDevice: Send + Sync + Debug {
     /// Read `count` sectors from `lba` into `buf`.
     /// Return the number of sectors actually read or an error.
     fn read_sectors(
-        &mut self,
+        &self,
         lba: u64,
         count: usize,
         buf: &mut [u8],
@@ -16,7 +17,7 @@ pub trait BlockDevice: Send + Sync + Debug {
 
     /// Write `count` sectors from `buf` into `lba`.
     fn write_sectors(
-        &mut self,
+        &self,
         lba: u64,
         count: usize,
         buf: &[u8],
@@ -24,6 +25,10 @@ pub trait BlockDevice: Send + Sync + Debug {
 
     fn sector_size(&self) -> usize {
         512
+    }
+
+    fn sync(&self) -> Result<(), BlockDeviceError> {
+        Ok(())
     }
 }
 
@@ -50,52 +55,44 @@ impl fatfs::IoError for BlockDeviceError {
     }
 }
 
-// Example block device (e.g., a dummy RAM disk or real hardware)
-#[derive(Debug)]
-pub struct MockBlockDevice {
-    // In a real driver, store device state (ports, memory, etc.)
-    // For simplicity, let's store an in-memory buffer as a "disk"
-    storage: &'static mut [u8],
-    sector_size: usize,
+lazy_static! {
+    static ref BLOCK_DEVICES: RwLock<Vec<&'static dyn BlockDevice>> = RwLock::new(Vec::new());
 }
 
-impl MockBlockDevice {
-    pub fn new(storage: &'static mut [u8], sector_size: usize) -> Self {
-        Self {
-            storage,
-            sector_size,
-        }
-    }
+pub fn register_block_device(device: &'static dyn BlockDevice) -> usize {
+    let mut devices = BLOCK_DEVICES.write();
+    devices.push(device);
+    devices.len() - 1
 }
 
-impl BlockDevice for MockBlockDevice {
-    fn read_sectors(
-        &mut self,
-        lba: u64,
-        count: usize,
-        buf: &mut [u8],
-    ) -> Result<usize, BlockDeviceError> {
-        let start = (lba as usize) * self.sector_size;
-        let end = start + count * self.sector_size;
-        if end > self.storage.len() || buf.len() < (end - start) {
-            return Err(BlockDeviceError::IoError);
-        }
-        buf[..(end - start)].copy_from_slice(&self.storage[start..end]);
-        Ok(count)
-    }
+fn block_device(id: usize) -> Option<&'static dyn BlockDevice> {
+    BLOCK_DEVICES.read().get(id).copied()
+}
 
-    fn write_sectors(
-        &mut self,
-        lba: u64,
-        count: usize,
-        buf: &[u8],
-    ) -> Result<usize, BlockDeviceError> {
-        let start = (lba as usize) * self.sector_size;
-        let end = start + count * self.sector_size;
-        if end > self.storage.len() || buf.len() < (end - start) {
-            return Err(BlockDeviceError::IoError);
-        }
-        self.storage[start..end].copy_from_slice(&buf[..(end - start)]);
-        Ok(count)
+pub fn read_sectors(
+    id: usize,
+    lba: u64,
+    count: usize,
+    buf: &mut [u8],
+) -> Result<usize, BlockDeviceError> {
+    block_device(id)
+        .ok_or(BlockDeviceError::NotFound)?
+        .read_sectors(lba, count, buf)
+}
+
+pub fn write_sectors(
+    id: usize,
+    lba: u64,
+    count: usize,
+    buf: &[u8],
+) -> Result<usize, BlockDeviceError> {
+    block_device(id)
+        .ok_or(BlockDeviceError::NotFound)?
+        .write_sectors(lba, count, buf)
+}
+
+pub fn sync_all() {
+    for device in BLOCK_DEVICES.read().iter().copied() {
+        let _ = device.sync();
     }
 }

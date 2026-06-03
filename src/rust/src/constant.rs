@@ -22,5 +22,22 @@ pub const USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END: usize =
 pub const USER_DATA_SEGMENT: u32 = 0x23;
 pub const USER_CODE_SEGMENT: u32 = 0x1B;
 
+pub const PIC_MASTER_COMMAND_PORT: u16 = 0x20;
+pub const PIC_MASTER_DATA_PORT: u16 = 0x21;
+pub const PIC_SLAVE_COMMAND_PORT: u16 = 0xA0;
+pub const PIC_SLAVE_DATA_PORT: u16 = 0xA1;
+pub const PIC_MASTER_VECTOR_OFFSET: u16 = 0x20;
+pub const PIC_SLAVE_VECTOR_OFFSET: u16 = 0x28;
+pub const PIC_SLAVE_IRQ_LINE: u8 = 2;
+pub const PIC_SLAVE_IRQ_MASK: u8 = 1u8 << PIC_SLAVE_IRQ_LINE;
+
 pub const PIT_BASE_FREQUENCY_HZ: u32 = 1_193_182;
 pub const TIMER_HZ: u32 = 1000;
+
+pub const fn irq_to_vector(irq_line: u8) -> Option<u16> {
+    if irq_line < 16 {
+        Some(PIC_MASTER_VECTOR_OFFSET + irq_line as u16)
+    } else {
+        None
+    }
+}
