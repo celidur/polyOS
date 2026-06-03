@@ -193,21 +193,26 @@ impl Cli {
     }
 
     pub fn get_matches(&self) -> Result<CliMatches, String> {
-        let args: &'static [&'static str] = crate::process::args();
-        let input = &args[1..];
+        let argc = crate::process::argc();
 
         let mut global = ArgMatches::new();
         let mut command_match: Option<CommandMatches> = None;
-        let mut iter = input.iter().peekable();
-        while let Some(&arg) = iter.next() {
-            if self.handle_argument(arg, &mut global, &mut iter).is_err() {
+        let mut i = 1usize;
+        while i < argc {
+            let arg = crate::process::arg(i).unwrap_or("");
+            if self
+                .handle_argument_argv(arg, &mut global, &mut i, argc)
+                .is_err()
+            {
                 if let Some(command) = self.commands.iter().find(|c| c.name == arg) {
-                    command_match = Some(command.parse(&mut iter)?);
+                    i += 1;
+                    command_match = Some(command.parse(&mut i, argc)?);
                     break;
                 } else {
                     return Err(format!("Unknown command or argument: {}", arg));
                 }
             }
+            i += 1;
         }
 
         let required_args = self
@@ -231,19 +236,22 @@ impl Cli {
         })
     }
 
-    fn handle_argument(
+    fn handle_argument_argv(
         &self,
         arg: &str,
         global: &mut ArgMatches,
-        iter: &mut core::iter::Peekable<core::slice::Iter<'_, &str>>,
+        index: &mut usize,
+        argc: usize,
     ) -> Result<(), ()> {
         let (name, value) = if arg.starts_with("--") {
             let name = arg.trim_start_matches("--");
             if let Some(definition) = self.args.iter().find(|a| a.long.as_deref() == Some(name)) {
                 if definition.value_type == ArgValueT::Bool {
                     (definition.name.clone(), ArgValue::Bool(true))
-                } else if let Some(next) = iter.next() {
+                } else if *index + 1 < argc {
+                    let next = crate::process::arg(*index + 1).unwrap_or("");
                     if !next.starts_with('-') {
+                        *index += 1;
                         (definition.name.clone(), ArgValue::String(next.to_string()))
                     } else {
                         return Err(());
@@ -263,8 +271,10 @@ impl Cli {
             {
                 if definition.value_type == ArgValueT::Bool {
                     (definition.name.clone(), ArgValue::Bool(true))
-                } else if let Some(next) = iter.next() {
+                } else if *index + 1 < argc {
+                    let next = crate::process::arg(*index + 1).unwrap_or("");
                     if !next.starts_with('-') {
+                        *index += 1;
                         (definition.name.clone(), ArgValue::String(next.to_string()))
                     } else {
                         return Err(());
@@ -328,19 +338,19 @@ impl Command {
         self
     }
 
-    pub fn parse(
-        &self,
-        iter: &mut core::iter::Peekable<core::slice::Iter<'_, &str>>,
-    ) -> Result<CommandMatches, String> {
+    pub fn parse(&self, index: &mut usize, argc: usize) -> Result<CommandMatches, String> {
         let mut matches = ArgMatches::new();
 
-        while let Some(&arg) = iter.next() {
+        while *index < argc {
+            let arg = crate::process::arg(*index).unwrap_or("");
             let (name, value) = if arg.starts_with("--") {
                 (
                     arg.trim_start_matches("--"),
-                    if let Some(next) = iter.peek() {
+                    if *index + 1 < argc {
+                        let next = crate::process::arg(*index + 1).unwrap_or("");
                         if !next.starts_with('-') {
-                            ArgValue::String(iter.next().unwrap().to_string())
+                            *index += 1;
+                            ArgValue::String(next.to_string())
                         } else {
                             ArgValue::Bool(true)
                         }
@@ -351,9 +361,11 @@ impl Command {
             } else if arg.starts_with('-') {
                 (
                     arg.trim_start_matches('-'),
-                    if let Some(next) = iter.peek() {
+                    if *index + 1 < argc {
+                        let next = crate::process::arg(*index + 1).unwrap_or("");
                         if !next.starts_with('-') {
-                            ArgValue::String(iter.next().unwrap().to_string())
+                            *index += 1;
+                            ArgValue::String(next.to_string())
                         } else {
                             ArgValue::Bool(true)
                         }
@@ -379,6 +391,8 @@ impl Command {
             } else {
                 return Err(format!("Unknown argument: {}", arg));
             }
+
+            *index += 1;
         }
         let required_args = self
             .args
@@ -388,7 +402,10 @@ impl Command {
             .collect::<Vec<String>>();
         for arg in required_args {
             if matches.get_arg(&arg).is_none() {
-                return Err(format!("Missing required argument: {}, for command: {}, use --help for usage information", arg, self.name));
+                return Err(format!(
+                    "Missing required argument: {}, for command: {}, use --help for usage information",
+                    arg, self.name
+                ));
             }
         }
 

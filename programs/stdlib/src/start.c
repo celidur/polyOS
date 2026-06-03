@@ -10,4 +10,5 @@ void c_start(int argc, char** argv) {
     } else {
         serial_printf("process exited with code %d\n", res);
     }
+    _exit(res);
 }

@@ -2,11 +2,13 @@
 
 global _start
 extern c_start
-extern polyos_exit
+extern _exit
 
 section .asm
 
 _start:
     call c_start
-    call polyos_exit
+    push 0
+    call _exit
+    add esp, 4
     ret

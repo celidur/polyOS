@@ -4,6 +4,7 @@ use walkdir::WalkDir;
 
 fn main() {
     let include_dir = "../stdlib/include";
+    println!("cargo:rerun-if-changed={include_dir}");
 
     // Gather all `.h` files in the `include` directory recursively
     let headers: Vec<_> = WalkDir::new(include_dir)
@@ -21,6 +22,10 @@ fn main() {
 
     if headers.is_empty() {
         panic!("No header files found in the include directory");
+    }
+
+    for header in headers.iter() {
+        println!("cargo:rerun-if-changed={}", header.display());
     }
 
     let bindings = bindgen::Builder::default()

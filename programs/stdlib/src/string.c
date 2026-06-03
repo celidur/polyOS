@@ -67,8 +67,12 @@ char* strcpy(char* dest, const char* src){
 }
 
 char* strncpy(char* dest, const char* src, int max){
+    if (max <= 0){
+        return dest;
+    }
+
     int i = 0;
-    while (src[i] != 0 && i < max){
+    while (src[i] != 0 && i < (max - 1)){
         dest[i] = src[i];
         i++;
     }

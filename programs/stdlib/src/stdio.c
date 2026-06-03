@@ -7,8 +7,8 @@
 
 int putchar(int c)
 {
-    polyos_putchar(c);
-    return 0;
+    char ch = (char)c;
+    return write(STDOUT_FILENO, &ch, 1) == 1 ? c : -1;
 }
 
 int printf(const char *fmt, ...){
@@ -22,8 +22,7 @@ int printf(const char *fmt, ...){
     va_start(ap, fmt);
     for (p = fmt; *p; p++){
         if (i >= MAX_BUFFER - 1){
-            buff[i] = '\0';
-            print(buff);
+            write(STDOUT_FILENO, buff, i);
             i = 0;
         }
         if (*p != '%'){
@@ -36,8 +35,7 @@ int printf(const char *fmt, ...){
                 sval = itoa(ival);
                 for (int j = 0; sval[j] != '\0'; j++){
                     if (i >= MAX_BUFFER - 1){
-                        buff[i] = '\0';
-                        print(buff);
+                        write(STDOUT_FILENO, buff, i);
                         i = 0;
                     }
                     buff[i++] = sval[j];
@@ -47,8 +45,7 @@ int printf(const char *fmt, ...){
                 sval = va_arg(ap, char*);
                 for (int j = 0; sval[j] != '\0'; j++){
                     if (i >= MAX_BUFFER - 1){
-                        buff[i] = '\0';
-                        print(buff);
+                        write(STDOUT_FILENO, buff, i);
                         i = 0;
                     }
                     buff[i++] = sval[j];
@@ -62,8 +59,7 @@ int printf(const char *fmt, ...){
                 sval = hex(va_arg(ap, uint32_t));
                 for (int j = 0; sval[j] != '\0'; j++){
                     if (i >= MAX_BUFFER - 1){
-                        buff[i] = '\0';
-                        print(buff);
+                        write(STDOUT_FILENO, buff, i);
                         i = 0;
                     }
                     buff[i++] = sval[j];
@@ -77,8 +73,7 @@ int printf(const char *fmt, ...){
 
     va_end(ap);
 
-    buff[i] = '\0';
-    print(buff);
+    write(STDOUT_FILENO, buff, i);
 
     return 0;
 }
@@ -94,8 +89,7 @@ int serial_printf(const char *fmt, ...){
     va_start(ap, fmt);
     for (p = fmt; *p; p++){
         if (i >= MAX_BUFFER - 1){
-            buff[i] = '\0';
-            serial(buff);
+            write(STDERR_FILENO, buff, i);
             i = 0;
         }
         if (*p != '%'){
@@ -108,8 +102,7 @@ int serial_printf(const char *fmt, ...){
                 sval = itoa(ival);
                 for (int j = 0; sval[j] != '\0'; j++){
                     if (i >= MAX_BUFFER - 1){
-                        buff[i] = '\0';
-                        serial(buff);
+                        write(STDERR_FILENO, buff, i);
                         i = 0;
                     }
                     buff[i++] = sval[j];
@@ -119,8 +112,7 @@ int serial_printf(const char *fmt, ...){
                 sval = va_arg(ap, char*);
                 for (int j = 0; sval[j] != '\0'; j++){
                     if (i >= MAX_BUFFER - 1){
-                        buff[i] = '\0';
-                        serial(buff);
+                        write(STDERR_FILENO, buff, i);
                         i = 0;
                     }
                     buff[i++] = sval[j];
@@ -134,8 +126,7 @@ int serial_printf(const char *fmt, ...){
                 sval = hex(va_arg(ap, uint32_t));
                 for (int j = 0; sval[j] != '\0'; j++){
                     if (i >= MAX_BUFFER - 1){
-                        buff[i] = '\0';
-                        serial(buff);
+                        write(STDERR_FILENO, buff, i);
                         i = 0;
                     }
                     buff[i++] = sval[j];
@@ -149,8 +140,7 @@ int serial_printf(const char *fmt, ...){
 
     va_end(ap);
 
-    buff[i] = '\0';
-    serial(buff);
+    write(STDERR_FILENO, buff, i);
 
     return 0;
 }

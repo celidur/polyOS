@@ -1,0 +1,16 @@
+[package]
+name = "fork"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+polyos_std = { path = "../polyos_std" }
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 3
+opt-level = 3

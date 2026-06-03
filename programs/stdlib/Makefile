@@ -9,6 +9,7 @@ NASM = nasm
 
 C_SOURCES = $(wildcard $(SRC_DIR)/*.c)
 ASM_SOURCES = $(wildcard $(SRC_DIR)/*.asm)
+HEADERS = $(wildcard ./include/*.h)
 C_OBJS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES))
 ASM_OBJS = $(patsubst $(SRC_DIR)/%.asm, $(BUILD_DIR)/%.asm.o, $(ASM_SOURCES))
 OBJS = $(C_OBJS) $(ASM_OBJS)
@@ -21,7 +22,7 @@ $(BUILD_DIR):
 $(TARGET): $(OBJS)
 	$(LINKER) -m elf_i386 -relocatable $(OBJS) -o $(TARGET)
 
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c $(HEADERS)
 	$(BUILDER) $(FLAGS) $(INCLUDES) -std=gnu99 -c $< -o $@
 
 $(BUILD_DIR)/%.asm.o: $(SRC_DIR)/%.asm

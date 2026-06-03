@@ -9,9 +9,11 @@ pub mod stdio;
 #[allow(warnings)]
 pub mod bindings;
 pub mod cli;
+pub mod io;
 mod memory;
 pub mod prelude;
 pub mod process;
+pub mod sync;
 
 pub use prelude::*;
 

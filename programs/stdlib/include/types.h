@@ -15,7 +15,14 @@ typedef short			    s16;
 typedef int			        s32;
 typedef long long	    	s64;
 
+#ifdef __SIZE_TYPE__
+typedef __SIZE_TYPE__ size_t;
+#else
 typedef u32 size_t;
+#endif
+typedef s32 ssize_t;
+typedef s32 off_t;
+typedef s32 pid_t;
 
 /* required for opal-api.h */
 typedef u8  uint8_t;
@@ -43,11 +50,13 @@ typedef s64 int64_t;
 #define max_t(type, a, b) max(((type) a), ((type) b))
 
 /*
- * Define bool only if compiling with pre-C23 standards,
- * since from C23 onward, 'bool' is a built-in keyword.
+ * Some compilers expose bool as a macro to _Bool even without explicitly
+ * including stdbool.h. Only define it if it is genuinely absent.
  */
 #if !defined(__STDC_VERSION__) || __STDC_VERSION__ < 202311L
+#ifndef bool
 typedef int bool;
+#endif
 
 #ifndef true
 #define true 1
@@ -56,7 +65,7 @@ typedef int bool;
 #ifndef false
 #define false 0
 #endif
-#endif /* C23 check */
+#endif
 
 #define NULL ((void *)0)
 

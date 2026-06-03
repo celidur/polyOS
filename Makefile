@@ -5,6 +5,7 @@ SRC_DIR = ./src
 RUST_DIR = ./src/rust
 RUST_TARGET = i686-polyos
 RUST_KERNEL = $(RUST_DIR)/target/$(RUST_TARGET)/release/rust_kernel
+RUST_SOURCES := $(shell find $(RUST_DIR)/src -type f) $(RUST_DIR)/Cargo.toml $(RUST_DIR)/i686-polyos.json $(RUST_DIR)/linker.ld
 
 NASM = nasm
 
@@ -45,8 +46,8 @@ $(BIN_DIR)/:
 $(DIRECTORIES):
 	@mkdir -p $(DIRECTORIES)
 
-$(RUST_KERNEL): $(RUST_DIR)/Cargo.toml
-	cd $(RUST_DIR) && cargo +nightly build --release --target $(RUST_TARGET).json
+$(RUST_KERNEL): $(RUST_SOURCES)
+	cd $(RUST_DIR) && cargo +nightly build -Zjson-target-spec --release --target $(RUST_TARGET).json
 
 $(BIN_DIR)/os.bin: $(BIN_DIR)/boot.bin $(BIN_DIR)/kernel.bin
 	@rm -f $@

@@ -2,23 +2,30 @@
 #include "string.h"
 #include "stdio.h"
 
-int polyos_getkeyblock(){
-    int val = 0;
-    do
-    {
-        val = polyos_getkey();
-    } while (val == 0);
-    return val;
+#define POLYOS_WAIT_TIMEOUT_CODE -2
+
+int recvfrom_wait(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen, u32 timeout_ticks){
+    u32 attempts = 0;
+    while (timeout_ticks == 0 || attempts < timeout_ticks) {
+        int res = recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
+        if (res >= 0) {
+            return res;
+        }
+        polyos_sleep(1);
+        attempts++;
+    }
+
+    return POLYOS_WAIT_TIMEOUT_CODE;
 }
 
 void polyos_terminal_readline(char* out, int max, bool output_while_typing)
 {
     int i = 0;
-    for (i = 0; i < max; i++)
-    {
-        char key = polyos_getkeyblock();
-        if (key == 0x08){
-            i --;
+    while (i < max - 1) {
+        char key = 0;
+        if (read(STDIN_FILENO, &key, 1) != 1){
+            polyos_sleep(1);
+            continue;
         }
 
         // Carriage return means we're done
@@ -27,76 +34,101 @@ void polyos_terminal_readline(char* out, int max, bool output_while_typing)
         }
 
         if (output_while_typing && key != 0x08){
-            polyos_putchar(key);
+            write(STDOUT_FILENO, &key, 1);
         }
 
         // Backspace
-        if (key == 0x08 && i >= 0){
-            remove_last_char();
-            out[i] = '\0';
-            i -= 1;
+        if (key == 0x08){
+            if (i > 0) {
+                write(STDOUT_FILENO, &key, 1);
+                i -= 1;
+                out[i] = '\0';
+            }
             continue;
         }
+
         out[i] = key;
+        i++;
     }
     // Null terminate
     out[i] = '\0';
 }
 
-struct command_argument* polyos_parse_command(char *command, int max){
-    struct command_argument* root_command = NULL;
-    char scommand[1025];
-    if (max >= (int) sizeof(scommand)){
-        return NULL;
-    }
-
-    strncpy(scommand, command, sizeof(scommand));
-    char* token = strtok(scommand, " ");
-    if (!token){
-        return NULL;
-    }
-
-    root_command = polyos_malloc(sizeof(struct command_argument));
-    if (!root_command){
-        return NULL;
-    }
-
-    strncpy(root_command->argument, token, sizeof(root_command->argument));
-    root_command->next = NULL;
-
-    struct command_argument* current_command = root_command;
-    token = strtok(NULL, " ");
-    while(token){
-        struct command_argument* next_command = polyos_malloc(sizeof(struct command_argument));
-        if (!next_command){
-            return root_command;
-        }
-        strncpy(next_command->argument, token, sizeof(next_command->argument));
-        next_command->next = NULL;
-        current_command->next = next_command;
-        current_command = next_command;
-        token = strtok(NULL, " ");
-    }
-
-    return root_command;
+int clear_screen()
+{
+    return ioctl(STDOUT_FILENO, POLYOS_IOCTL_SCREEN_CLEAR, 0);
 }
 
-void polyos_free_command(struct command_argument* command){
-    while(command){
-        struct command_argument* next = command->next;
-        polyos_free(command);
-        command = next;
+int fopen(const char *filename, const char *mode){
+    int flags = O_RDONLY;
+
+    if (mode && mode[0] == 'w'){
+        flags = O_WRONLY | O_CREAT | O_TRUNC;
+    } else if (mode && mode[0] == 'a'){
+        flags = O_WRONLY | O_CREAT | O_APPEND;
     }
+
+    if (mode){
+        for (int i = 0; mode[i]; i++){
+            if (mode[i] == '+'){
+                flags = (flags & ~(O_RDONLY | O_WRONLY)) | O_RDWR;
+                break;
+            }
+        }
+    }
+
+    return open(filename, flags, 0);
+}
+
+int fread(int fd, void *ptr, int size){
+    return read(fd, ptr, size);
+}
+
+int fwrite(int fd, void *ptr, int size){
+    return write(fd, ptr, size);
+}
+
+int fseek(int fd, int offset, FILE_SEEK_MODE mode){
+    return lseek(fd, offset, mode) < 0 ? -1 : 0;
+}
+
+int fclose(int fd){
+    return close(fd);
 }
 
 int polyos_system_run(const char *command){
     char buff[1024];
+    char *argv[64];
+    int argc = 0;
+
     strncpy(buff, command, sizeof(buff));
-    struct command_argument* root_command = polyos_parse_command(buff, sizeof(buff));
-    if (!root_command){
+    buff[sizeof(buff) - 1] = '\0';
+
+    char* token = strtok(buff, " ");
+    while(token && argc < (int)(sizeof(argv) / sizeof(argv[0])) - 1){
+        argv[argc++] = token;
+        token = strtok(NULL, " ");
+    }
+    argv[argc] = NULL;
+
+    if (argc == 0){
         return -1;
     }
-    int res = polyos_system(root_command);
-    polyos_free_command(root_command);
-    return res;
+
+    pid_t pid = fork();
+    if (pid < 0){
+        return -1;
+    }
+
+    if (pid == 0){
+        execve(argv[0], argv, NULL);
+        _exit(127);
+    }
+
+    int status = 0;
+    if (waitpid(pid, &status, 0) < 0){
+        return -1;
+    }
+
+    return status;
 }

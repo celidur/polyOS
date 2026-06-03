@@ -26,8 +26,11 @@ int main(int argc, char **argv)
             clear_screen();
         } else if (strncmp(buffer, "reboot", 7) == 0){
             reboot();
-        } else if (polyos_system_run(buffer) < 0){
-            printf("Command not found\n");
+        } else {
+            int status = polyos_system_run(buffer);
+            if (status < 0 || status == 127){
+                printf("Command not found\n");
+            }
         }
     }
 

@@ -5,7 +5,7 @@ all:  $(TARGET)
 
 $(TARGET): 
 	cd ../
-	cargo build --release
+	cargo build -Zjson-target-spec --release
 	cp ./target/i686-polyos/release/$(PARENT_DIR) $(TARGET)
 
 clean:

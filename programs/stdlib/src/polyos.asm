@@ -1,67 +1,85 @@
 [BITS 32]
 
+%define SYS_EXIT 1
+%define SYS_FORK 2
+%define SYS_READ 3
+%define SYS_WRITE 4
+%define SYS_OPEN 5
+%define SYS_CLOSE 6
+%define SYS_WAITPID 7
+%define SYS_EXECVE 11
+%define SYS_LSEEK 19
+%define SYS_GETPID 20
+%define SYS_PIPE 42
+%define SYS_IOCTL 54
+%define SYS_GETPPID 64
+%define SYS_FSTAT 108
+
+%define POLYOS_SYS_SLEEP 200
+%define POLYOS_SYS_MALLOC 201
+%define POLYOS_SYS_FREE 202
+%define POLYOS_SYS_PRINT_MEMORY 203
+%define POLYOS_SYS_REBOOT 204
+%define POLYOS_SYS_SHUTDOWN 205
+%define POLYOS_SYS_NETWORK_INFO 220
+%define POLYOS_SYS_NETWORK_DHCP_DISCOVER 221
+%define POLYOS_SYS_NETWORK_PING_GATEWAY 222
+%define POLYOS_SYS_NETWORK_PING_IPV4 223
+%define POLYOS_SYS_NETWORK_DNS_QUERY 224
+%define POLYOS_SYS_NETWORK_PING_NAME 225
+%define POLYOS_SYS_SOCKET 226
+%define POLYOS_SYS_SENDTO 227
+%define POLYOS_SYS_RECVFROM 228
+%define POLYOS_SYS_SEM_CREATE 230
+%define POLYOS_SYS_SEM_WAIT 231
+%define POLYOS_SYS_SEM_SIGNAL 232
+%define POLYOS_SYS_SEM_CLOSE 233
+
 section .asm
 
-global serial:function
-global print:function
-global polyos_getkey:function
-global polyos_putchar:function
+global polyos_sleep:function
 global polyos_malloc:function
 global polyos_free:function
-global polyos_process_load_start:function
-global polyos_system:function
-global polyos_exit:function
+global execve:function
+global fork:function
+global waitpid:function
+global getpid:function
+global getppid:function
+global _exit:function
+global exit:function
 global print_memory:function
-global remove_last_char:function
-global clear_screen:function
 
 global reboot:function
 global shutdown:function
+global network_info:function
+global network_dhcp_discover:function
+global network_ping_gateway:function
+global network_ping_ipv4:function
+global network_dns_query:function
+global network_ping_name:function
+global socket:function
+global sendto:function
+global recvfrom:function
+global close:function
 
-global fopen:function
-global fread:function
-global fwrite:function
-global fseek:function
+global open:function
+global read:function
+global write:function
+global lseek:function
 global fstat:function
-global fclose:function
+global ioctl:function
+global pipe:function
+global sem_create:function
+global sem_wait:function
+global sem_signal:function
+global sem_close:function
 
-; void serial(char *str)
-serial:
+; void polyos_sleep(u32 duration_ms)
+polyos_sleep:
     push ebp
     mov ebp, esp
-    push dword [ebp+8]
-    mov eax, 0 ; Command serial
-    int 0x80
-    add esp, 4
-    pop ebp
-    ret
-
-; void print(char *str)
-print:
-    push ebp
-    mov ebp, esp
-    push dword [ebp+8]
-    mov eax, 1 ; Command print
-    int 0x80
-    add esp, 4
-    pop ebp
-    ret
-
-; int polyos_getkey()
-polyos_getkey:
-    push ebp
-    mov ebp, esp
-    mov eax, 2 ; Command getkey
-    int 0x80
-    pop ebp
-    ret
-
-; void polyos_putchar(char c)
-polyos_putchar:
-    push ebp
-    mov ebp, esp
-    mov eax, 3 ; Command putchar
-    push dword [ebp+8] ; c
+    mov eax, POLYOS_SYS_SLEEP
+    push dword [ebp+8] ; duration_ms
     int 0x80
     add esp, 4
     pop ebp
@@ -71,7 +89,7 @@ polyos_putchar:
 polyos_malloc:
     push ebp
     mov ebp, esp
-    mov eax, 4 ; Command malloc
+    mov eax, POLYOS_SYS_MALLOC
     push dword [ebp+8] ; size
     int 0x80
     add esp, 4
@@ -82,41 +100,44 @@ polyos_malloc:
 polyos_free:
     push ebp
     mov ebp, esp
-    mov eax, 5 ; Command free
+    mov eax, POLYOS_SYS_FREE
     push dword [ebp+8] ; ptr
     int 0x80
     add esp, 4
     pop ebp
     ret
 
-; int polyos_process_load_start(const char *filename)
-polyos_process_load_start:
+; int execve(const char *pathname, char *const argv[], char *const envp[])
+execve:
     push ebp
     mov ebp, esp
-    mov eax, 6 ; Command process_load_start
-    push dword [ebp+8] ; filename
+    mov eax, SYS_EXECVE
+    push dword [ebp+16] ; envp
+    push dword [ebp+12] ; argv
+    push dword [ebp+8] ; pathname
     int 0x80
-    add esp, 4
+    add esp, 12
     pop ebp
     ret
 
-; int polyos_system(struct command_arguemnts *args)
-polyos_system:
+; int fork()
+fork:
     push ebp
     mov ebp, esp
-    mov eax, 7 ; Command system
-    push dword [ebp+8] ; args
+    mov eax, SYS_FORK
     int 0x80
-    add esp, 4
     pop ebp
     ret
 
-; void polyos_exit()
-polyos_exit:
+; void exit(int code)
+_exit:
+exit:
     push ebp
     mov ebp, esp
-    mov eax, 9 ; Command exit
+    mov eax, SYS_EXIT
+    push dword [ebp+8] ; code
     int 0x80
+    add esp, 4
     pop ebp
     ret
 
@@ -124,75 +145,58 @@ polyos_exit:
 print_memory:
     push ebp
     mov ebp, esp
-    mov eax, 10 ; Command print_memory
+    mov eax, POLYOS_SYS_PRINT_MEMORY
     int 0x80
     pop ebp
     ret
 
-; void remove_last_char()
-remove_last_char:
+; int open(const char *pathname, int flags, int mode)
+open:
     push ebp
     mov ebp, esp
-    mov eax, 11 ; Command remove_last_char
-    int 0x80
-    pop ebp
-    ret
-
-; void clear_screen()
-clear_screen:
-    push ebp
-    mov ebp, esp
-    mov eax, 12 ; Command clear_screen
-    int 0x80
-    pop ebp
-    ret
-
-; int fopen(const char *filename, const char *mode)
-fopen:
-    push ebp
-    mov ebp, esp
-    mov eax, 13 ; Command fopen
-    push dword [ebp+12] ; filename
-    push dword [ebp+8] ; mode
-    int 0x80
-    add esp, 8
-    pop ebp
-    ret
-
-; int fread(int fd, void *buf, size_t size)
-fread:
-    push ebp
-    mov ebp, esp
-    mov eax, 14 ; Command fread
-    push dword [ebp+16] ; fd
-    push dword [ebp+12] ; buf
-    push dword [ebp+8] ; size
+    mov eax, SYS_OPEN
+    push dword [ebp+16] ; mode
+    push dword [ebp+12] ; flags
+    push dword [ebp+8] ; pathname
     int 0x80
     add esp, 12
     pop ebp
     ret
 
-; int fwrite(int fd, void *buf, size_t size)
-fwrite:
+; int read(int fd, void *buf, size_t size)
+read:
     push ebp
     mov ebp, esp
-    mov eax, 15 ; Command fwrite
-    push dword [ebp+16] ; fd
+    mov eax, SYS_READ
+    push dword [ebp+16] ; size
     push dword [ebp+12] ; buf
-    push dword [ebp+8] ; size
+    push dword [ebp+8] ; fd
     int 0x80
     add esp, 12
     pop ebp
     ret
 
-; int fseek(int fd, int offset, FILE_SEEK_MODE mode)
-fseek:
+; int write(int fd, const void *buf, size_t size)
+write:
     push ebp
     mov ebp, esp
-    mov eax, 16 ; Command fseek
-    push dword [ebp+16] ; fd
+    mov eax, SYS_WRITE
+    push dword [ebp+16] ; size
+    push dword [ebp+12] ; buf
+    push dword [ebp+8] ; fd
+    int 0x80
+    add esp, 12
+    pop ebp
+    ret
+
+; int lseek(int fd, int offset, int whence)
+lseek:
+    push ebp
+    mov ebp, esp
+    mov eax, SYS_LSEEK
+    push dword [ebp+16] ; whence
     push dword [ebp+12] ; offset
-    push dword [ebp+8] ; mode
+    push dword [ebp+8] ; fd
     int 0x80
     add esp, 12
     pop ebp
@@ -202,19 +206,32 @@ fseek:
 fstat:
     push ebp
     mov ebp, esp
-    mov eax, 17 ; Command fstat
-    push dword [ebp+12] ; fd
-    push dword [ebp+8] ; stat
+    mov eax, SYS_FSTAT
+    push dword [ebp+12] ; stat
+    push dword [ebp+8] ; fd
     int 0x80
     add esp, 8
     pop ebp
     ret
 
-; int fclose(int fd)
-fclose:
+; int ioctl(int fd, unsigned long request, unsigned long arg)
+ioctl:
     push ebp
     mov ebp, esp
-    mov eax, 18 ; Command fclose
+    mov eax, SYS_IOCTL
+    push dword [ebp+16] ; arg
+    push dword [ebp+12] ; request
+    push dword [ebp+8] ; fd
+    int 0x80
+    add esp, 12
+    pop ebp
+    ret
+
+; int close(int fd)
+close:
+    push ebp
+    mov ebp, esp
+    mov eax, SYS_CLOSE
     push dword [ebp+8] ; fd
     int 0x80
     add esp, 4
@@ -223,12 +240,193 @@ fclose:
 
 ; void reboot()
 reboot:
-    mov eax, 19 ; Command reboot
+    mov eax, POLYOS_SYS_REBOOT
     int 0x80
     ret
 
 ; void shutdown()
 shutdown:
-    mov eax, 20 ; Command shutdown
+    mov eax, POLYOS_SYS_SHUTDOWN
     int 0x80
+    ret
+
+; int network_info(struct network_info *info)
+network_info:
+    push ebp
+    mov ebp, esp
+    mov eax, POLYOS_SYS_NETWORK_INFO
+    push dword [ebp+8] ; info
+    int 0x80
+    add esp, 4
+    pop ebp
+    ret
+
+; int network_dhcp_discover()
+network_dhcp_discover:
+    mov eax, POLYOS_SYS_NETWORK_DHCP_DISCOVER
+    int 0x80
+    ret
+
+; int network_ping_gateway()
+network_ping_gateway:
+    mov eax, POLYOS_SYS_NETWORK_PING_GATEWAY
+    int 0x80
+    ret
+
+; int network_ping_ipv4(u32 ip)
+network_ping_ipv4:
+    push ebp
+    mov ebp, esp
+    mov eax, POLYOS_SYS_NETWORK_PING_IPV4
+    push dword [ebp+8] ; ip
+    int 0x80
+    add esp, 4
+    pop ebp
+    ret
+
+; int network_dns_query(const char *name)
+network_dns_query:
+    push ebp
+    mov ebp, esp
+    mov eax, POLYOS_SYS_NETWORK_DNS_QUERY
+    push dword [ebp+8] ; name
+    int 0x80
+    add esp, 4
+    pop ebp
+    ret
+
+; int network_ping_name(const char *name)
+network_ping_name:
+    push ebp
+    mov ebp, esp
+    mov eax, POLYOS_SYS_NETWORK_PING_NAME
+    push dword [ebp+8] ; name
+    int 0x80
+    add esp, 4
+    pop ebp
+    ret
+
+; int socket(int domain, int type, int protocol)
+socket:
+    push ebp
+    mov ebp, esp
+    mov eax, POLYOS_SYS_SOCKET
+    push dword [ebp+16] ; protocol
+    push dword [ebp+12] ; type
+    push dword [ebp+8] ; domain
+    int 0x80
+    add esp, 12
+    pop ebp
+    ret
+
+; int sendto(int sockfd, const void *buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen)
+sendto:
+    push ebp
+    mov ebp, esp
+    mov eax, POLYOS_SYS_SENDTO
+    push dword [ebp+28] ; addrlen
+    push dword [ebp+24] ; dest_addr
+    push dword [ebp+20] ; flags
+    push dword [ebp+16] ; len
+    push dword [ebp+12] ; buf
+    push dword [ebp+8] ; sockfd
+    int 0x80
+    add esp, 24
+    pop ebp
+    ret
+
+; int recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen)
+recvfrom:
+    push ebp
+    mov ebp, esp
+    mov eax, POLYOS_SYS_RECVFROM
+    push dword [ebp+28] ; addrlen
+    push dword [ebp+24] ; src_addr
+    push dword [ebp+20] ; flags
+    push dword [ebp+16] ; len
+    push dword [ebp+12] ; buf
+    push dword [ebp+8] ; sockfd
+    int 0x80
+    add esp, 24
+    pop ebp
+    ret
+
+; int waitpid(int pid)
+waitpid:
+    push ebp
+    mov ebp, esp
+    mov eax, SYS_WAITPID
+    push dword [ebp+16] ; options
+    push dword [ebp+12] ; status
+    push dword [ebp+8] ; pid
+    int 0x80
+    add esp, 12
+    pop ebp
+    ret
+
+; int getpid()
+getpid:
+    mov eax, SYS_GETPID
+    int 0x80
+    ret
+
+; int getppid()
+getppid:
+    mov eax, SYS_GETPPID
+    int 0x80
+    ret
+
+; int pipe(int pipefd[2])
+pipe:
+    push ebp
+    mov ebp, esp
+    mov eax, SYS_PIPE
+    push dword [ebp+8] ; pipefd
+    int 0x80
+    add esp, 4
+    pop ebp
+    ret
+
+; int sem_create(int initial_count)
+sem_create:
+    push ebp
+    mov ebp, esp
+    mov eax, POLYOS_SYS_SEM_CREATE
+    push dword [ebp+8] ; initial_count
+    int 0x80
+    add esp, 4
+    pop ebp
+    ret
+
+; int sem_wait(int semid)
+sem_wait:
+    push ebp
+    mov ebp, esp
+    mov eax, POLYOS_SYS_SEM_WAIT
+    push dword [ebp+8] ; semid
+    int 0x80
+    add esp, 4
+    pop ebp
+    ret
+
+; int sem_signal(int semid)
+sem_signal:
+    push ebp
+    mov ebp, esp
+    mov eax, POLYOS_SYS_SEM_SIGNAL
+    push dword [ebp+8] ; semid
+    int 0x80
+    add esp, 4
+    pop ebp
+    ret
+
+; int sem_close(int semid)
+sem_close:
+    push ebp
+    mov ebp, esp
+    mov eax, POLYOS_SYS_SEM_CLOSE
+    push dword [ebp+8] ; semid
+    int 0x80
+    add esp, 4
+    pop ebp
     ret
