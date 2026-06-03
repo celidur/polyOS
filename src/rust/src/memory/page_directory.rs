@@ -186,6 +186,7 @@ impl PageDirectory {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn map_to(
         &self,
         virtual_address: u32,
@@ -203,6 +204,7 @@ impl PageDirectory {
         self.map_range(virtual_address, physical_address, count, flags)
     }
 
+    #[allow(dead_code)]
     pub fn align_address(address: u32) -> u32 {
         if Self::is_aligned(address) {
             address

@@ -24,12 +24,16 @@ all: $(DIRECTORIES) $(BIN_DIR)/os.bin user_programs
 	if [ -d "./mnt" ]; then rm -rf ./mnt; fi
 	mkdir -p ./mnt/d
 ifeq ($(OS), Darwin)
-	DEV_ID=$$(hdiutil attach -imagekey diskimage-class=CRawDiskImage -nomount $(BIN_DIR)/os.bin | grep "/dev/disk" | sed -E 's/ .*//') && \
-	diskutil mount -mountPoint ./mnt/d $$DEV_ID && \
+	set -e; \
+	DEV_ID=$$(hdiutil attach -imagekey diskimage-class=CRawDiskImage -nomount $(BIN_DIR)/os.bin | grep "/dev/disk" | sed -E 's/ .*//'); \
+	test -n "$$DEV_ID"; \
+	trap 'diskutil unmountDisk $$DEV_ID >/dev/null 2>&1 || true; hdiutil detach $$DEV_ID >/dev/null 2>&1 || true' EXIT; \
+	diskutil mount -mountPoint ./mnt/d $$DEV_ID; \
 	cp -r ./file/* ./mnt/d; \
 	sleep 1; \
 	diskutil unmountDisk $$DEV_ID; \
-	hdiutil detach $$DEV_ID;
+	hdiutil detach $$DEV_ID; \
+	trap - EXIT;
 else
 	sudo mount -t vfat $(BIN_DIR)/os.bin ./mnt/d
 

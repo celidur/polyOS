@@ -13,6 +13,7 @@ mod fs;
 mod gdt;
 mod interrupts;
 mod kernel;
+mod kernel_selftest;
 mod memory;
 mod net;
 mod panic;

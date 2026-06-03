@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use core::ptr::null;
+use alloc::vec::Vec;
 
 use crate::{constant::PROGRAM_VIRTUAL_ADDRESS, kernel::KERNEL, memory::Page};
 
@@ -135,12 +135,45 @@ impl ElfHeader {
 }
 
 #[derive(Debug, Clone)]
+pub struct ElfSegment {
+    virtual_address: u32,
+    flags: u32,
+    page_offset: usize,
+    file_size: usize,
+    memory_size: usize,
+    memory: Page<u8>,
+}
+
+impl ElfSegment {
+    pub fn virtual_address(&self) -> u32 {
+        self.virtual_address
+    }
+
+    pub fn flags(&self) -> u32 {
+        self.flags
+    }
+
+    pub fn page_offset(&self) -> usize {
+        self.page_offset
+    }
+
+    pub fn file_size(&self) -> usize {
+        self.file_size
+    }
+
+    pub fn memory_size(&self) -> usize {
+        self.memory_size
+    }
+
+    pub fn memory(&self) -> &Page<u8> {
+        &self.memory
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct ElfFile {
     memory: Page<u8>,
-    virtual_base_address: *const u8,
-    virtual_end_address: *const u8,
-    physical_base_address: *const u8,
-    physical_end_address: *const u8,
+    segments: Vec<ElfSegment>,
 }
 
 unsafe impl Send for ElfFile {}
@@ -162,10 +195,7 @@ impl ElfFile {
 
         let mut elf = Self {
             memory,
-            virtual_base_address: null(),
-            virtual_end_address: null(),
-            physical_base_address: null(),
-            physical_end_address: null(),
+            segments: Vec::new(),
         };
 
         elf.load_segments(header)?;
@@ -182,29 +212,38 @@ impl ElfFile {
     }
 
     fn process_load_segment(&mut self, phdr: &Elf32Phdr) {
-        if self.virtual_base_address.is_null() || (self.virtual_base_address as u32) > phdr.p_vaddr
-        {
-            self.virtual_base_address = phdr.p_vaddr as *mut u8;
-            self.physical_base_address =
-                self.memory.as_ptr().wrapping_add(phdr.p_offset as usize) as *mut u8;
-        }
+        let virtual_address = phdr.p_vaddr & 0xFFFFF000;
+        let page_offset = (phdr.p_vaddr - virtual_address) as usize;
+        let size = page_offset + phdr.p_memsz as usize;
+        let Some(segment_memory) = Page::<u8>::new(size) else {
+            return;
+        };
 
-        let end_virtual = phdr.p_vaddr + phdr.p_filesz;
-        if self.virtual_end_address.is_null() || (self.virtual_end_address as u32) < end_virtual {
-            self.virtual_end_address = end_virtual as *mut u8;
-            self.physical_end_address = self
-                .memory
-                .as_ptr()
-                .wrapping_add(phdr.p_offset as usize + phdr.p_filesz as usize)
-                as *mut u8;
-        }
+        let source = unsafe {
+            core::slice::from_raw_parts(
+                self.memory.as_ptr().add(phdr.p_offset as usize),
+                phdr.p_filesz as usize,
+            )
+        };
+        let destination = &mut segment_memory.as_mut_slice()
+            [page_offset..page_offset + phdr.p_filesz as usize];
+        destination.copy_from_slice(source);
+
+        self.segments.push(ElfSegment {
+            virtual_address,
+            flags: phdr.p_flags,
+            page_offset,
+            file_size: phdr.p_filesz as usize,
+            memory_size: phdr.p_memsz as usize,
+            memory: segment_memory,
+        });
     }
 
     pub fn header(&self) -> &ElfHeader {
         unsafe { &*(self.memory.as_ptr() as *const ElfHeader) }
     }
 
-    pub fn phdr_phys_address(&self, phdr: &Elf32Phdr) -> *mut u8 {
-        self.memory.as_ptr().wrapping_add(phdr.p_offset as usize) as *mut u8
+    pub fn segments(&self) -> &[ElfSegment] {
+        &self.segments
     }
 }

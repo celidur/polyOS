@@ -37,7 +37,7 @@ pub fn shutdown() {
 
     unsafe { outw(0x604, 0x2000) };
 
-    halt();
+    halt_forever();
 }
 
 pub fn reboot() {
@@ -48,20 +48,19 @@ pub fn reboot() {
     }
     serial_println!("Rebooting...");
     unsafe { outb(0x64, 0xFE) };
-    halt();
+    halt_forever();
 }
 
-pub fn halt() -> ! {
+pub fn halt() {
+    unsafe {
+        asm!("hlt", options(nostack, nomem));
+    }
+}
+
+pub fn halt_forever() -> ! {
     serial_println!("Halting CPU...");
 
     loop {
-        unsafe {
-            asm!(
-                "
-                hlt
-                ",
-                options(nostack, nomem)
-            )
-        }
+        halt();
     }
 }

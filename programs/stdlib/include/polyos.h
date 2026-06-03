@@ -66,6 +66,7 @@ int sem_create(int initial_count);
 int sem_wait(int semid);
 int sem_signal(int semid);
 int sem_close(int semid);
+int kernel_selftest();
 int execve(const char *pathname, char *const argv[], char *const envp[]);
 pid_t fork();
 pid_t waitpid(pid_t pid, int *status, int options);

@@ -1,6 +1,6 @@
 use core::arch::naked_asm;
 
-use crate::{constant::KERNEL_DATA_SELECTOR, kernel_main, utils::halt};
+use crate::{constant::KERNEL_DATA_SELECTOR, kernel_main, utils::halt_forever};
 
 #[unsafe(naked)]
 #[unsafe(no_mangle)]
@@ -30,10 +30,10 @@ pub unsafe extern "C" fn _start() -> ! {
 
         "call {kernel_main}",
 
-        "call {halt}",
+        "call {halt_forever}",
 
         kds = const KERNEL_DATA_SELECTOR,
         kernel_main = sym kernel_main,
-        halt = sym halt,
+        halt_forever = sym halt_forever,
     );
 }

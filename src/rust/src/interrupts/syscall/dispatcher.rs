@@ -52,6 +52,7 @@ pub fn syscall_init() {
     syscall_register(SyscallId::SemaphoreWait, syscall_semaphore_wait);
     syscall_register(SyscallId::SemaphoreSignal, syscall_semaphore_signal);
     syscall_register(SyscallId::SemaphoreClose, syscall_semaphore_close);
+    syscall_register(SyscallId::KernelSelfTest, syscall_kernel_selftest);
 }
 
 pub fn syscall_handle(frame: &InterruptFrame) -> u32 {

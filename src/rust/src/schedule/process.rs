@@ -351,25 +351,13 @@ impl Process {
 
         match self.filetype {
             ProcessFileType::Elf(ref elf) => {
-                for phdr in elf.header().program_headers() {
-                    if phdr.p_memsz == 0 {
-                        continue;
-                    }
-
-                    let phdr_phys_adress = elf.phdr_phys_address(phdr);
+                for segment in elf.segments() {
                     let mut flags = memory::PRESENT | memory::USER_ACCESS;
-                    if (phdr.p_flags & PF_W) != 0 {
+                    if (segment.flags() & PF_W) != 0 {
                         flags |= memory::WRITABLE;
                     }
                     self.page_directory
-                        .map_to(
-                            PageDirectory::align_address_down(phdr.p_vaddr),
-                            PageDirectory::align_address_down(phdr_phys_adress as u32),
-                            PageDirectory::align_address(unsafe {
-                                phdr_phys_adress.add(phdr.p_memsz as usize)
-                            } as u32),
-                            flags,
-                        )
+                        .map_page(segment.virtual_address(), segment.memory(), flags)
                         .map_err(|_| KernelError::Paging)?;
                 }
             }

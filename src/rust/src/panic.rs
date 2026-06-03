@@ -6,7 +6,7 @@ use crate::{
     device::screen::Color,
     interrupts::disable_interrupts,
     print::{disable_cursor, set_color},
-    utils::halt,
+    utils::halt_forever,
 };
 
 #[panic_handler]
@@ -18,5 +18,5 @@ fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
     disable_cursor();
     serial_println!("KERNEL PANIC: {}", info);
-    halt();
+    halt_forever();
 }

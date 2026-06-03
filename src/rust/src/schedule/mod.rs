@@ -1,4 +1,4 @@
-mod loader;
+pub(crate) mod loader;
 pub mod process;
 pub mod process_manager;
 pub mod semaphore;

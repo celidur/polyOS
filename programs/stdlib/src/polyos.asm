@@ -34,6 +34,7 @@
 %define POLYOS_SYS_SEM_WAIT 231
 %define POLYOS_SYS_SEM_SIGNAL 232
 %define POLYOS_SYS_SEM_CLOSE 233
+%define POLYOS_SYS_KERNEL_SELFTEST 234
 
 section .asm
 
@@ -73,6 +74,7 @@ global sem_create:function
 global sem_wait:function
 global sem_signal:function
 global sem_close:function
+global kernel_selftest:function
 
 ; void polyos_sleep(u32 duration_ms)
 polyos_sleep:
@@ -429,4 +431,10 @@ sem_close:
     int 0x80
     add esp, 4
     pop ebp
+    ret
+
+; int kernel_selftest()
+kernel_selftest:
+    mov eax, POLYOS_SYS_KERNEL_SELFTEST
+    int 0x80
     ret

@@ -37,6 +37,7 @@ pub enum SyscallId {
     SemaphoreWait = 231,
     SemaphoreSignal = 232,
     SemaphoreClose = 233,
+    KernelSelfTest = 234,
 }
 
 impl SyscallId {
@@ -76,6 +77,7 @@ impl SyscallId {
             231 => Some(Self::SemaphoreWait),
             232 => Some(Self::SemaphoreSignal),
             233 => Some(Self::SemaphoreClose),
+            234 => Some(Self::KernelSelfTest),
             _ => None,
         }
     }
