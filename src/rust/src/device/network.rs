@@ -3,11 +3,11 @@
 use alloc::vec::Vec;
 
 use crate::{
-    constant::{irq_to_vector, PIC_MASTER_DATA_PORT, PIC_SLAVE_DATA_PORT, PIC_SLAVE_IRQ_MASK},
+    constant::{PIC_MASTER_DATA_PORT, PIC_SLAVE_DATA_PORT, PIC_SLAVE_IRQ_MASK, irq_to_vector},
     device::{
-        io::{inb as port_inb, inw as port_inw, outb, outl, outw},
-        pci::{find_device, PciBar, PciDevice},
         DeviceDriver, DeviceProbeStage, ManagedDevice,
+        io::{inb as port_inb, inw as port_inw, outb, outl, outw},
+        pci::{PciBar, PciDevice, find_device},
     },
     interrupts::{InterruptDevice, InterruptSource},
     memory::Page,
@@ -43,9 +43,13 @@ const ISR_TX_ERR: u16 = 1 << 3;
 const ISR_RX_OVERFLOW: u16 = 1 << 4;
 const ISR_RX_FIFO_OVERFLOW: u16 = 1 << 6;
 const ISR_SYSTEM_ERR: u16 = 1 << 15;
-const IMR_DEFAULT: u16 =
-    ISR_RX_OK | ISR_RX_ERR | ISR_TX_OK | ISR_TX_ERR | ISR_RX_OVERFLOW | ISR_RX_FIFO_OVERFLOW
-        | ISR_SYSTEM_ERR;
+const IMR_DEFAULT: u16 = ISR_RX_OK
+    | ISR_RX_ERR
+    | ISR_TX_OK
+    | ISR_TX_ERR
+    | ISR_RX_OVERFLOW
+    | ISR_RX_FIFO_OVERFLOW
+    | ISR_SYSTEM_ERR;
 
 const RX_STATUS_OK: u16 = 1 << 0;
 
@@ -121,12 +125,8 @@ impl DeviceDriver for Rtl8139Driver {
                 let pci_function = device.pci.function;
                 let io_base = device.io_base;
 
-                let interface_id = net::register_interface(
-                    "rtl8139",
-                    0,
-                    device.mac,
-                    &RTL8139_DRIVER,
-                );
+                let interface_id =
+                    net::register_interface("rtl8139", 0, device.mac, &RTL8139_DRIVER);
                 device.interface_id = interface_id;
                 RTL8139_DRIVER
                     .device
@@ -134,13 +134,14 @@ impl DeviceDriver for Rtl8139Driver {
                     .expect("rtl8139 device already probed");
 
                 if let Some(irq_vector) = irq_to_vector(irq_line) {
-                    InterruptSource::new(irq_vector)
-                        .register_device(&RTL8139_DRIVER);
+                    InterruptSource::new(irq_vector).register_device(&RTL8139_DRIVER);
                     enable_irq_line(irq_line);
                 } else {
                     serial_println!(
                         "rtl8139: cannot register interrupt handler for PCI {}:{}:{}: invalid IRQ line {}",
-                        pci_bus, pci_device, pci_function,
+                        pci_bus,
+                        pci_device,
+                        pci_function,
                         irq_line
                     );
                 }
@@ -173,7 +174,9 @@ crate::register_device_driver!(RTL8139_DRIVER_REG, RTL8139_DRIVER);
 
 impl NetworkDevice for Rtl8139Driver {
     fn read(&self) -> Option<Vec<u8>> {
-        self.device.with_mut(|device| device.read_packet()).flatten()
+        self.device
+            .with_mut(|device| device.read_packet())
+            .flatten()
     }
 
     fn write(&self, frame: &[u8]) -> Result<(), NetworkError> {

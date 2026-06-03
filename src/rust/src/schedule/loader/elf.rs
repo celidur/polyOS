@@ -225,8 +225,8 @@ impl ElfFile {
                 phdr.p_filesz as usize,
             )
         };
-        let destination = &mut segment_memory.as_mut_slice()
-            [page_offset..page_offset + phdr.p_filesz as usize];
+        let destination =
+            &mut segment_memory.as_mut_slice()[page_offset..page_offset + phdr.p_filesz as usize];
         destination.copy_from_slice(source);
 
         self.segments.push(ElfSegment {

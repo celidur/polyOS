@@ -26,7 +26,7 @@ mod utils;
 use crate::{
     device::{
         pci::pci_read_config,
-        screen::{ScreenMode, TextMode, SCREEN_DRIVER},
+        screen::{SCREEN_DRIVER, ScreenMode, TextMode},
     },
     gdt::GDT,
     interrupts::interrupts_init,

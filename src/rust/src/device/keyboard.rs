@@ -228,8 +228,7 @@ impl DeviceDriver for KeyboardDriver {
             .device
             .probe(Keyboard::new())
             .expect("keyboard device already probed");
-        InterruptSource::new(keyboard_interrupt)
-            .register_device(&KEYBOARD_DRIVER);
+        InterruptSource::new(keyboard_interrupt).register_device(&KEYBOARD_DRIVER);
     }
 
     fn remove(&self) {

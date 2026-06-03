@@ -424,11 +424,7 @@ fn send_ping_ipv4(
             .ok_or(NetworkError::NoInterface)?;
 
         let frame = prepare_ping_frame(interface_id, interface, target_ip, target_name, socket_id)?;
-        (
-            interface_id,
-            interface.device,
-            frame,
-        )
+        (interface_id, interface.device, frame)
     };
 
     device.write(&frame)?;

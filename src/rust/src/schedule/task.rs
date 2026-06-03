@@ -188,7 +188,7 @@ pub fn task_next() -> ! {
                 // No runnable task yet: wait for an interrupt to wake a sleeper.
                 enable_interrupts();
                 halt();
-            },
+            }
             TaskSwitch::NoTasks => {
                 panic!("scheduler stopped: no runnable tasks and no sleeping/blocked tasks")
             }
@@ -245,18 +245,16 @@ pub fn copy_string_from_task(
             directory
                 .map_page(page_addr, &page, flags)
                 .map_err(|_| ())?;
-            let buffer = unsafe {
-                core::slice::from_raw_parts_mut(virt as *mut u8, to_copy as usize)
-            };
+            let buffer =
+                unsafe { core::slice::from_raw_parts_mut(virt as *mut u8, to_copy as usize) };
             let buffer2 = page.as_mut_slice();
             directory.switch();
             buffer2[..to_copy as usize].copy_from_slice(&buffer[..to_copy as usize]);
             KERNEL.kernel_page();
             directory.set(page_addr, old_entry).map_err(|_| ())?;
             remain -= to_copy;
-            let buffer = unsafe {
-                core::slice::from_raw_parts_mut(phys as *mut u8, to_copy as usize)
-            };
+            let buffer =
+                unsafe { core::slice::from_raw_parts_mut(phys as *mut u8, to_copy as usize) };
             buffer[..to_copy as usize].copy_from_slice(&buffer2[..to_copy as usize]);
             virt += to_copy;
             phys += to_copy;
@@ -287,9 +285,8 @@ pub fn copy_string_to_task(
 
             let offset = buff - phs_addr;
             let to_copy = (PAGING_PAGE_SIZE as u32 - offset).min(remain);
-            let buffer = unsafe {
-                core::slice::from_raw_parts_mut(virt as *mut u8, to_copy as usize)
-            };
+            let buffer =
+                unsafe { core::slice::from_raw_parts_mut(virt as *mut u8, to_copy as usize) };
             let buffer2 = unsafe {
                 core::slice::from_raw_parts((phs_addr + offset) as *const u8, to_copy as usize)
             };

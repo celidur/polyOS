@@ -1,6 +1,6 @@
 use crate::{
-    device::screen::{Color, ColorCode, ScreenChar},
     device::screen::SCREEN_DRIVER,
+    device::screen::{Color, ColorCode, ScreenChar},
 };
 
 #[doc(hidden)]

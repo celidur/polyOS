@@ -3,9 +3,12 @@ use core::arch::naked_asm;
 use crate::{
     constant::{
         KERNEL_DATA_SELECTOR, PIC_MASTER_COMMAND_PORT, PIC_MASTER_DATA_PORT,
-        PIC_MASTER_VECTOR_OFFSET, PIC_SLAVE_COMMAND_PORT, PIC_SLAVE_DATA_PORT,
-        PIC_SLAVE_IRQ_LINE, PIC_SLAVE_IRQ_MASK, PIC_SLAVE_VECTOR_OFFSET,
-    }, kernel_main, memory::init_heap, utils::halt_forever
+        PIC_MASTER_VECTOR_OFFSET, PIC_SLAVE_COMMAND_PORT, PIC_SLAVE_DATA_PORT, PIC_SLAVE_IRQ_LINE,
+        PIC_SLAVE_IRQ_MASK, PIC_SLAVE_VECTOR_OFFSET,
+    },
+    kernel_main,
+    memory::init_heap,
+    utils::halt_forever,
 };
 
 #[unsafe(naked)]

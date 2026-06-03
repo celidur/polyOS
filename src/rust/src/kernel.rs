@@ -7,8 +7,8 @@ use spin::RwLock;
 
 use crate::{
     device::{
-        driver::{probe_stage, DeviceProbeStage},
         disk::DISK_DRIVER,
+        driver::{DeviceProbeStage, probe_stage},
     },
     fs::{DevFsDriver, FatDriver, MemFsDriver, MountOptions, Vfs},
     interrupts,

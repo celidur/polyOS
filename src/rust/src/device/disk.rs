@@ -6,10 +6,10 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 use spin::Mutex;
 
 use super::{
-    block_dev::{register_block_device, BlockDevice, BlockDeviceError},
+    block_dev::{BlockDevice, BlockDeviceError, register_block_device},
     driver::{DeviceDriver, DeviceProbeStage},
-    managed::ManagedDevice,
     io::{inb, inw, outb, outw},
+    managed::ManagedDevice,
 };
 
 pub enum DiskError {
@@ -203,11 +203,7 @@ impl DiskDriver {
 
     pub fn block_device_id(&self) -> Option<usize> {
         let id = self.block_device_id.load(Ordering::Acquire);
-        if id == usize::MAX {
-            None
-        } else {
-            Some(id)
-        }
+        if id == usize::MAX { None } else { Some(id) }
     }
 }
 
@@ -229,12 +225,7 @@ impl BlockDevice for DiskDriver {
             .ok_or(BlockDeviceError::NotFound)?
     }
 
-    fn write_sectors(
-        &self,
-        lba: u64,
-        count: usize,
-        buf: &[u8],
-    ) -> Result<usize, BlockDeviceError> {
+    fn write_sectors(&self, lba: u64, count: usize, buf: &[u8]) -> Result<usize, BlockDeviceError> {
         self.device
             .with_mut(|disk| {
                 disk.write_sectors_internal(lba, count, buf)

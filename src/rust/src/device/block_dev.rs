@@ -16,12 +16,7 @@ pub trait BlockDevice: Send + Sync + Debug {
     ) -> Result<usize, BlockDeviceError>;
 
     /// Write `count` sectors from `buf` into `lba`.
-    fn write_sectors(
-        &self,
-        lba: u64,
-        count: usize,
-        buf: &[u8],
-    ) -> Result<usize, BlockDeviceError>;
+    fn write_sectors(&self, lba: u64, count: usize, buf: &[u8]) -> Result<usize, BlockDeviceError>;
 
     fn sector_size(&self) -> usize {
         512

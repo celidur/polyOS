@@ -57,7 +57,10 @@ fn test_page(runner: &mut Runner) {
     };
 
     runner.check("page allocate", page.len() >= PAGING_PAGE_SIZE);
-    runner.check("page zeroed", page.as_slice()[0..64].iter().all(|&byte| byte == 0));
+    runner.check(
+        "page zeroed",
+        page.as_slice()[0..64].iter().all(|&byte| byte == 0),
+    );
 
     page.as_mut_slice()[7] = 0x5a;
     let Some(copy) = page.copy() else {
@@ -184,7 +187,8 @@ fn test_vfs_memfs(runner: &mut Runner) {
     );
     runner.check(
         "vfs memfs stat",
-        vfs.stat(path).is_ok_and(|metadata| metadata.size >= data.len() as u64),
+        vfs.stat(path)
+            .is_ok_and(|metadata| metadata.size >= data.len() as u64),
     );
     runner.check("vfs memfs remove", vfs.remove(path).is_ok());
 }

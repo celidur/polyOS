@@ -23,15 +23,15 @@ impl FileOps for ConsoleFile {
         read_from(buf, || {
             KEYBOARD_DRIVER
                 .read_byte()
-                .or_else(|| SERIAL_DRIVER.read_byte())
+                .or_else(|| SERIAL_DRIVER.read())
                 .map(normalize_input)
         })
     }
 
     fn write(&mut self, buf: &[u8]) -> Result<usize, FsError> {
+        SERIAL_DRIVER.write(buf);
         for byte in buf.iter().copied() {
             terminal_writechar(byte, 15);
-            SERIAL_DRIVER.write_byte(byte);
         }
 
         Ok(buf.len())
@@ -48,9 +48,9 @@ impl FileOps for ConsoleFile {
                     return Err(FsError::InvalidArgument);
                 }
 
-                let Some((rows, cols)) = SCREEN_DRIVER.with_text(|text| {
-                    text.map(|text| (text.rows() as u16, text.cols() as u16))
-                }) else {
+                let Some((rows, cols)) = SCREEN_DRIVER
+                    .with_text(|text| text.map(|text| (text.rows() as u16, text.cols() as u16)))
+                else {
                     return Err(FsError::Unsupported);
                 };
 
@@ -136,4 +136,8 @@ pub fn open_console() -> FileHandle {
     FileHandle::new(Box::new(ConsoleFile))
 }
 
-crate::register_device_node!(CONSOLE_DEVICE_NODE_REG, ["console", "tty", "tty0"], open_console);
+crate::register_device_node!(
+    CONSOLE_DEVICE_NODE_REG,
+    ["console", "tty", "tty0"],
+    open_console
+);

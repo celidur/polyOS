@@ -6,9 +6,7 @@ use alloc::{
 
 use crate::device::{device_node_names, find_device_node};
 
-use super::vfs::{
-    FileHandle, FileMetadata, FileSystem, FileSystemDriver, FsError, MountOptions,
-};
+use super::vfs::{FileHandle, FileMetadata, FileSystem, FileSystemDriver, FsError, MountOptions};
 
 #[derive(Debug, Default)]
 pub struct DevFsDriver;

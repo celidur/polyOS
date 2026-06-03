@@ -1,6 +1,6 @@
 use crate::{
     constant::{PIT_BASE_FREQUENCY_HZ, TIMER_HZ},
-    device::{io::outb, DeviceDriver, DeviceProbeStage},
+    device::{DeviceDriver, DeviceProbeStage, io::outb},
 };
 
 const PIT_COMMAND_PORT: u16 = 0x43;

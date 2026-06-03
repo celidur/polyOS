@@ -1,14 +1,12 @@
 use alloc::boxed::Box;
 
 use crate::{
-    device::{control::*, DeviceDriver, DeviceProbeStage, ManagedDevice},
+    device::{DeviceDriver, DeviceProbeStage, ManagedDevice, control::*},
     fs::{FileHandle, FileMetadata, FileOps, FsError},
     memory::PageDirectory,
 };
 
-use super::{
-    Color, ColorCode, ScreenChar, ScreenMode, TextMode, TextVga, Vga,
-};
+use super::{Color, ColorCode, ScreenChar, ScreenMode, TextMode, TextVga, Vga};
 
 pub struct ScreenDriver {
     device: ManagedDevice<Vga<'static>>,
@@ -32,7 +30,10 @@ impl ScreenDriver {
         F: FnOnce(Option<&mut TextVga<'_>>) -> R,
     {
         let mut f = Some(f);
-        match self.device.with_mut(|vga| f.take().unwrap()(vga.get_text_vga())) {
+        match self
+            .device
+            .with_mut(|vga| f.take().unwrap()(vga.get_text_vga()))
+        {
             Some(result) => result,
             None => f.take().unwrap()(None),
         }
@@ -43,7 +44,10 @@ impl ScreenDriver {
         F: FnOnce(Option<&mut super::GraphicVga<'_>>) -> R,
     {
         let mut f = Some(f);
-        match self.device.with_mut(|vga| f.take().unwrap()(vga.get_graphic_vga())) {
+        match self
+            .device
+            .with_mut(|vga| f.take().unwrap()(vga.get_graphic_vga()))
+        {
             Some(result) => result,
             None => f.take().unwrap()(None),
         }
@@ -129,9 +133,9 @@ impl FileOps for ScreenFile {
                     return Err(FsError::InvalidArgument);
                 }
 
-                let Some((rows, cols)) = SCREEN_DRIVER.with_text(|text| {
-                    text.map(|text| (text.rows() as u16, text.cols() as u16))
-                }) else {
+                let Some((rows, cols)) = SCREEN_DRIVER
+                    .with_text(|text| text.map(|text| (text.rows() as u16, text.cols() as u16)))
+                else {
                     return Err(FsError::Unsupported);
                 };
 

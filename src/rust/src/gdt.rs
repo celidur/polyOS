@@ -39,17 +39,15 @@ impl Gdt {
         let tss_limit = tss_base + core::mem::size_of::<Tss>() as u32;
 
         let entries = [
-            GdtEntryRaw::encode_from(0x00, 0x00, 0x00, 0x00),             // null segment
+            GdtEntryRaw::encode_from(0x00, 0x00, 0x00, 0x00), // null segment
             GdtEntryRaw::encode_from(0x00, 0xFFFFFFFF, TYPE_KCODE, 0xCF), // kernel code segment
             GdtEntryRaw::encode_from(0x00, 0xFFFFFFFF, TYPE_KDATA, 0xCF), // kernel data segment
             GdtEntryRaw::encode_from(0x00, 0xFFFFFFFF, TYPE_UCODE, 0xCF), // user code segment
             GdtEntryRaw::encode_from(0x00, 0xFFFFFFFF, TYPE_UDATA, 0xCF), // user data segment
-            GdtEntryRaw::encode_from(tss_base, tss_limit, TYPE_TSS, 0x00),            // TSS segment
+            GdtEntryRaw::encode_from(tss_base, tss_limit, TYPE_TSS, 0x00), // TSS segment
         ];
 
-        Self {
-            entries,
-        }
+        Self { entries }
     }
 
     pub fn init_gdt(&self) {

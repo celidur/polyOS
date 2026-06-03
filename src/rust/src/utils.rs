@@ -3,7 +3,7 @@ use core::arch::asm;
 use crate::{
     device::{
         io::{inb, outb, outw},
-        screen::{Bitmap, GraphicMode, ScreenMode, TextMode, SCREEN_DRIVER},
+        screen::{Bitmap, GraphicMode, SCREEN_DRIVER, ScreenMode, TextMode},
     },
     interrupts::disable_interrupts,
 };

@@ -19,9 +19,8 @@ lazy_static! {
         Arc::new(RwLock::new([None; IDT_TOTAL_INTERRUPTS]));
     static ref INT_ERR_CALLBACKS: Arc<RwLock<[Option<InterruptErrorHandler>; IDT_TOTAL_INTERRUPTS]>> =
         Arc::new(RwLock::new([None; IDT_TOTAL_INTERRUPTS]));
-    static ref INT_DEVICE_CALLBACKS: Arc<
-        RwLock<[Option<&'static dyn InterruptDevice>; IDT_TOTAL_INTERRUPTS]>,
-    > = Arc::new(RwLock::new([None; IDT_TOTAL_INTERRUPTS]));
+    static ref INT_DEVICE_CALLBACKS: Arc<RwLock<[Option<&'static dyn InterruptDevice>; IDT_TOTAL_INTERRUPTS]>> =
+        Arc::new(RwLock::new([None; IDT_TOTAL_INTERRUPTS]));
 }
 
 pub trait RegisterInterrupt {

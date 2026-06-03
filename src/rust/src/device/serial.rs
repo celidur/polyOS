@@ -1,7 +1,8 @@
-use alloc::boxed::Box;
-use core::fmt::{self, Write};
+use core::fmt::Write;
 
-use uart_16550::SerialPort;
+use alloc::boxed::Box;
+
+use uart_16550::{ByteReceiveError, Config, Uart16550, backend::PioBackend};
 
 use crate::{
     device::{DeviceDriver, DeviceProbeStage, ManagedDevice},
@@ -9,6 +10,33 @@ use crate::{
 };
 
 const DEFAULT_SERIAL_BASE: u16 = 0x3F8;
+
+pub struct SerialPort {
+    port: Uart16550<PioBackend>,
+}
+
+impl SerialPort {
+    pub unsafe fn new(base: u16) -> Option<Self> {
+        let mut port = unsafe { Uart16550::new_port(base) }.ok()?;
+        port.init(Config::default()).ok()?;
+        Some(Self { port })
+    }
+
+    pub fn send_bytes_exact(&mut self, bytes: &[u8]) {
+        self.port.send_bytes_exact(bytes);
+    }
+
+    pub fn try_receive_byte(&mut self) -> Result<u8, ByteReceiveError> {
+        self.port.try_receive_byte()
+    }
+}
+
+impl Write for SerialPort {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        self.send_bytes_exact(s.as_bytes());
+        Ok(())
+    }
+}
 
 pub struct SerialDriver {
     device: ManagedDevice<SerialPort>,
@@ -21,27 +49,23 @@ impl SerialDriver {
         }
     }
 
-    pub fn write(&self, args: fmt::Arguments) {
+    pub fn write_fmt(&self, args: core::fmt::Arguments) -> core::fmt::Result {
         self.device
-            .with_mut(|serial_port| {
-                serial_port
-                    .write_fmt(args)
-                    .expect("Printing to serial failed");
+            .with_mut(|serial_port: &mut SerialPort| serial_port.write_fmt(args))
+            .expect("serial device not probed")
+    }
+
+    pub fn write(&self, bytes: &[u8]) {
+        self.device
+            .with_mut(|serial_port: &mut SerialPort| {
+                serial_port.send_bytes_exact(bytes);
             })
             .expect("serial device not probed");
     }
 
-    pub fn write_byte(&self, byte: u8) {
+    pub fn read(&self) -> Option<u8> {
         self.device
-            .with_mut(|serial_port| {
-                serial_port.send(byte);
-            })
-            .expect("serial device not probed");
-    }
-
-    pub fn read_byte(&self) -> Option<u8> {
-        self.device
-            .with_mut(|serial_port| serial_port.try_receive().ok())
+            .with_mut(|serial_port: &mut SerialPort| serial_port.try_receive_byte().ok())
             .flatten()
     }
 }
@@ -55,7 +79,7 @@ impl FileOps for SerialFile {
         let mut read = 0;
 
         while read < buf.len() {
-            let Some(byte) = SERIAL_DRIVER.read_byte().map(normalize_input) else {
+            let Some(byte) = SERIAL_DRIVER.read().map(normalize_input) else {
                 break;
             };
 
@@ -71,10 +95,7 @@ impl FileOps for SerialFile {
     }
 
     fn write(&mut self, buf: &[u8]) -> Result<usize, FsError> {
-        for byte in buf.iter().copied() {
-            SERIAL_DRIVER.write_byte(byte);
-        }
-
+        SERIAL_DRIVER.write(buf);
         Ok(buf.len())
     }
 
@@ -103,8 +124,8 @@ impl DeviceDriver for SerialDriver {
     }
 
     fn probe(&self) {
-        let mut serial_port = unsafe { SerialPort::new(DEFAULT_SERIAL_BASE) };
-        serial_port.init();
+        let serial_port =
+            unsafe { SerialPort::new(DEFAULT_SERIAL_BASE).expect("should be valid port") };
 
         SERIAL_DRIVER
             .device

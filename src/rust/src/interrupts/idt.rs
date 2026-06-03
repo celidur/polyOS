@@ -3,7 +3,7 @@ use paste::paste;
 use seq_macro::seq;
 
 use crate::{
-    constant::{irq_to_vector, KERNEL_CODE_SELECTOR},
+    constant::{KERNEL_CODE_SELECTOR, irq_to_vector},
     interrupts::{
         callback::{
             idt_clock, idt_general_protection_fault, idt_handle_exception,
