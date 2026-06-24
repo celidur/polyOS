@@ -8,8 +8,8 @@ use crate::{
     kernel::KERNEL,
     schedule::{
         process::{
-            ACCESS_READ, ACCESS_WRITE, DirectoryHandle, FD_CLOEXEC, O_NONBLOCK, Process,
-            ProcessDescriptor,
+            ACCESS_EXECUTE, ACCESS_READ, ACCESS_WRITE, DirectoryHandle, FD_CLOEXEC, O_NONBLOCK,
+            Process, ProcessDescriptor,
         },
         task::{Task, TaskId, WaitReason, task_next},
     },
@@ -617,10 +617,11 @@ pub fn syscall_chdir(_frame: &InterruptFrame) -> u32 {
     }
 
     match KERNEL.vfs.read().stat(path.as_str()) {
-        Ok(metadata) if metadata.is_dir => {
+        Ok(metadata) if metadata.is_dir && process.has_permission(&metadata, ACCESS_EXECUTE) => {
             process.set_cwd(path);
             0
         }
+        Ok(metadata) if metadata.is_dir => abi::errno(abi::EACCES),
         Ok(_) => abi::errno(abi::ENOTDIR),
         Err(error) => fs_errno(error),
     }
@@ -721,8 +722,10 @@ pub fn syscall_getdents(_frame: &InterruptFrame) -> u32 {
         return abi::errno(abi::EFAULT);
     }
 
-    let Some(ProcessDescriptor::Directory(directory)) = process.get_fd(fd) else {
-        return abi::errno(abi::ENOTDIR);
+    let directory = match process.get_fd(fd) {
+        Some(ProcessDescriptor::Directory(directory)) => directory,
+        Some(_) => return abi::errno(abi::ENOTDIR),
+        None => return abi::errno(abi::EBADF),
     };
 
     let mut directory = directory.lock();
@@ -763,6 +766,16 @@ fn insert_directory_fd(process: &Process, path: &str, flags: u32) -> Option<u32>
     let metadata = vfs.stat(path).ok()?;
     if !metadata.is_dir {
         return None;
+    }
+
+    match flags & O_ACCMODE {
+        0 => {}
+        1 | 2 => return Some(abi::errno(abi::EISDIR)),
+        _ => return Some(abi::errno(abi::EINVAL)),
+    }
+
+    if flags & O_TRUNC != 0 {
+        return Some(abi::errno(abi::EISDIR));
     }
 
     if !process.has_permission(&metadata, ACCESS_READ) {

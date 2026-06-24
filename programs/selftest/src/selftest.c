@@ -242,6 +242,8 @@ static int test_unix_errno_dup_and_cwd(void)
         }
         expect("getdents", bytes > 0 && found, bytes);
         close(dirfd);
+        errno = 0;
+        expect("getdents bad fd", getdents(dirfd, entries, sizeof(entries)) == -1 && errno == EBADF, errno);
     }
 
     DIR *dir = opendir(".");
@@ -306,6 +308,17 @@ static int test_unix_errno_dup_and_cwd(void)
     expect("chown kept uid", stat("/tmp/selftest-mode.txt", &stat_buf) == 0 && stat_buf.uid == 123 && stat_buf.gid == 789, stat_buf.gid);
     errno = 0;
     expect("chmod missing errno", chmod("/tmp/missing-mode-file", 0600) == -1 && errno == ENOENT, errno);
+    errno = 0;
+    expect("open directory write denied", open("/tmp", O_WRONLY, 0) == -1 && errno == EISDIR, errno);
+    rmdir("/tmp/selftest-search-dir");
+    expect("mkdir search dir", mkdir("/tmp/selftest-search-dir", 0700) == 0, -1);
+    expect("chmod search dir none", chmod("/tmp/selftest-search-dir", 0000) == 0, -1);
+    errno = 0;
+    expect("chdir search denied", chdir("/tmp/selftest-search-dir") == -1 && errno == EACCES, errno);
+    expect("chmod search dir exec", chmod("/tmp/selftest-search-dir", 0700) == 0, -1);
+    expect("chdir search allowed", chdir("/tmp/selftest-search-dir") == 0, -1);
+    expect("chdir search root", chdir("/") == 0, -1);
+    expect("rmdir search dir", rmdir("/tmp/selftest-search-dir") == 0, -1);
     const char noexec_path[] = "/tmp/selftest-noexec.elf";
     unlink(noexec_path);
     fd = open(noexec_path, O_CREAT | O_RDWR | O_TRUNC, 0644);
