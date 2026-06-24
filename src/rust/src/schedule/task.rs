@@ -18,6 +18,8 @@ pub type TaskId = usize;
 pub enum WaitReason {
     Io,
     Process(usize),
+    PipeRead(usize),
+    PipeWrite(usize),
     Semaphore(usize),
 }
 

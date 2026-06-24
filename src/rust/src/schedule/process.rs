@@ -33,6 +33,9 @@ pub const SIGCONT: u32 = 18;
 pub const SIGSTOP: u32 = 19;
 pub const SIGNAL_FRAME_MAGIC: u32 = 0x5349_4731;
 pub const FD_CLOEXEC: u32 = 1;
+pub const ACCESS_EXECUTE: u16 = 0o1;
+pub const ACCESS_WRITE: u16 = 0o2;
+pub const ACCESS_READ: u16 = 0o4;
 const O_ACCMODE: u32 = 0x3;
 pub const O_APPEND: u32 = 0x400;
 pub const O_NONBLOCK: u32 = 0x800;
@@ -128,7 +131,20 @@ impl ProcessDescriptor {
         match self {
             Self::File(file) => file.lock().ops.read(buf),
             Self::Directory(_) => Err(FsError::IsADirectory),
-            Self::Pipe { pipe, end } => pipe.lock().read(*end, buf).map_err(pipe_error),
+            Self::Pipe { pipe, end } => {
+                let (result, waiters) = {
+                    let mut pipe = pipe.lock();
+                    let result = pipe.read(*end, buf);
+                    let waiters = if matches!(result, Ok(read) if read > 0) {
+                        pipe.take_write_waiters()
+                    } else {
+                        Vec::new()
+                    };
+                    (result, waiters)
+                };
+                wake_tasks(waiters);
+                result.map_err(pipe_error)
+            }
             Self::Socket(_) => Err(FsError::Unsupported),
         }
     }
@@ -137,7 +153,20 @@ impl ProcessDescriptor {
         match self {
             Self::File(file) => file.lock().ops.write(buf),
             Self::Directory(_) => Err(FsError::IsADirectory),
-            Self::Pipe { pipe, end } => pipe.lock().write(*end, buf).map_err(pipe_error),
+            Self::Pipe { pipe, end } => {
+                let (result, waiters) = {
+                    let mut pipe = pipe.lock();
+                    let result = pipe.write(*end, buf);
+                    let waiters = if matches!(result, Ok(written) if written > 0) {
+                        pipe.take_read_waiters()
+                    } else {
+                        Vec::new()
+                    };
+                    (result, waiters)
+                };
+                wake_tasks(waiters);
+                result.map_err(pipe_error)
+            }
             Self::Socket(_) => Err(FsError::Unsupported),
         }
     }
@@ -197,9 +226,24 @@ impl ProcessDescriptor {
                     let _ = crate::net::socket_close(socket_id);
                 }
             }
-            Self::Pipe { pipe, end } => pipe.lock().close_end(end),
+            Self::Pipe { pipe, end } => {
+                let waiters = pipe.lock().close_end(end);
+                wake_tasks(waiters);
+            }
         }
     }
+}
+
+fn wake_tasks(waiters: Vec<TaskId>) {
+    if waiters.is_empty() {
+        return;
+    }
+
+    KERNEL.with_task_manager(|tm| {
+        for task_id in waiters {
+            let _ = tm.wake_task(task_id);
+        }
+    });
 }
 
 #[derive(Clone)]
@@ -237,6 +281,10 @@ pub struct SignalFrame {
 
 pub struct Process {
     pub pid: ProcessId,
+    pub uid: u32,
+    pub gid: u32,
+    pub euid: u32,
+    pub egid: u32,
     pub fd_table: Mutex<Vec<Option<ProcessFd>>>,
     pub children: Mutex<Vec<ProcessId>>,
     parent: Mutex<Option<ProcessId>>,
@@ -244,6 +292,7 @@ pub struct Process {
     pub entrypoint: u32,
     pub tasks: RwLock<Option<TaskId>>,
     pub cwd: Mutex<String>,
+    pub umask: Mutex<u16>,
     pub env: Mutex<Vec<String>>,
     pub filetype: ProcessFileType,
     pub page_directory: PageDirectory,
@@ -310,6 +359,10 @@ impl Process {
         let page_directory = PageDirectory::new_4gb(memory::PRESENT)?;
         Some(Self {
             pid: 0,
+            uid: 0,
+            gid: 0,
+            euid: 0,
+            egid: 0,
             fd_table: Mutex::new(Self::default_fd_table()),
             children: Mutex::new(vec![]),
             parent: Mutex::new(None),
@@ -325,6 +378,7 @@ impl Process {
             brk_pages: Mutex::new(BTreeMap::new()),
             cow_pages: Mutex::new(BTreeMap::new()),
             cwd: Mutex::new("/".to_string()),
+            umask: Mutex::new(0o022),
             env: Mutex::new(default_environment()),
         })
     }
@@ -346,6 +400,10 @@ impl Process {
             PageDirectory::new_4gb(memory::PRESENT).ok_or(KernelError::Allocation)?;
         Ok(Self {
             pid: 0,
+            uid: 0,
+            gid: 0,
+            euid: 0,
+            egid: 0,
             fd_table: Mutex::new(Self::default_fd_table()),
             children: Mutex::new(vec![]),
             parent: Mutex::new(None),
@@ -361,6 +419,7 @@ impl Process {
             brk_pages: Mutex::new(BTreeMap::new()),
             cow_pages: Mutex::new(BTreeMap::new()),
             cwd: Mutex::new("/".to_string()),
+            umask: Mutex::new(0o022),
             env: Mutex::new(default_environment()),
         })
     }
@@ -407,6 +466,10 @@ impl Process {
 
         Ok(Self {
             pid,
+            uid: parent.uid,
+            gid: parent.gid,
+            euid: parent.euid,
+            egid: parent.egid,
             fd_table: Mutex::new(fd_table),
             children: Mutex::new(vec![]),
             parent: Mutex::new(Some(parent.pid)),
@@ -422,6 +485,7 @@ impl Process {
             brk_pages: Mutex::new(brk_pages),
             cow_pages: Mutex::new(cow_pages),
             cwd: Mutex::new(parent.cwd.lock().clone()),
+            umask: Mutex::new(*parent.umask.lock()),
             env: Mutex::new(parent.env.lock().clone()),
         })
     }
@@ -758,6 +822,29 @@ impl Process {
 
     pub fn set_cwd(&self, path: String) {
         *self.cwd.lock() = path;
+    }
+
+    pub fn apply_umask(&self, mode: u16) -> u16 {
+        mode & !(*self.umask.lock()) & 0o777
+    }
+
+    pub fn set_umask(&self, mask: u16) -> u16 {
+        let mut current = self.umask.lock();
+        let old = *current;
+        *current = mask & 0o777;
+        old
+    }
+
+    pub fn has_permission(&self, metadata: &FileMetadata, permission: u16) -> bool {
+        let shift = if self.euid == metadata.uid {
+            6
+        } else if self.egid == metadata.gid {
+            3
+        } else {
+            0
+        };
+
+        ((metadata.mode >> shift) & permission) == permission
     }
 
     pub fn parent_pid(&self) -> Option<ProcessId> {

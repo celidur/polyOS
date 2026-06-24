@@ -1,4 +1,6 @@
-use alloc::collections::VecDeque;
+use alloc::{collections::VecDeque, vec::Vec};
+
+use crate::schedule::task::TaskId;
 
 pub const PIPE_CAPACITY: usize = 4096;
 
@@ -19,6 +21,8 @@ pub struct Pipe {
     buffer: VecDeque<u8>,
     readers: usize,
     writers: usize,
+    read_waiters: VecDeque<TaskId>,
+    write_waiters: VecDeque<TaskId>,
 }
 
 impl Pipe {
@@ -27,7 +31,13 @@ impl Pipe {
             buffer: VecDeque::new(),
             readers: 1,
             writers: 1,
+            read_waiters: VecDeque::new(),
+            write_waiters: VecDeque::new(),
         }
+    }
+
+    pub fn id(&self) -> usize {
+        self as *const Self as usize
     }
 
     pub fn clone_end(&mut self, end: PipeEnd) {
@@ -37,10 +47,16 @@ impl Pipe {
         }
     }
 
-    pub fn close_end(&mut self, end: PipeEnd) {
+    pub fn close_end(&mut self, end: PipeEnd) -> Vec<TaskId> {
         match end {
-            PipeEnd::Read => self.readers = self.readers.saturating_sub(1),
-            PipeEnd::Write => self.writers = self.writers.saturating_sub(1),
+            PipeEnd::Read => {
+                self.readers = self.readers.saturating_sub(1);
+                self.take_write_waiters()
+            }
+            PipeEnd::Write => {
+                self.writers = self.writers.saturating_sub(1);
+                self.take_read_waiters()
+            }
         }
     }
 
@@ -95,5 +111,25 @@ impl Pipe {
         let to_write = available.min(input.len());
         self.buffer.extend(input[..to_write].iter().copied());
         Ok(to_write)
+    }
+
+    pub fn add_read_waiter(&mut self, task_id: TaskId) {
+        if !self.read_waiters.contains(&task_id) {
+            self.read_waiters.push_back(task_id);
+        }
+    }
+
+    pub fn add_write_waiter(&mut self, task_id: TaskId) {
+        if !self.write_waiters.contains(&task_id) {
+            self.write_waiters.push_back(task_id);
+        }
+    }
+
+    pub fn take_read_waiters(&mut self) -> Vec<TaskId> {
+        self.read_waiters.drain(..).collect()
+    }
+
+    pub fn take_write_waiters(&mut self) -> Vec<TaskId> {
+        self.write_waiters.drain(..).collect()
     }
 }

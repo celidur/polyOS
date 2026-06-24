@@ -79,6 +79,22 @@ pub fn getppid() -> i32 {
     unsafe { crate::bindings::getppid() }
 }
 
+pub fn getuid() -> u32 {
+    unsafe { crate::bindings::getuid() }
+}
+
+pub fn getgid() -> u32 {
+    unsafe { crate::bindings::getgid() }
+}
+
+pub fn geteuid() -> u32 {
+    unsafe { crate::bindings::geteuid() }
+}
+
+pub fn getegid() -> u32 {
+    unsafe { crate::bindings::getegid() }
+}
+
 pub fn initialize(argc: i32, argv: *const *const u8, envp: *const *const u8) {
     unsafe {
         ARGC = argc.max(0) as usize;

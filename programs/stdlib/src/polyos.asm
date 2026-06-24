@@ -10,16 +10,22 @@
 %define SYS_UNLINK 10
 %define SYS_EXECVE 11
 %define SYS_CHDIR 12
+%define SYS_CHMOD 15
 %define SYS_LSEEK 19
 %define SYS_GETPID 20
+%define SYS_GETUID 24
 %define SYS_KILL 37
 %define SYS_MKDIR 39
 %define SYS_RMDIR 40
 %define SYS_DUP 41
 %define SYS_PIPE 42
 %define SYS_BRK 45
+%define SYS_GETGID 47
+%define SYS_GETEUID 49
+%define SYS_GETEGID 50
 %define SYS_IOCTL 54
 %define SYS_FCNTL 55
+%define SYS_UMASK 60
 %define SYS_DUP2 63
 %define SYS_GETPPID 64
 %define SYS_SIGACTION 67
@@ -32,6 +38,7 @@
 %define SYS_SIGRETURN 119
 %define SYS_GETDENTS 141
 %define SYS_NANOSLEEP 162
+%define SYS_CHOWN 182
 %define SYS_GETCWD 183
 %define SYS_CLOCK_GETTIME 265
 
@@ -62,7 +69,11 @@ global __sys_kill:function
 global __sys_sigaction:function
 global __polyos_signal_trampoline:function
 global getpid:function
+global getuid:function
 global getppid:function
+global getgid:function
+global geteuid:function
+global getegid:function
 global _exit:function
 global exit:function
 global print_memory:function
@@ -91,9 +102,12 @@ global __sys_dup:function
 global __sys_dup2:function
 global __sys_brk:function
 global __sys_unlink:function
+global __sys_chmod:function
 global __sys_mkdir:function
 global __sys_rmdir:function
+global __sys_umask:function
 global __sys_chdir:function
+global __sys_chown:function
 global __sys_getcwd:function
 global __sys_getdents:function
 global __sys_sem_create:function
@@ -458,9 +472,33 @@ getpid:
     int 0x80
     ret
 
+; int getuid()
+getuid:
+    mov eax, SYS_GETUID
+    int 0x80
+    ret
+
 ; int getppid()
 getppid:
     mov eax, SYS_GETPPID
+    int 0x80
+    ret
+
+; int getgid()
+getgid:
+    mov eax, SYS_GETGID
+    int 0x80
+    ret
+
+; int geteuid()
+geteuid:
+    mov eax, SYS_GETEUID
+    int 0x80
+    ret
+
+; int getegid()
+getegid:
+    mov eax, SYS_GETEGID
     int 0x80
     ret
 
@@ -520,6 +558,18 @@ __sys_unlink:
     pop ebp
     ret
 
+; int __sys_chmod(const char *pathname, int mode)
+__sys_chmod:
+    push ebp
+    mov ebp, esp
+    mov eax, SYS_CHMOD
+    push dword [ebp+12] ; mode
+    push dword [ebp+8] ; pathname
+    int 0x80
+    add esp, 8
+    pop ebp
+    ret
+
 ; int __sys_mkdir(const char *pathname, int mode)
 __sys_mkdir:
     push ebp
@@ -543,6 +593,17 @@ __sys_rmdir:
     pop ebp
     ret
 
+; int __sys_umask(int mask)
+__sys_umask:
+    push ebp
+    mov ebp, esp
+    mov eax, SYS_UMASK
+    push dword [ebp+8] ; mask
+    int 0x80
+    add esp, 4
+    pop ebp
+    ret
+
 ; int __sys_chdir(const char *pathname)
 __sys_chdir:
     push ebp
@@ -551,6 +612,19 @@ __sys_chdir:
     push dword [ebp+8] ; pathname
     int 0x80
     add esp, 4
+    pop ebp
+    ret
+
+; int __sys_chown(const char *pathname, unsigned int uid, unsigned int gid)
+__sys_chown:
+    push ebp
+    mov ebp, esp
+    mov eax, SYS_CHOWN
+    push dword [ebp+16] ; gid
+    push dword [ebp+12] ; uid
+    push dword [ebp+8] ; pathname
+    int 0x80
+    add esp, 12
     pop ebp
     ret
 

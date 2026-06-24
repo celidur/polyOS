@@ -1,14 +1,17 @@
-use alloc::{string::String, sync::Arc};
+use alloc::{string::String, sync::Arc, vec::Vec};
 use spin::Mutex;
 
 use crate::{
     constant::MAX_PATH,
-    fs::{FileHandle, FsError, Pipe, PipeEnd, file::FileStat},
+    fs::{FileHandle, FsError, Pipe, PipeEnd, PipeError, file::FileStat},
     interrupts::InterruptFrame,
     kernel::KERNEL,
     schedule::{
-        process::{DirectoryHandle, FD_CLOEXEC, Process, ProcessDescriptor},
-        task::Task,
+        process::{
+            ACCESS_READ, ACCESS_WRITE, DirectoryHandle, FD_CLOEXEC, O_NONBLOCK, Process,
+            ProcessDescriptor,
+        },
+        task::{Task, TaskId, WaitReason, task_next},
     },
 };
 
@@ -40,8 +43,13 @@ struct Dirent {
     d_name: [u8; 256],
 }
 
+enum PipeSyscallResult {
+    Completed(u32),
+    Block(WaitReason),
+}
+
 pub fn syscall_open(_frame: &InterruptFrame) -> u32 {
-    let Some((process, path, flags)) = with_current_task(|task| {
+    let Some((process, path, flags, mode)) = with_current_task(|task| {
         let path_ptr = task.get_stack_item(0);
         if path_ptr == 0 {
             return None;
@@ -49,7 +57,12 @@ pub fn syscall_open(_frame: &InterruptFrame) -> u32 {
 
         let path = user::read_c_string(task, path_ptr, MAX_PATH)?;
         let path = task.process.resolve_path(path.as_str())?;
-        Some((task.process.clone(), path, task.get_stack_item(1)))
+        Some((
+            task.process.clone(),
+            path,
+            task.get_stack_item(1),
+            task.get_stack_item(2) as u16,
+        ))
     }) else {
         return abi::errno(abi::EFAULT);
     };
@@ -62,6 +75,7 @@ pub fn syscall_open(_frame: &InterruptFrame) -> u32 {
                 if let Err(error) = vfs.create(path.as_str(), false) {
                     return fs_errno(error);
                 }
+                apply_created_mode(&process, path.as_str(), mode, false);
 
                 match vfs.open(path.as_str()) {
                     Ok(handle) => handle,
@@ -77,6 +91,21 @@ pub fn syscall_open(_frame: &InterruptFrame) -> u32 {
             }
         }
     };
+
+    let required_permissions = match open_required_permissions(flags) {
+        Ok(permissions) => permissions,
+        Err(error) => return fs_errno(error),
+    };
+
+    if required_permissions != 0 {
+        match handle.ops.stat() {
+            Ok(metadata) if !process.has_permission(&metadata, required_permissions) => {
+                return abi::errno(abi::EACCES);
+            }
+            Ok(_) => {}
+            Err(error) => return fs_errno(error),
+        }
+    }
 
     if flags & O_TRUNC != 0 && flags & O_ACCMODE != 0 {
         if let Err(error) = handle.ops.truncate(0) {
@@ -111,6 +140,18 @@ pub fn syscall_read(_frame: &InterruptFrame) -> u32 {
         Some(descriptor) => descriptor,
         None => return abi::errno(abi::EBADF),
     };
+
+    if let ProcessDescriptor::Pipe { pipe, end } = &descriptor {
+        let result = syscall_pipe_read(&process, fd, pipe.clone(), *end, buf_ptr, len);
+        return match result {
+            PipeSyscallResult::Completed(value) => value,
+            PipeSyscallResult::Block(reason) => {
+                drop(descriptor);
+                drop(process);
+                block_current_and_restart(reason)
+            }
+        };
+    }
 
     let mut data = vec![0; len];
     let read = match descriptor.read(data.as_mut_slice()) {
@@ -155,6 +196,19 @@ pub fn syscall_write(_frame: &InterruptFrame) -> u32 {
         return abi::errno(abi::EBADF);
     };
 
+    if let ProcessDescriptor::Pipe { pipe, end } = &descriptor {
+        let result = syscall_pipe_write(&process, fd, pipe.clone(), *end, data.as_slice());
+        return match result {
+            PipeSyscallResult::Completed(value) => value,
+            PipeSyscallResult::Block(reason) => {
+                drop(descriptor);
+                drop(data);
+                drop(process);
+                block_current_and_restart(reason)
+            }
+        };
+    }
+
     if process.get_status_flags(fd).unwrap_or(0) & O_APPEND != 0 {
         if let Err(error) = seek_for_append(&descriptor) {
             return fs_errno(error);
@@ -164,6 +218,109 @@ pub fn syscall_write(_frame: &InterruptFrame) -> u32 {
     match descriptor.write(data.as_slice()) {
         Ok(written) => written as u32,
         Err(error) => fs_errno(error),
+    }
+}
+
+fn syscall_pipe_read(
+    process: &Process,
+    fd: i32,
+    pipe: Arc<Mutex<Pipe>>,
+    end: PipeEnd,
+    buf_ptr: u32,
+    len: usize,
+) -> PipeSyscallResult {
+    let task_id = current_task_id();
+    let mut data = vec![0; len];
+
+    let (result, waiters, pipe_id, should_block) = {
+        let mut pipe = pipe.lock();
+        let pipe_id = pipe.id();
+        match pipe.read(end, data.as_mut_slice()) {
+            Ok(read) => {
+                let waiters = if read > 0 {
+                    pipe.take_write_waiters()
+                } else {
+                    Vec::new()
+                };
+                (Ok(read), waiters, pipe_id, false)
+            }
+            Err(PipeError::WouldBlock)
+                if process.get_status_flags(fd).unwrap_or(0) & O_NONBLOCK == 0 =>
+            {
+                if let Some(task_id) = task_id {
+                    pipe.add_read_waiter(task_id);
+                    (Err(PipeError::WouldBlock), Vec::new(), pipe_id, true)
+                } else {
+                    (Err(PipeError::WouldBlock), Vec::new(), pipe_id, false)
+                }
+            }
+            Err(error) => (Err(error), Vec::new(), pipe_id, false),
+        }
+    };
+
+    wake_pipe_waiters(waiters);
+
+    match result {
+        Ok(read) => {
+            if read != 0
+                && user::copy_to_user(&process.page_directory, buf_ptr, data.as_ptr(), read as u32)
+                    .is_err()
+            {
+                return PipeSyscallResult::Completed(abi::errno(abi::EFAULT));
+            }
+
+            PipeSyscallResult::Completed(read as u32)
+        }
+        Err(PipeError::WouldBlock) if should_block => {
+            PipeSyscallResult::Block(WaitReason::PipeRead(pipe_id))
+        }
+        Err(error) => PipeSyscallResult::Completed(fs_errno(pipe_fs_error(error))),
+    }
+}
+
+fn syscall_pipe_write(
+    process: &Process,
+    fd: i32,
+    pipe: Arc<Mutex<Pipe>>,
+    end: PipeEnd,
+    data: &[u8],
+) -> PipeSyscallResult {
+    let task_id = current_task_id();
+
+    let (result, waiters, pipe_id, should_block) = {
+        let mut pipe = pipe.lock();
+        let pipe_id = pipe.id();
+        match pipe.write(end, data) {
+            Ok(written) => {
+                let waiters = if written > 0 {
+                    pipe.take_read_waiters()
+                } else {
+                    Vec::new()
+                };
+                (Ok(written), waiters, pipe_id, false)
+            }
+            Err(PipeError::WouldBlock)
+                if process.get_status_flags(fd).unwrap_or(0) & O_NONBLOCK == 0 =>
+            {
+                if let Some(task_id) = task_id {
+                    pipe.add_write_waiter(task_id);
+                    (Err(PipeError::WouldBlock), Vec::new(), pipe_id, true)
+                } else {
+                    (Err(PipeError::WouldBlock), Vec::new(), pipe_id, false)
+                }
+            }
+            Err(error) => (Err(error), Vec::new(), pipe_id, false),
+        }
+    };
+
+    wake_pipe_waiters(waiters);
+
+    match result {
+        Ok(written) => PipeSyscallResult::Completed(written as u32),
+        Err(PipeError::WouldBlock) if should_block => {
+            PipeSyscallResult::Block(WaitReason::PipeWrite(pipe_id))
+        }
+        Err(error) => PipeSyscallResult::Completed(fs_errno(pipe_fs_error(error))),
     }
 }
 
@@ -373,14 +530,75 @@ pub fn syscall_rmdir(_frame: &InterruptFrame) -> u32 {
 }
 
 pub fn syscall_mkdir(_frame: &InterruptFrame) -> u32 {
-    let Some(path) = current_resolved_path(0) else {
+    let Some((process, path, mode)) = with_current_task(|task| {
+        Some((
+            task.process.clone(),
+            current_resolved_path_for_task(task, 0)?,
+            task.get_stack_item(1) as u16,
+        ))
+    }) else {
         return abi::errno(abi::EFAULT);
     };
 
     match KERNEL.vfs.read().create(path.as_str(), true) {
+        Ok(()) => {
+            apply_created_mode(&process, path.as_str(), mode, true);
+            0
+        }
+        Err(error) => fs_errno(error),
+    }
+}
+
+pub fn syscall_chmod(_frame: &InterruptFrame) -> u32 {
+    let Some((path, mode)) = with_current_task(|task| {
+        Some((
+            current_resolved_path_for_task(task, 0)?,
+            task.get_stack_item(1) as u16,
+        ))
+    }) else {
+        return abi::errno(abi::EFAULT);
+    };
+
+    match KERNEL.vfs.read().chmod(path.as_str(), mode & 0o777) {
         Ok(()) => 0,
         Err(error) => fs_errno(error),
     }
+}
+
+pub fn syscall_chown(_frame: &InterruptFrame) -> u32 {
+    let Some((path, mut uid, mut gid)) = with_current_task(|task| {
+        Some((
+            current_resolved_path_for_task(task, 0)?,
+            task.get_stack_item(1),
+            task.get_stack_item(2),
+        ))
+    }) else {
+        return abi::errno(abi::EFAULT);
+    };
+
+    let vfs = KERNEL.vfs.read();
+    if uid == u32::MAX || gid == u32::MAX {
+        let metadata = match vfs.stat(path.as_str()) {
+            Ok(metadata) => metadata,
+            Err(error) => return fs_errno(error),
+        };
+        if uid == u32::MAX {
+            uid = metadata.uid;
+        }
+        if gid == u32::MAX {
+            gid = metadata.gid;
+        }
+    }
+
+    match vfs.chown(path.as_str(), uid, gid) {
+        Ok(()) => 0,
+        Err(error) => fs_errno(error),
+    }
+}
+
+pub fn syscall_umask(_frame: &InterruptFrame) -> u32 {
+    with_current_task(|task| Some(task.process.set_umask(task.get_stack_item(0) as u16) as u32))
+        .unwrap_or_else(|| abi::errno(abi::EFAULT))
 }
 
 pub fn syscall_chdir(_frame: &InterruptFrame) -> u32 {
@@ -547,6 +765,10 @@ fn insert_directory_fd(process: &Process, path: &str, flags: u32) -> Option<u32>
         return None;
     }
 
+    if !process.has_permission(&metadata, ACCESS_READ) {
+        return Some(abi::errno(abi::EACCES));
+    }
+
     let entries = vfs.read_dir(path).ok()?;
     let directory = DirectoryHandle {
         path: path.into(),
@@ -583,6 +805,31 @@ fn remove_path(directory: bool) -> u32 {
     }
 }
 
+fn open_required_permissions(flags: u32) -> Result<u16, FsError> {
+    let mut permissions = match flags & O_ACCMODE {
+        0 => ACCESS_READ,
+        1 => ACCESS_WRITE,
+        2 => ACCESS_READ | ACCESS_WRITE,
+        _ => return Err(FsError::InvalidArgument),
+    };
+
+    if flags & O_TRUNC != 0 {
+        permissions |= ACCESS_WRITE;
+    }
+
+    Ok(permissions)
+}
+
+fn apply_created_mode(process: &Process, path: &str, mode: u16, directory: bool) {
+    let default_mode = if directory { 0o777 } else { 0o666 };
+    let mode = process.apply_umask(if mode == 0 {
+        default_mode
+    } else {
+        mode & 0o777
+    });
+    let _ = KERNEL.vfs.read().chmod(path, mode);
+}
+
 fn current_resolved_path(stack_index: u32) -> Option<String> {
     with_current_task(|task| current_resolved_path_for_task(task, stack_index))
 }
@@ -603,6 +850,32 @@ fn with_current_task<T>(f: impl FnOnce(&Task) -> Option<T>) -> Option<T> {
         let task = current_task.read();
         f(&task)
     })
+}
+
+fn current_task_id() -> Option<TaskId> {
+    KERNEL.with_task_manager(|tm| tm.get_current().map(|task| task.read().id))
+}
+
+fn wake_pipe_waiters(waiters: Vec<TaskId>) {
+    if waiters.is_empty() {
+        return;
+    }
+
+    KERNEL.with_task_manager(|tm| {
+        for task_id in waiters {
+            let _ = tm.wake_task(task_id);
+        }
+    });
+}
+
+fn block_current_and_restart(reason: WaitReason) -> u32 {
+    let blocked =
+        KERNEL.with_task_manager(|tm| tm.block_current_and_restart_syscall(reason).is_ok());
+    if !blocked {
+        return abi::errno(abi::EAGAIN);
+    }
+
+    task_next();
 }
 
 fn seek_for_append(descriptor: &ProcessDescriptor) -> Result<(), FsError> {
@@ -634,6 +907,14 @@ fn fs_errno(error: FsError) -> u32 {
         FsError::BrokenPipe => abi::EPIPE,
     };
     abi::errno(code)
+}
+
+fn pipe_fs_error(error: PipeError) -> FsError {
+    match error {
+        PipeError::WouldBlock => FsError::WouldBlock,
+        PipeError::BrokenPipe => FsError::BrokenPipe,
+        PipeError::WrongEnd => FsError::InvalidArgument,
+    }
 }
 
 fn metadata_to_stat(meta: &crate::fs::FileMetadata) -> FileStat {

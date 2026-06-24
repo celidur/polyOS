@@ -1,7 +1,4 @@
-use alloc::{
-    string::{String, ToString},
-    sync::Arc,
-};
+use alloc::sync::Arc;
 use spin::Mutex;
 
 use crate::{
@@ -13,6 +10,8 @@ use crate::{
 };
 
 use fatfs::{Read, Seek, SeekFrom, Write};
+
+use super::filesystem::{fat_entry_mode, fat_entry_name, fat_error, fat_parent_and_name};
 
 pub struct FatFile {
     file:
@@ -27,9 +26,7 @@ impl FatFile {
             let fs = fs.lock();
             let root_dir = fs.root_dir();
             // SAFETY HACK: Extend lifetime
-            unsafe {
-                core::mem::transmute(root_dir.open_file(path).map_err(|_| FsError::NotFound)?)
-            }
+            unsafe { core::mem::transmute(root_dir.open_file(path).map_err(fat_error)?) }
         };
 
         Ok(FatFile {
@@ -51,57 +48,47 @@ unsafe impl Sync for FatFile {}
 
 impl FileOps for FatFile {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, FsError> {
-        self.file.lock().read(buf).map_err(|_| FsError::IoError)
+        self.file.lock().read(buf).map_err(fat_error)
     }
 
     fn write(&mut self, buf: &[u8]) -> Result<usize, FsError> {
-        self.file.lock().write(buf).map_err(|_| FsError::IoError)
+        self.file.lock().write(buf).map_err(fat_error)
     }
 
     fn seek(&mut self, pos: usize) -> Result<usize, FsError> {
         self.file
             .lock()
             .seek(SeekFrom::Start(pos as u64))
-            .map_err(|_| FsError::IoError)
+            .map_err(fat_error)
             .map(|d| d as usize)
     }
 
     fn truncate(&mut self, size: usize) -> Result<(), FsError> {
         let mut file = self.file.lock();
         file.seek(SeekFrom::Start(size as u64))
-            .map_err(|_| FsError::IoError)?;
-        file.truncate().map_err(|_| FsError::IoError)?;
-        file.flush().map_err(|_| FsError::IoError)
+            .map_err(fat_error)?;
+        file.truncate().map_err(fat_error)?;
+        file.flush().map_err(fat_error)
     }
 
     fn stat(&self) -> Result<FileMetadata, FsError> {
         let fs = self.fs.lock();
         let root_dir = fs.root_dir();
-        let parent_dir = self.path.rsplit('/').nth(1).unwrap_or("");
-        let parent_dir = if parent_dir.is_empty() {
+        let (parent_path, entry_name) = fat_parent_and_name(self.path.as_ref());
+        let parent_dir = if parent_path.is_empty() {
             Ok(root_dir)
         } else {
-            root_dir.open_dir(parent_dir)
+            root_dir.open_dir(parent_path)
         };
-        if parent_dir.is_err() {
-            return Err(FsError::NotFound);
-        }
-        let n = self.path.rsplit('/').next().unwrap_or("");
-        let parent_dir = parent_dir.unwrap();
+        let parent_dir = parent_dir.map_err(fat_error)?;
+        let entry_name = entry_name.to_lowercase();
         for r in parent_dir.iter() {
-            let e = r.map_err(|_| FsError::NotFound)?;
-            let short = e.short_file_name_as_bytes();
-            let name = if let Some(name) = e.long_file_name_as_ucs2_units() {
-                String::from_utf16_lossy(name)
-            } else {
-                String::from_utf8_lossy(short).to_string()
-            };
-            let name = name.to_lowercase();
-            let n = n.to_lowercase();
+            let e = r.map_err(fat_error)?;
+            let name = fat_entry_name(&e).to_lowercase();
 
-            if name == n {
+            if name == entry_name {
                 let size = e.len();
-                let mode = if e.is_dir() { 0o755 } else { 0o644 };
+                let mode = fat_entry_mode(self.path.as_ref(), &e);
                 return Ok(FileMetadata {
                     uid: 0,
                     gid: 0,

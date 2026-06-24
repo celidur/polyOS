@@ -116,12 +116,18 @@ impl ProcessManager {
         let task_id = *old_process.tasks.read();
         let children = old_process.children.lock().clone();
         let cwd = old_process.cwd.lock().clone();
+        let umask = *old_process.umask.lock();
         let signal_actions = old_process.signal_actions_for_exec();
 
-        let process = Process::new(pid, parent, filename, Some(args))?;
+        let mut process = Process::new(pid, parent, filename, Some(args))?;
+        process.uid = old_process.uid;
+        process.gid = old_process.gid;
+        process.euid = old_process.euid;
+        process.egid = old_process.egid;
         let fd_table = old_process.take_exec_fd_table();
         *process.fd_table.lock() = fd_table;
         process.set_cwd(cwd);
+        process.set_umask(umask);
         process.replace_signal_actions(signal_actions);
         process.children.lock().extend(children);
         *process.tasks.write() = task_id;

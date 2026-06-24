@@ -18,7 +18,11 @@ pub fn syscall_init() {
     syscall_register(SyscallId::Exit, syscall_exit);
     syscall_register(SyscallId::WaitPid, syscall_waitpid);
     syscall_register(SyscallId::GetPid, syscall_getpid);
+    syscall_register(SyscallId::GetUid, syscall_getuid);
     syscall_register(SyscallId::GetPpid, syscall_getppid);
+    syscall_register(SyscallId::GetGid, syscall_getgid);
+    syscall_register(SyscallId::GetEuid, syscall_geteuid);
+    syscall_register(SyscallId::GetEgid, syscall_getegid);
     syscall_register(SyscallId::Kill, syscall_kill);
     syscall_register(SyscallId::SigAction, syscall_sigaction);
     syscall_register(SyscallId::SigReturn, syscall_sigreturn);
@@ -36,9 +40,12 @@ pub fn syscall_init() {
     syscall_register(SyscallId::Fcntl, syscall_fcntl);
     syscall_register(SyscallId::Pipe, syscall_pipe);
     syscall_register(SyscallId::Unlink, syscall_unlink);
+    syscall_register(SyscallId::Chmod, syscall_chmod);
     syscall_register(SyscallId::Mkdir, syscall_mkdir);
     syscall_register(SyscallId::Rmdir, syscall_rmdir);
+    syscall_register(SyscallId::Umask, syscall_umask);
     syscall_register(SyscallId::Chdir, syscall_chdir);
+    syscall_register(SyscallId::Chown, syscall_chown);
     syscall_register(SyscallId::GetCwd, syscall_getcwd);
     syscall_register(SyscallId::GetDents, syscall_getdents);
     syscall_register(SyscallId::Ioctl, syscall_ioctl);

@@ -214,6 +214,25 @@ impl TaskManager {
         Ok(cur)
     }
 
+    pub fn block_current_and_restart_syscall(
+        &mut self,
+        reason: WaitReason,
+    ) -> Result<TaskId, KernelError> {
+        let Some(cur) = self.current else {
+            return Err(KernelError::NoTasks);
+        };
+
+        let Some(nn_task) = self.tasks.get(&cur) else {
+            self.current = None;
+            return Err(KernelError::NoTasks);
+        };
+
+        let mut task = nn_task.write();
+        task.registers.ip = task.registers.ip.saturating_sub(2);
+        task.state = TaskState::Blocked { reason };
+        Ok(cur)
+    }
+
     #[allow(dead_code)]
     pub fn wake_task(&mut self, task_id: TaskId) -> Result<(), KernelError> {
         let Some(nn_task) = self.tasks.get(&task_id) else {

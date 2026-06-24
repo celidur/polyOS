@@ -101,6 +101,30 @@ pub fn unlink(path: &str) -> Result<(), i32> {
     }
 }
 
+pub fn chmod(path: &str, mode: i32) -> Result<(), i32> {
+    let path = nul_terminated(path);
+    let result = unsafe { crate::bindings::chmod(path.as_ptr() as *const i8, mode) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(errno())
+    }
+}
+
+pub fn chown(path: &str, uid: u32, gid: u32) -> Result<(), i32> {
+    let path = nul_terminated(path);
+    let result = unsafe { crate::bindings::chown(path.as_ptr() as *const i8, uid, gid) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(errno())
+    }
+}
+
+pub fn umask(mask: i32) -> i32 {
+    unsafe { crate::bindings::umask(mask) }
+}
+
 pub fn chdir(path: &str) -> Result<(), i32> {
     let path = nul_terminated(path);
     let result = unsafe { crate::bindings::chdir(path.as_ptr() as *const i8) };

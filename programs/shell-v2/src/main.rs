@@ -200,7 +200,7 @@ fn run_simple_command(command: &ParsedCommand, env: &mut ShellEnv) -> bool {
         if let Some(name) = command.command() {
             println!("{}: command not found", name);
         }
-    } else {
+    } else if status != 126 {
         println!("Process exited with status {}", status);
     }
 
@@ -235,6 +235,10 @@ fn run_builtin(command: &ParsedCommand, env: &mut ShellEnv) -> Option<BuiltinRes
         }
         "pwd" => {
             print_pwd();
+            Some(BuiltinResult::Continue(0))
+        }
+        "id" => {
+            print_id();
             Some(BuiltinResult::Continue(0))
         }
         "cd" => {
@@ -275,6 +279,10 @@ fn run_builtin(command: &ParsedCommand, env: &mut ShellEnv) -> Option<BuiltinRes
         }
         "stat" => {
             stat_paths(args);
+            Some(BuiltinResult::Continue(0))
+        }
+        "chmod" => {
+            chmod_command(args);
             Some(BuiltinResult::Continue(0))
         }
         "echo" => {
@@ -437,7 +445,8 @@ fn run_pipeline(commands: &[ParsedCommand], env: &ShellEnv) -> Result<(), &'stat
 
 fn apply_redirections<'a>(command: &ParsedCommand<'a>) -> Result<(), RedirectionError<'a>> {
     if let Some(path) = command.stdin {
-        let fd = fs::open(path, fs::O_RDONLY, 0).map_err(|error| RedirectionError { path, error })?;
+        let fd =
+            fs::open(path, fs::O_RDONLY, 0).map_err(|error| RedirectionError { path, error })?;
         io::dup2(fd, bindings::STDIN_FILENO as i32).map_err(|_| RedirectionError {
             path,
             error: fs::errno(),
@@ -469,21 +478,42 @@ fn exec_search(command: &ParsedCommand, env: &ShellEnv) -> ! {
 
     let env_entries = env.as_strs();
     if name.contains('/') {
-        if executable_exists(name) {
-            process::execve_with_env(name, &command.args, &env_entries);
+        match executable_status(name) {
+            ExecutableStatus::Executable => {
+                process::execve_with_env(name, &command.args, &env_entries);
+            }
+            ExecutableStatus::PermissionDenied => {
+                println!("{}: Permission denied", name);
+                process::exit(126);
+            }
+            _ => {}
         }
     } else {
         let path = env.get("PATH").unwrap_or("/bin");
         for directory in path.split(':') {
             let directory = if directory.is_empty() { "." } else { directory };
             let path = join_path(directory, name);
-            if executable_exists(path.as_str()) {
-                process::execve_with_env(path.as_str(), &command.args, &env_entries);
+            match executable_status(path.as_str()) {
+                ExecutableStatus::Executable => {
+                    process::execve_with_env(path.as_str(), &command.args, &env_entries);
+                }
+                ExecutableStatus::PermissionDenied => {
+                    println!("{}: Permission denied", path);
+                    process::exit(126);
+                }
+                _ => {}
             }
 
             let path = format!("{}.elf", path);
-            if executable_exists(path.as_str()) {
-                process::execve_with_env(path.as_str(), &command.args, &env_entries);
+            match executable_status(path.as_str()) {
+                ExecutableStatus::Executable => {
+                    process::execve_with_env(path.as_str(), &command.args, &env_entries);
+                }
+                ExecutableStatus::PermissionDenied => {
+                    println!("{}: Permission denied", path);
+                    process::exit(126);
+                }
+                _ => {}
             }
         }
     }
@@ -491,8 +521,32 @@ fn exec_search(command: &ParsedCommand, env: &ShellEnv) -> ! {
     process::exit(127);
 }
 
-fn executable_exists(path: &str) -> bool {
-    fs::stat(path).map(|stat| !stat.is_dir()).unwrap_or(false)
+enum ExecutableStatus {
+    Missing,
+    Directory,
+    PermissionDenied,
+    Executable,
+}
+
+fn executable_status(path: &str) -> ExecutableStatus {
+    match fs::stat(path) {
+        Ok(stat) if stat.is_dir() => ExecutableStatus::Directory,
+        Ok(stat) if can_execute(&stat) => ExecutableStatus::Executable,
+        Ok(_) => ExecutableStatus::PermissionDenied,
+        Err(_) => ExecutableStatus::Missing,
+    }
+}
+
+fn can_execute(stat: &fs::FileStat) -> bool {
+    let shift = if process::geteuid() == stat.uid {
+        6
+    } else if process::getegid() == stat.gid {
+        3
+    } else {
+        0
+    };
+
+    ((stat.mode >> shift) & 0o1) != 0
 }
 
 fn close_if_open(fd: i32) {
@@ -505,7 +559,8 @@ fn print_help() {
     println!("Builtins:");
     println!("  cd [dir]      change directory");
     println!("  pwd           print current directory");
-    println!("  ls [-a] [path...] list files");
+    println!("  id            print user and group ids");
+    println!("  ls [-la] [path...] list files");
     println!("  cat <file...> print files");
     println!("  touch <file>  create file if missing");
     println!("  cp <src> <dst> copy file");
@@ -514,6 +569,7 @@ fn print_help() {
     println!("  rmdir <dir>   remove empty directory");
     println!("  rm <file>     remove file");
     println!("  stat <path>   show file metadata");
+    println!("  chmod <mode> <path...> change file mode");
     println!("  echo [text]   print text");
     println!("  env           print environment");
     println!("  export A=B    set environment variable");
@@ -546,7 +602,8 @@ fn valid_env_name(name: &str) -> bool {
     }
 
     for (index, byte) in name.bytes().enumerate() {
-        let valid = byte == b'_' || byte.is_ascii_alphabetic() || (index > 0 && byte.is_ascii_digit());
+        let valid =
+            byte == b'_' || byte.is_ascii_alphabetic() || (index > 0 && byte.is_ascii_digit());
         if !valid {
             return false;
         }
@@ -570,22 +627,62 @@ fn print_pwd() {
     }
 }
 
+fn print_id() {
+    let uid = process::getuid();
+    let gid = process::getgid();
+    let euid = process::geteuid();
+    let egid = process::getegid();
+    if uid == euid && gid == egid {
+        println!("uid={} gid={} groups={}", uid, gid, gid);
+    } else {
+        println!(
+            "uid={} gid={} euid={} egid={} groups={}",
+            uid, gid, euid, egid, gid
+        );
+    }
+}
+
 fn change_directory(path: &str) {
     if let Err(error) = fs::chdir(path) {
         print_fs_error("cd", path, error);
     }
 }
 
+#[derive(Clone, Copy)]
+struct LsOptions {
+    show_all: bool,
+    long: bool,
+}
+
 fn list_paths(args: &[&str]) {
-    let show_all = args.iter().any(|arg| *arg == "-a");
-    let paths: Vec<&str> = args
-        .iter()
-        .copied()
-        .filter(|arg| !arg.starts_with('-'))
-        .collect();
+    let mut options = LsOptions {
+        show_all: false,
+        long: false,
+    };
+    let mut paths = Vec::new();
+
+    for arg in args {
+        if let Some(flags) = arg.strip_prefix('-')
+            && !flags.is_empty()
+        {
+            for flag in flags.bytes() {
+                match flag {
+                    b'a' => options.show_all = true,
+                    b'l' => options.long = true,
+                    _ => {
+                        println!("ls: invalid option -- {}", flag as char);
+                        return;
+                    }
+                }
+            }
+            continue;
+        }
+
+        paths.push(*arg);
+    }
 
     if paths.is_empty() {
-        list_path(".", show_all);
+        list_path(".", options);
         return;
     }
 
@@ -597,32 +694,110 @@ fn list_paths(args: &[&str]) {
             }
             println!("{}:", path);
         }
-        list_path(path, show_all);
+        list_path(path, options);
     }
 }
 
-fn list_path(path: &str, show_all: bool) {
+fn list_path(path: &str, options: LsOptions) {
     match fs::stat(path) {
         Ok(stat) if stat.is_dir() => match fs::read_dir(path) {
             Ok(entries) => {
                 for entry in entries {
-                    if !show_all && entry.name.starts_with('.') {
+                    if !options.show_all && entry.name.starts_with('.') {
                         continue;
                     }
 
-                    if entry.file_type == fs::DT_DIR {
-                        print!("{}/  ", entry.name);
+                    if options.long {
+                        let child_path = join_child_path(path, entry.name.as_str());
+                        print_long_entry(child_path.as_str(), entry.name.as_str());
                     } else {
-                        print!("{}  ", entry.name);
+                        let display_name = if entry.file_type == fs::DT_DIR {
+                            format!("{}/", entry.name)
+                        } else {
+                            entry.name.clone()
+                        };
+                        print!("{}  ", display_name);
                     }
                 }
-                println!();
+                if !options.long {
+                    println!();
+                }
             }
             Err(error) => print_fs_error("ls", path, error),
         },
-        Ok(_) => println!("{}", path),
+        Ok(stat) => {
+            if options.long {
+                print_long_stat(path, &stat);
+            } else {
+                println!("{}", path);
+            }
+        }
         Err(error) => print_fs_error("ls", path, error),
     }
+}
+
+fn join_child_path(parent: &str, child: &str) -> String {
+    if parent == "." {
+        child.to_string()
+    } else if parent == "/" {
+        format!("/{}", child)
+    } else {
+        format!("{}/{}", parent.trim_end_matches('/'), child)
+    }
+}
+
+fn print_long_entry(path: &str, name: &str) {
+    match fs::lstat(path) {
+        Ok(stat) => {
+            let display_name = if stat.is_dir() {
+                format!("{}/", name)
+            } else {
+                name.to_string()
+            };
+            print_long_stat(display_name.as_str(), &stat);
+        }
+        Err(error) => println!(
+            "??????????    0    0        0 {} ({})",
+            name,
+            errno_name(error)
+        ),
+    }
+}
+
+fn print_long_stat(display_name: &str, stat: &fs::FileStat) {
+    let permissions = mode_string(stat);
+    println!(
+        "{} {:4} {:4} {:8} {}",
+        permissions, stat.uid, stat.gid, stat.size, display_name
+    );
+}
+
+fn mode_string(stat: &fs::FileStat) -> String {
+    let mut out = [b'-'; 10];
+    if stat.is_dir() {
+        out[0] = b'd';
+    }
+
+    let bits = [
+        (0o400, b'r'),
+        (0o200, b'w'),
+        (0o100, b'x'),
+        (0o040, b'r'),
+        (0o020, b'w'),
+        (0o010, b'x'),
+        (0o004, b'r'),
+        (0o002, b'w'),
+        (0o001, b'x'),
+    ];
+    for (index, (bit, letter)) in bits.iter().enumerate() {
+        if stat.mode & *bit != 0 {
+            out[index + 1] = *letter;
+        }
+    }
+
+    core::str::from_utf8(&out)
+        .unwrap_or("----------")
+        .to_string()
 }
 
 fn cat_files(paths: &[&str]) {
@@ -652,13 +827,7 @@ fn cat_file(path: &str) {
 fn cat_fd(fd: i32, label: &str) {
     let mut buffer = [0_u8; 512];
     loop {
-        let read = unsafe {
-            bindings::read(
-                fd,
-                buffer.as_mut_ptr() as *mut c_void,
-                buffer.len(),
-            )
-        };
+        let read = unsafe { bindings::read(fd, buffer.as_mut_ptr() as *mut c_void, buffer.len()) };
 
         if read < 0 {
             print_fs_error("cat", label, fs::errno());
@@ -824,6 +993,42 @@ fn stat_paths(paths: &[&str]) {
             Err(error) => print_fs_error("stat", path, error),
         }
     }
+}
+
+fn chmod_command(args: &[&str]) {
+    if args.len() < 2 {
+        println!("Usage: chmod <mode> <path>...");
+        return;
+    }
+
+    let Some(mode) = parse_octal_mode(args[0]) else {
+        println!("chmod: invalid mode '{}'", args[0]);
+        return;
+    };
+
+    for path in &args[1..] {
+        if let Err(error) = fs::chmod(path, mode as i32) {
+            print_fs_error("chmod", path, error);
+        }
+    }
+}
+
+fn parse_octal_mode(mode: &str) -> Option<u16> {
+    let digits = mode.strip_prefix('0').unwrap_or(mode);
+    if digits.is_empty() {
+        return Some(0);
+    }
+
+    let mut value = 0_u16;
+    for byte in digits.bytes() {
+        if !(b'0'..=b'7').contains(&byte) {
+            return None;
+        }
+        value = value.checked_mul(8)?;
+        value = value.checked_add((byte - b'0') as u16)?;
+    }
+
+    (value <= 0o777).then_some(value)
 }
 
 fn write_stdout(data: &[u8]) {

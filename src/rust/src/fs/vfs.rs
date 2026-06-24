@@ -134,8 +134,7 @@ impl Vfs {
     /// Resolve `path` to candidate (FileSystem, subpath) pairs.
     ///
     /// Multiple filesystems may share the same mount point. Later mounts are
-    /// searched first, which gives us a small writable overlay on top of the
-    /// boot FAT filesystem while still allowing fallback to FAT for `/bin`.
+    /// searched first so a caller can intentionally layer filesystems.
     fn resolve_paths(&self, path: &str) -> Vec<(Arc<dyn FileSystem>, String)> {
         let mounts = self.mounts.read();
         let mut best_len = 0;

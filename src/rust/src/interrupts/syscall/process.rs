@@ -2,10 +2,11 @@ use alloc::{string::String, string::ToString, vec::Vec};
 
 use crate::{
     constant::MAX_PATH,
+    fs::FsError,
     interrupts::InterruptFrame,
     kernel::KERNEL,
     schedule::{
-        process::ProcessArguments,
+        process::{ACCESS_EXECUTE, ProcessArguments},
         process_manager::process_terminate,
         task::{WaitReason, task_next},
     },
@@ -58,15 +59,31 @@ pub fn syscall_execve(_frame: &InterruptFrame) -> u32 {
         } else {
             read_string_array_from_task(&task, envp_ptr)?
         };
-        Some((task.process.pid, path, ProcessArguments { args, env }))
+        Some((
+            task.process.clone(),
+            task.process.pid,
+            path,
+            ProcessArguments { args, env },
+        ))
     });
 
-    let Some((pid, path, args)) = exec else {
+    let Some((process, pid, path, args)) = exec else {
         return abi::errno(abi::EFAULT);
     };
 
+    match KERNEL.vfs.read().stat(path.as_str()) {
+        Ok(metadata) if metadata.is_dir => return abi::errno(abi::EACCES),
+        Ok(metadata) if !process.has_permission(&metadata, ACCESS_EXECUTE) => {
+            return abi::errno(abi::EACCES);
+        }
+        Ok(_) => {}
+        Err(FsError::NotFound) => return abi::errno(abi::ENOENT),
+        Err(_) => return abi::errno(abi::EACCES),
+    }
+
     match KERNEL.with_process_manager(|pm| pm.exec(pid, path.as_str(), args)) {
         Ok(()) => {
+            drop(process);
             drop(path);
             task_next();
         }
@@ -118,10 +135,34 @@ pub fn syscall_getpid(_frame: &InterruptFrame) -> u32 {
     })
 }
 
+pub fn syscall_getuid(_frame: &InterruptFrame) -> u32 {
+    current_process_id_field(|process| process.uid)
+}
+
 pub fn syscall_getppid(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
         tm.get_current()
             .map(|task| task.read().process.parent_pid().unwrap_or(0))
+            .unwrap_or_else(|| abi::errno(abi::ESRCH))
+    })
+}
+
+pub fn syscall_getgid(_frame: &InterruptFrame) -> u32 {
+    current_process_id_field(|process| process.gid)
+}
+
+pub fn syscall_geteuid(_frame: &InterruptFrame) -> u32 {
+    current_process_id_field(|process| process.euid)
+}
+
+pub fn syscall_getegid(_frame: &InterruptFrame) -> u32 {
+    current_process_id_field(|process| process.egid)
+}
+
+fn current_process_id_field(read: impl FnOnce(&crate::schedule::process::Process) -> u32) -> u32 {
+    KERNEL.with_task_manager(|tm| {
+        tm.get_current()
+            .map(|task| read(&task.read().process))
             .unwrap_or_else(|| abi::errno(abi::ESRCH))
     })
 }

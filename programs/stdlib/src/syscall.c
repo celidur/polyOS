@@ -34,9 +34,12 @@ extern int __sys_dup(int oldfd);
 extern int __sys_dup2(int oldfd, int newfd);
 extern void *__sys_brk(void *addr);
 extern int __sys_unlink(const char *pathname);
+extern int __sys_chmod(const char *pathname, int mode);
 extern int __sys_mkdir(const char *pathname, int mode);
 extern int __sys_rmdir(const char *pathname);
+extern int __sys_umask(int mask);
 extern int __sys_chdir(const char *pathname);
+extern int __sys_chown(const char *pathname, unsigned int uid, unsigned int gid);
 extern int __sys_getcwd(char *buf, size_t size);
 extern int __sys_getdents(int fd, struct dirent *dirp, size_t count);
 
@@ -437,6 +440,11 @@ int unlink(const char *pathname)
     return syscall_ret(__sys_unlink(pathname));
 }
 
+int chmod(const char *pathname, int mode)
+{
+    return syscall_ret(__sys_chmod(pathname, mode));
+}
+
 int mkdir(const char *pathname, int mode)
 {
     return syscall_ret(__sys_mkdir(pathname, mode));
@@ -447,9 +455,19 @@ int rmdir(const char *pathname)
     return syscall_ret(__sys_rmdir(pathname));
 }
 
+int umask(int mask)
+{
+    return __sys_umask(mask);
+}
+
 int chdir(const char *pathname)
 {
     return syscall_ret(__sys_chdir(pathname));
+}
+
+int chown(const char *pathname, unsigned int uid, unsigned int gid)
+{
+    return syscall_ret(__sys_chown(pathname, uid, gid));
 }
 
 char *getcwd(char *buf, size_t size)

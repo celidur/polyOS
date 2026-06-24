@@ -7,6 +7,7 @@
 
 static int passed = 0;
 static int failed = 0;
+static volatile int cow_global_value = 0x55667788;
 
 static void ok(const char *name)
 {
@@ -87,6 +88,13 @@ static int test_devices(void)
     int ioctl_result = ioctl(STDOUT_FILENO, TIOCGWINSZ, (unsigned long)&ws);
     expect("ioctl TIOCGWINSZ", ioctl_result == 0 && ws.ws_col > 0 && ws.ws_row > 0, ioctl_result);
 
+    fd = open("/dev/tty", O_WRONLY, 0);
+    expect("open /dev/tty", fd >= 0, fd);
+    if (fd >= 0) {
+        expect("write /dev/tty zero", write(fd, "", 0) == 0, -1);
+        expect("close /dev/tty", close(fd) == 0, -1);
+    }
+
     return failed == local_failed;
 }
 
@@ -146,7 +154,7 @@ static int test_unix_errno_dup_and_cwd(void)
 {
     int local_failed = failed;
     char cwd[64];
-    char buf[16];
+    char buf[64];
 
     errno = 0;
     expect("errno open missing", open("/tmp/no-such-file", O_RDONLY, 0) == -1 && errno == ENOENT, errno);
@@ -255,6 +263,72 @@ static int test_unix_errno_dup_and_cwd(void)
     expect("chdir root", chdir("/") == 0, -1);
     expect("rmdir", rmdir("/tmp/selftest-dir") == 0, -1);
 
+    unlink("/tmp/selftest-mode.txt");
+    int old_mask = umask(0027);
+    expect("umask set", old_mask == 0022, old_mask);
+    fd = open("/tmp/selftest-mode.txt", O_CREAT | O_RDWR | O_TRUNC, 0666);
+    expect("open mode file", fd >= 0, fd);
+    if (fd >= 0) {
+        expect("close mode file", close(fd) == 0, -1);
+    }
+    memset(&stat_buf, 0, sizeof(stat_buf));
+    expect("open applies umask", stat("/tmp/selftest-mode.txt", &stat_buf) == 0 && (stat_buf.mode & 0777) == 0640, stat_buf.mode);
+    expect("chmod", chmod("/tmp/selftest-mode.txt", 0601) == 0, -1);
+    memset(&stat_buf, 0, sizeof(stat_buf));
+    expect("chmod mode", stat("/tmp/selftest-mode.txt", &stat_buf) == 0 && (stat_buf.mode & 0777) == 0601, stat_buf.mode);
+    expect("chmod deny all", chmod("/tmp/selftest-mode.txt", 0000) == 0, -1);
+    errno = 0;
+    expect("permission read denied", open("/tmp/selftest-mode.txt", O_RDONLY, 0) == -1 && errno == EACCES, errno);
+    errno = 0;
+    expect("permission write denied", open("/tmp/selftest-mode.txt", O_WRONLY, 0) == -1 && errno == EACCES, errno);
+    expect("chmod read only", chmod("/tmp/selftest-mode.txt", 0400) == 0, -1);
+    fd = open("/tmp/selftest-mode.txt", O_RDONLY, 0);
+    expect("permission read allowed", fd >= 0, fd);
+    if (fd >= 0) {
+        close(fd);
+    }
+    errno = 0;
+    expect("permission write still denied", open("/tmp/selftest-mode.txt", O_WRONLY, 0) == -1 && errno == EACCES, errno);
+    expect("chmod write only", chmod("/tmp/selftest-mode.txt", 0200) == 0, -1);
+    fd = open("/tmp/selftest-mode.txt", O_WRONLY, 0);
+    expect("permission write allowed", fd >= 0, fd);
+    if (fd >= 0) {
+        close(fd);
+    }
+    errno = 0;
+    expect("permission read still denied", open("/tmp/selftest-mode.txt", O_RDONLY, 0) == -1 && errno == EACCES, errno);
+    expect("chmod restore mode", chmod("/tmp/selftest-mode.txt", 0601) == 0, -1);
+    expect("chown", chown("/tmp/selftest-mode.txt", 123, 456) == 0, -1);
+    memset(&stat_buf, 0, sizeof(stat_buf));
+    expect("chown ids", stat("/tmp/selftest-mode.txt", &stat_buf) == 0 && stat_buf.uid == 123 && stat_buf.gid == 456, stat_buf.uid);
+    expect("chown keep uid", chown("/tmp/selftest-mode.txt", (unsigned int)-1, 789) == 0, -1);
+    memset(&stat_buf, 0, sizeof(stat_buf));
+    expect("chown kept uid", stat("/tmp/selftest-mode.txt", &stat_buf) == 0 && stat_buf.uid == 123 && stat_buf.gid == 789, stat_buf.gid);
+    errno = 0;
+    expect("chmod missing errno", chmod("/tmp/missing-mode-file", 0600) == -1 && errno == ENOENT, errno);
+    const char noexec_path[] = "/tmp/selftest-noexec.elf";
+    unlink(noexec_path);
+    fd = open(noexec_path, O_CREAT | O_RDWR | O_TRUNC, 0644);
+    expect("noexec create", fd >= 0, fd);
+    if (fd >= 0) {
+        close(fd);
+        pid_t pid = fork();
+        expect("noexec fork", pid >= 0, pid);
+        if (pid == 0) {
+            char *exec_args[] = { (char *)noexec_path, NULL };
+            errno = 0;
+            execve(noexec_path, exec_args, NULL);
+            _exit(errno == EACCES ? 0 : errno);
+        }
+        if (pid > 0) {
+            int status = -1;
+            expect("execute denied", waitpid(pid, &status, 0) == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0, status);
+        }
+        unlink(noexec_path);
+    }
+    expect("umask restore", umask(old_mask) == 0027, -1);
+    expect("unlink mode file", unlink("/tmp/selftest-mode.txt") == 0, -1);
+
     return failed == local_failed;
 }
 
@@ -263,7 +337,7 @@ static int test_pipe(void)
     int local_failed = failed;
     int fds[2];
     const char msg[] = "pipe-ok";
-    char buf[16];
+    char buf[64];
 
     expect("pipe create", pipe(fds) == 0, -1);
     if (failed != local_failed) {
@@ -276,6 +350,63 @@ static int test_pipe(void)
     expect("pipe content", memcmp(buf, msg, sizeof(msg) - 1) == 0, -1);
     expect("pipe close read", close(fds[0]) == 0, -1);
     expect("pipe close write", close(fds[1]) == 0, -1);
+
+    expect("pipe nonblock create", pipe(fds) == 0, -1);
+    if (failed == local_failed) {
+        expect("pipe nonblock set", fcntl(fds[0], F_SETFL, O_NONBLOCK) == 0, -1);
+        errno = 0;
+        expect("pipe nonblock empty read", read(fds[0], buf, 1) == -1 && errno == EAGAIN, errno);
+        close(fds[0]);
+        close(fds[1]);
+    }
+
+    const char blocking_msg[] = "pipe-blocking-read";
+    expect("pipe blocking read create", pipe(fds) == 0, -1);
+    if (failed == local_failed) {
+        pid_t pid = fork();
+        expect("pipe blocking read fork", pid >= 0, pid);
+        if (pid == 0) {
+            close(fds[0]);
+            sleep_ms(10);
+            write(fds[1], blocking_msg, sizeof(blocking_msg) - 1);
+            close(fds[1]);
+            _exit(0);
+        }
+        if (pid >= 0) {
+            close(fds[1]);
+            memset(buf, 0, sizeof(buf));
+            expect("pipe blocking read", read(fds[0], buf, sizeof(blocking_msg) - 1) == (ssize_t)(sizeof(blocking_msg) - 1), -1);
+            expect("pipe blocking read content", memcmp(buf, blocking_msg, sizeof(blocking_msg) - 1) == 0, -1);
+            close(fds[0]);
+            int status = -1;
+            expect("pipe blocking read wait", waitpid(pid, &status, 0) == pid && WIFEXITED(status), status);
+        }
+    }
+
+    expect("pipe blocking write create", pipe(fds) == 0, -1);
+    if (failed == local_failed) {
+        char fill[4096];
+        memset(fill, 'x', sizeof(fill));
+        expect("pipe fill", write(fds[1], fill, sizeof(fill)) == (ssize_t)sizeof(fill), -1);
+        pid_t pid = fork();
+        expect("pipe blocking write fork", pid >= 0, pid);
+        if (pid == 0) {
+            char one = 0;
+            sleep_ms(10);
+            read(fds[0], &one, 1);
+            close(fds[0]);
+            close(fds[1]);
+            _exit(0);
+        }
+        if (pid >= 0) {
+            const char one = 'y';
+            expect("pipe blocking write", write(fds[1], &one, 1) == 1, -1);
+            int status = -1;
+            expect("pipe blocking write wait", waitpid(pid, &status, 0) == pid && WIFEXITED(status), status);
+            close(fds[0]);
+            close(fds[1]);
+        }
+    }
 
     return failed == local_failed;
 }
@@ -387,10 +518,19 @@ static int test_fork_pipe_semaphore(void)
     volatile int cow_value = 0x11112222;
     const char msg[] = "fork-sync-ok";
     char buf[32];
+    char *cow_heap = malloc(32);
+
+    expect("fork cow heap alloc", cow_heap != NULL, errno);
+    if (cow_heap == NULL) {
+        return 0;
+    }
+    memset(cow_heap, 0x5a, 32);
+    cow_global_value = 0x55667788;
 
     expect("fork sem_init", sem_init(&sem, 0, 0) == 0 && sem > 0, sem);
     expect("fork pipe create", pipe(fds) == 0, -1);
     if (sem <= 0 || failed != local_failed) {
+        free(cow_heap);
         return 0;
     }
 
@@ -400,6 +540,8 @@ static int test_fork_pipe_semaphore(void)
     if (pid == 0) {
         close(fds[0]);
         cow_value = 0x33334444;
+        cow_global_value = 0x11223344;
+        cow_heap[0] = 0x11;
         if (write(fds[1], msg, sizeof(msg) - 1) != (ssize_t)(sizeof(msg) - 1)) {
             _exit(31);
         }
@@ -426,7 +568,53 @@ static int test_fork_pipe_semaphore(void)
     pid_t waited = waitpid(pid, &status, 0);
     expect("waitpid child", waited == pid && WIFEXITED(status) && WEXITSTATUS(status) == 23, status);
     expect("fork cow stack", cow_value == 0x11112222, cow_value);
+    expect("fork cow global", cow_global_value == 0x55667788, cow_global_value);
+    expect("fork cow heap", cow_heap[0] == 0x5a, cow_heap[0]);
+    free(cow_heap);
     expect("fork sem_destroy", sem_destroy(&sem) == 0, -1);
+
+    return failed == local_failed;
+}
+
+static int test_fork_fd_state(void)
+{
+    int local_failed = failed;
+    const char path[] = "/tmp/fork-fd-state.txt";
+    const char data[] = "abcdef";
+    char buf[4];
+
+    unlink(path);
+    int fd = open(path, O_CREAT | O_RDWR | O_TRUNC, 0);
+    expect("fork fd open", fd >= 0, fd);
+    if (fd < 0) {
+        return 0;
+    }
+
+    expect("fork fd write", write(fd, data, sizeof(data) - 1) == (ssize_t)(sizeof(data) - 1), -1);
+    expect("fork fd seek", lseek(fd, 0, SEEK_SET) == 0, -1);
+
+    pid_t pid = fork();
+    expect("fork fd fork", pid >= 0, pid);
+    if (pid == 0) {
+        char child_buf[2];
+        ssize_t read_bytes = read(fd, child_buf, sizeof(child_buf));
+        _exit(read_bytes == (ssize_t)sizeof(child_buf) && memcmp(child_buf, "ab", 2) == 0 ? 0 : 52);
+    }
+
+    if (pid < 0) {
+        close(fd);
+        unlink(path);
+        return 0;
+    }
+
+    int status = -1;
+    pid_t waited = waitpid(pid, &status, 0);
+    expect("fork fd child", waited == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0, status);
+
+    memset(buf, 0, sizeof(buf));
+    expect("fork fd shared offset", read(fd, buf, 2) == 2 && memcmp(buf, "cd", 2) == 0, -1);
+    expect("fork fd close", close(fd) == 0, -1);
+    expect("fork fd unlink", unlink(path) == 0, -1);
 
     return failed == local_failed;
 }
@@ -634,6 +822,10 @@ static int test_memory_and_sleep(void)
 
     expect("getpid", getpid() >= 0, -1);
     expect("getppid", getppid() >= 0, -1);
+    expect("getuid", getuid() == 0, getuid());
+    expect("getgid", getgid() == 0, getgid());
+    expect("geteuid", geteuid() == 0, geteuid());
+    expect("getegid", getegid() == 0, getegid());
     errno = 0;
     expect("reboot invalid cmd errno", reboot(0) == -1 && errno == EINVAL, errno);
 
@@ -755,6 +947,7 @@ int main(int argc, char **argv)
     test_semaphore_basic();
     test_socket_errno();
     test_fork_pipe_semaphore();
+    test_fork_fd_state();
     test_waitpid_zombie_reparent();
     test_signals();
     test_environment();

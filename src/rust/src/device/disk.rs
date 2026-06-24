@@ -12,6 +12,24 @@ use super::{
     managed::ManagedDevice,
 };
 
+const ATA_REG_DATA: u16 = 0x0;
+const ATA_REG_SECTOR_COUNT: u16 = 0x2;
+const ATA_REG_LBA_LOW: u16 = 0x3;
+const ATA_REG_LBA_MID: u16 = 0x4;
+const ATA_REG_LBA_HIGH: u16 = 0x5;
+const ATA_REG_DRIVE: u16 = 0x6;
+const ATA_REG_STATUS_COMMAND: u16 = 0x7;
+
+const ATA_STATUS_ERR: u8 = 0x01;
+const ATA_STATUS_DRQ: u8 = 0x08;
+const ATA_STATUS_DF: u8 = 0x20;
+const ATA_STATUS_BSY: u8 = 0x80;
+
+const ATA_CMD_READ_SECTORS: u8 = 0x20;
+const ATA_CMD_WRITE_SECTORS: u8 = 0x30;
+const ATA_DRIVE_LBA_MASTER: u8 = 0xE0;
+const ATA_WAIT_TIMEOUT: usize = 1_000_000;
+
 pub enum DiskError {
     Timeout,
     IoError,
@@ -40,6 +58,53 @@ impl Disk {
         }
     }
 
+    fn status(&self) -> u8 {
+        unsafe { inb(self.base + ATA_REG_STATUS_COMMAND) }
+    }
+
+    fn wait_ready(&self) -> Result<(), DiskError> {
+        let mut timeout = ATA_WAIT_TIMEOUT;
+        while timeout > 0 {
+            if self.status() & ATA_STATUS_BSY == 0 {
+                return Ok(());
+            }
+            timeout -= 1;
+        }
+
+        Err(DiskError::Timeout)
+    }
+
+    fn wait_data_request(&self) -> Result<(), DiskError> {
+        let mut timeout = ATA_WAIT_TIMEOUT;
+        while timeout > 0 {
+            let status = self.status();
+            if status & (ATA_STATUS_ERR | ATA_STATUS_DF) != 0 {
+                return Err(DiskError::IoError);
+            }
+            if status & ATA_STATUS_BSY == 0 && status & ATA_STATUS_DRQ != 0 {
+                return Ok(());
+            }
+            timeout -= 1;
+        }
+
+        Err(DiskError::Timeout)
+    }
+
+    fn select_lba_sector(&self, lba: u64) -> Result<(), DiskError> {
+        self.wait_ready()?;
+        unsafe {
+            outb(
+                self.base + ATA_REG_DRIVE,
+                ATA_DRIVE_LBA_MASTER | ((lba >> 24) as u8 & 0x0f),
+            );
+            outb(self.base + ATA_REG_SECTOR_COUNT, 1);
+            outb(self.base + ATA_REG_LBA_LOW, lba as u8);
+            outb(self.base + ATA_REG_LBA_MID, (lba >> 8) as u8);
+            outb(self.base + ATA_REG_LBA_HIGH, (lba >> 16) as u8);
+        }
+        Ok(())
+    }
+
     fn evict(&mut self) -> Result<(), DiskError> {
         if self.cache.len() >= self.cache_size {
             if let Some(&key) = self
@@ -65,33 +130,18 @@ impl Disk {
     }
 
     fn write_cache(&mut self, lba: u64) -> Result<(), DiskError> {
-        if let Some(entry) = self.cache.get_mut(&lba) {
+        if let Some(entry) = self.cache.get(&lba).cloned() {
             let mut entry = entry.lock();
             if entry.dirty {
-                unsafe {
-                    outb(self.base + 0x6, (lba >> 24) as u8 | 0xE0);
-                    outb(self.base + 0x2, 1_u8);
-                    outb(self.base + 0x3, lba as u8);
-                    outb(self.base + 0x4, (lba >> 8) as u8);
-                    outb(self.base + 0x5, (lba >> 16) as u8);
-                    outb(self.base + 0x7, 0x30);
-                }
-                let mut timeout = 1000000;
-                while timeout > 0 {
-                    let status = unsafe { inb(self.base + 0x7) };
-                    if status & 0x80 == 0 && status & 0x08 != 0 {
-                        break;
-                    }
-                    timeout -= 1;
-                }
-                if timeout == 0 {
-                    return Err(DiskError::Timeout);
-                }
+                self.select_lba_sector(lba)?;
+                unsafe { outb(self.base + ATA_REG_STATUS_COMMAND, ATA_CMD_WRITE_SECTORS) };
+                self.wait_data_request()?;
 
                 for j in 0..256 {
-                    unsafe { outw(self.base, entry.data[j]) };
+                    unsafe { outw(self.base + ATA_REG_DATA, entry.data[j]) };
                 }
 
+                self.wait_ready()?;
                 entry.dirty = false;
             }
 
@@ -108,27 +158,14 @@ impl Disk {
 
         let mut buf: [u16; 256] = [0; 256];
 
-        unsafe {
-            outb(self.base + 0x6, (lba >> 24) as u8 | 0xE0);
-            outb(self.base + 0x2, 1_u8);
-            outb(self.base + 0x3, lba as u8);
-            outb(self.base + 0x4, (lba >> 8) as u8);
-            outb(self.base + 0x5, (lba >> 16) as u8);
-            outb(self.base + 0x7, 0x20);
-        }
-
-        let mut timeout = 1000000;
-        while unsafe { inb(self.base + 0x7) } & 0x80 != 0 && timeout > 0 {
-            timeout -= 1;
-        }
-
-        if timeout == 0 {
-            return Err(DiskError::Timeout);
-        }
+        self.select_lba_sector(lba)?;
+        unsafe { outb(self.base + ATA_REG_STATUS_COMMAND, ATA_CMD_READ_SECTORS) };
+        self.wait_data_request()?;
 
         for e in buf.iter_mut() {
-            *e = unsafe { inw(self.base) };
+            *e = unsafe { inw(self.base + ATA_REG_DATA) };
         }
+        self.wait_ready()?;
 
         let entry = Arc::new(Mutex::new(CacheEntry {
             data: buf,

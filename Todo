@@ -36,7 +36,7 @@
     - [x] add O_TRUNC and O_APPEND behavior
     - [x] pipe read returns EOF when writers are closed
     - [x] pipe write reports broken pipe when readers are closed
-    - [ ] wake blocked pipe readers/writers instead of polling
+    - [x] wake blocked pipe readers/writers instead of polling
 
 * Filesystem
     - [x] normalize ., .., repeated slash, and relative paths
@@ -53,11 +53,11 @@
     - [x] add lstat
     - [x] reject rmdir on non-empty memfs directories with ENOTEMPTY
     - [x] avoid FAT truncate/flush on every write
-    - [ ] add chmod, chown, umask with real uid/gid later
-    - [ ] make FAT create/remove directory entries robust
+    - [x] add chmod, chown, umask with real uid/gid later
+    - [x] make FAT create/remove directory entries robust
 
 * Shell / userspace utilities
-    - [x] add builtins: help, cd, pwd, ls, cat, touch, cp, mv, mkdir, rmdir, rm, stat, echo
+    - [x] add builtins: help, cd, pwd, id, ls, cat, touch, cp, mv, mkdir, rmdir, rm, stat, chmod, echo
     - [x] make execve resolve relative paths with cwd
     - [x] make FAT directory names shell-friendly for short 8.3 entries
     - [x] hide dotfiles in ls by default and add ls -a
@@ -73,11 +73,11 @@
     - [x] move C malloc/free onto userspace sbrk
     - [x] migrate Rust userspace allocator away from PolyOS malloc syscall
     - [ ] add mmap, munmap, mprotect
-    - [ ] expand COW tests for heap, globals, stack, and fd state
+    - [x] expand COW tests for heap, globals, stack, and fd state
 
 * TTY / terminal
     - [x] expose console/screen/serial/keyboard devices through devfs
-    - [ ] add /dev/tty
+    - [x] add /dev/tty
     - [ ] add termios: tcgetattr, tcsetattr
     - [ ] add canonical/raw input modes
     - [ ] send SIGINT on Ctrl-C to the foreground process group

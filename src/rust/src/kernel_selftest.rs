@@ -176,21 +176,56 @@ fn test_vfs_devices(runner: &mut Runner) {
             .stat("/bin")
             .is_ok_and(|metadata| metadata.is_dir),
     );
-    let overlay_path = "/kernel-selftest-root-overlay";
-    let _ = KERNEL.vfs.read().remove(overlay_path);
     runner.check(
-        "vfs root overlay mkdir",
-        KERNEL.vfs.read().mkdir(overlay_path).is_ok(),
+        "vfs fat long mkdir",
+        KERNEL.vfs.read().mkdir("/kernel-selftest-fat-root").is_ok(),
+    );
+    runner.check(
+        "vfs fat root survives long create",
+        KERNEL
+            .vfs
+            .read()
+            .stat("/bin")
+            .is_ok_and(|metadata| metadata.is_dir),
+    );
+    let _ = KERNEL.vfs.read().remove("/kernel-selftest-fat-root");
+    let fat_path = "/ksfat";
+    let fat_nested = "/ksfat/nested-file.txt";
+    let _ = KERNEL.vfs.read().remove(fat_nested);
+    let _ = KERNEL.vfs.read().remove(fat_path);
+    runner.check(
+        "vfs fat root mkdir",
+        KERNEL.vfs.read().mkdir(fat_path).is_ok(),
     );
     let root_entries = KERNEL.vfs.read().read_dir("/").unwrap_or_default();
     runner.check(
-        "vfs root merges overlay and lower",
+        "vfs root lists fat and mounts",
         root_entries
             .iter()
-            .any(|entry| entry == "kernel-selftest-root-overlay")
+            .any(|entry| entry == "ksfat")
             && root_entries.iter().any(|entry| entry == "bin"),
     );
-    let _ = KERNEL.vfs.read().remove(overlay_path);
+    runner.check(
+        "vfs fat nested create",
+        KERNEL.vfs.read().create(fat_nested, false).is_ok(),
+    );
+    runner.check(
+        "vfs fat nested stat",
+        KERNEL
+            .vfs
+            .read()
+            .stat(fat_nested)
+            .is_ok_and(|metadata| !metadata.is_dir),
+    );
+    runner.check(
+        "vfs fat rmdir non-empty",
+        matches!(
+            KERNEL.vfs.read().rmdir(fat_path),
+            Err(crate::fs::FsError::NotEmpty)
+        ),
+    );
+    let _ = KERNEL.vfs.read().remove(fat_nested);
+    let _ = KERNEL.vfs.read().remove(fat_path);
     runner.check(
         "vfs create missing parent",
         matches!(

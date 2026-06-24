@@ -23,6 +23,8 @@ typedef u32 size_t;
 typedef s32 ssize_t;
 typedef s32 off_t;
 typedef s32 pid_t;
+typedef u32 uid_t;
+typedef u32 gid_t;
 typedef s32 intptr_t;
 typedef u32 uintptr_t;
 typedef s32 time_t;
