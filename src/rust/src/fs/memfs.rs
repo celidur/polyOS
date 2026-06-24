@@ -75,22 +75,30 @@ impl FileSystem for MemFsVolume {
             return Err(FsError::IoError);
         }
         let mut result = Vec::new();
-        // gather direct children
-        let prefix = if path.is_empty() {
-            ""
+        let prefix = path.trim_matches('/');
+        let child_prefix = if prefix.is_empty() {
+            String::new()
         } else {
-            path.trim_end_matches('/')
+            let mut prefix = prefix.to_string();
+            prefix.push('/');
+            prefix
         };
+
         for (k, v) in map.iter() {
             if k == path {
                 continue;
             }
-            if v.lock().is_dir {
-                // check if 'k' starts with prefix, etc. Simplify for demo
+
+            let Some(child) = k.strip_prefix(child_prefix.as_str()) else {
+                continue;
+            };
+
+            if child.is_empty() || child.contains('/') {
+                continue;
             }
-            if k.starts_with(prefix) && k != path {
-                result.push(k.clone());
-            }
+
+            let _ = v;
+            result.push(child.to_string());
         }
         Ok(result)
     }
@@ -118,11 +126,22 @@ impl FileSystem for MemFsVolume {
 
     fn remove(&self, path: &str) -> Result<(), FsError> {
         let mut map = self.inner.write();
-        let node = map.remove(path).ok_or(FsError::NotFound)?;
-        let node = node.lock();
-        if node.is_dir && !node.data.is_empty() {
-            return Err(FsError::NotEmpty);
+        let node = map.get(path).ok_or(FsError::NotFound)?;
+        if node.lock().is_dir {
+            let has_children = if path.is_empty() {
+                map.keys().any(|entry| !entry.is_empty())
+            } else {
+                let child_prefix = alloc::format!("{}/", path);
+                map.keys()
+                    .any(|entry| entry.starts_with(child_prefix.as_str()))
+            };
+
+            if has_children {
+                return Err(FsError::NotEmpty);
+            }
         }
+
+        map.remove(path);
         Ok(())
     }
 
@@ -179,6 +198,14 @@ impl FileOps for MemFsFile {
         let node = self.inner.lock();
         self.offset = pos.min(node.data.len());
         Ok(self.offset)
+    }
+
+    fn truncate(&mut self, size: usize) -> Result<(), FsError> {
+        let mut node = self.inner.lock();
+        node.data.resize(size, 0);
+        node.meta.size = node.data.len() as u64;
+        self.offset = self.offset.min(node.data.len());
+        Ok(())
     }
 
     fn stat(&self) -> Result<FileMetadata, FsError> {

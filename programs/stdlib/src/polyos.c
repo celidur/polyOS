@@ -1,21 +1,14 @@
 #include "polyos.h"
+#include "stdlib.h"
 #include "string.h"
 #include "stdio.h"
 
-#define POLYOS_WAIT_TIMEOUT_CODE -2
-
-int recvfrom_wait(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen, u32 timeout_ticks){
-    u32 attempts = 0;
-    while (timeout_ticks == 0 || attempts < timeout_ticks) {
-        int res = recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
-        if (res >= 0) {
-            return res;
-        }
-        polyos_sleep(1);
-        attempts++;
-    }
-
-    return POLYOS_WAIT_TIMEOUT_CODE;
+static void sleep_ms(u32 duration_ms)
+{
+    struct timespec req;
+    req.tv_sec = duration_ms / 1000;
+    req.tv_nsec = (duration_ms % 1000) * 1000000;
+    nanosleep(&req, NULL);
 }
 
 void polyos_terminal_readline(char* out, int max, bool output_while_typing)
@@ -24,7 +17,7 @@ void polyos_terminal_readline(char* out, int max, bool output_while_typing)
     while (i < max - 1) {
         char key = 0;
         if (read(STDIN_FILENO, &key, 1) != 1){
-            polyos_sleep(1);
+            sleep_ms(1);
             continue;
         }
 
@@ -96,6 +89,94 @@ int fclose(int fd){
     return close(fd);
 }
 
+static int contains_slash(const char *value){
+    for (int i = 0; value[i]; i++){
+        if (value[i] == '/'){
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int build_exec_path(char *out, int out_size, const char *prefix, const char *command, const char *suffix){
+    int pos = 0;
+
+    for (int i = 0; prefix[i]; i++){
+        if (pos + 1 >= out_size){
+            return 0;
+        }
+        out[pos++] = prefix[i];
+    }
+
+    for (int i = 0; command[i]; i++){
+        if (pos + 1 >= out_size){
+            return 0;
+        }
+        out[pos++] = command[i];
+    }
+
+    for (int i = 0; suffix[i]; i++){
+        if (pos + 1 >= out_size){
+            return 0;
+        }
+        out[pos++] = suffix[i];
+    }
+
+    out[pos] = '\0';
+    return 1;
+}
+
+static void exec_if_present(const char *path, char *const argv[]){
+    struct file_stat stat_buf;
+    if (stat(path, &stat_buf) == 0 && !S_ISDIR(stat_buf.mode)){
+        execve(path, argv, environ);
+    }
+}
+
+static void exec_from_path(const char *command, char *const argv[]){
+    const char *path_env = getenv("PATH");
+    if (!path_env || !path_env[0]){
+        path_env = "/bin";
+    }
+
+    char directory[256];
+    char prefix_buf[256];
+    char path[256];
+    int dir_len = 0;
+
+    for (int i = 0;; i++){
+        char c = path_env[i];
+        if (c != ':' && c != '\0'){
+            if (dir_len + 1 < (int)sizeof(directory)){
+                directory[dir_len++] = c;
+            }
+            continue;
+        }
+
+        directory[dir_len] = '\0';
+        const char *prefix = dir_len == 0 ? "." : directory;
+        if (!build_exec_path(prefix_buf, sizeof(prefix_buf), prefix, "/", "")){
+            if (c == '\0'){
+                break;
+            }
+            dir_len = 0;
+            continue;
+        }
+
+        if (build_exec_path(path, sizeof(path), prefix_buf, command, "")){
+            exec_if_present(path, argv);
+        }
+        if (build_exec_path(path, sizeof(path), prefix_buf, command, ".elf")){
+            exec_if_present(path, argv);
+        }
+
+        if (c == '\0'){
+            break;
+        }
+        dir_len = 0;
+    }
+}
+
 int polyos_system_run(const char *command){
     char buff[1024];
     char *argv[64];
@@ -121,7 +202,11 @@ int polyos_system_run(const char *command){
     }
 
     if (pid == 0){
-        execve(argv[0], argv, NULL);
+        if (contains_slash(argv[0])){
+            exec_if_present(argv[0], argv);
+        } else {
+            exec_from_path(argv[0], argv);
+        }
         _exit(127);
     }
 
@@ -130,5 +215,9 @@ int polyos_system_run(const char *command){
         return -1;
     }
 
-    return status;
+    if (WIFEXITED(status)){
+        return WEXITSTATUS(status);
+    }
+
+    return -1;
 }

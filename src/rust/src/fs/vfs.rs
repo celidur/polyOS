@@ -18,6 +18,7 @@ pub enum FsError {
     NotFound,
     AlreadyExists,
     InvalidPath,
+    NotADirectory,
     IoError,
     Unsupported,
     PermissionDenied,
@@ -25,6 +26,8 @@ pub enum FsError {
     NoSpace,
     InvalidArgument,
     IsADirectory,
+    WouldBlock,
+    BrokenPipe,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -64,6 +67,9 @@ pub trait FileOps {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, FsError>;
     fn write(&mut self, buf: &[u8]) -> Result<usize, FsError>;
     fn seek(&mut self, pos: usize) -> Result<usize, FsError>;
+    fn truncate(&mut self, _size: usize) -> Result<(), FsError> {
+        Err(FsError::Unsupported)
+    }
     fn ioctl(
         &mut self,
         _request: u32,
@@ -118,9 +124,6 @@ impl Vfs {
         let fs = driver.mount(options)?;
 
         let mut mounts = self.mounts.write();
-        if mounts.iter().any(|m| m.mount_point == mount_point) {
-            return Err(FsError::AlreadyExists);
-        }
         mounts.push(MountEntry {
             mount_point: mount_point.to_string(),
             filesystem: fs,
@@ -128,44 +131,125 @@ impl Vfs {
         Ok(())
     }
 
-    /// Resolve `path` to a (FileSystem, subpath) pair by scanning mounts.
-    fn resolve_path(&self, path: &str) -> Result<(Arc<dyn FileSystem>, String), FsError> {
+    /// Resolve `path` to candidate (FileSystem, subpath) pairs.
+    ///
+    /// Multiple filesystems may share the same mount point. Later mounts are
+    /// searched first, which gives us a small writable overlay on top of the
+    /// boot FAT filesystem while still allowing fallback to FAT for `/bin`.
+    fn resolve_paths(&self, path: &str) -> Vec<(Arc<dyn FileSystem>, String)> {
         let mounts = self.mounts.read();
-        let mut best_match: Option<(Arc<dyn FileSystem>, usize)> = None;
+        let mut best_len = 0;
+        let mut matches = Vec::new();
         for entry in mounts.iter() {
             let mp_len = entry.mount_point.len();
-            if mount_matches(path, &entry.mount_point)
-                && (best_match.is_none() || mp_len > best_match.as_ref().unwrap().1)
-            {
-                best_match = Some((entry.filesystem.clone(), mp_len));
+            if !mount_matches(path, &entry.mount_point) {
+                continue;
+            }
+
+            if mp_len > best_len {
+                best_len = mp_len;
+                matches.clear();
+            }
+
+            if mp_len == best_len {
+                let subpath = &path[mp_len..];
+                let subpath = subpath.trim_start_matches('/');
+                matches.push((entry.filesystem.clone(), subpath.to_string()));
             }
         }
-        if let Some((fs, mp_len)) = best_match {
-            let subpath = &path[mp_len..];
-            let subpath = subpath.trim_start_matches('/');
-            Ok((fs, subpath.to_string()))
-        } else {
-            Err(FsError::NotFound)
+
+        matches.reverse();
+        matches
+    }
+
+    /// Resolve `path` to a single (FileSystem, subpath) pair for callers that
+    /// need the top mount only.
+    fn resolve_path(&self, path: &str) -> Result<(Arc<dyn FileSystem>, String), FsError> {
+        self.resolve_paths(path)
+            .into_iter()
+            .next()
+            .ok_or(FsError::NotFound)
+    }
+
+    fn existing_path(&self, path: &str) -> Result<(Arc<dyn FileSystem>, String), FsError> {
+        let mut last_error = FsError::NotFound;
+        for (fs, subpath) in self.resolve_paths(path) {
+            match fs.metadata(subpath.as_str()) {
+                Ok(_) => return Ok((fs, subpath)),
+                Err(error) => last_error = error,
+            }
         }
+
+        Err(last_error)
+    }
+
+    fn create_target(&self, path: &str) -> Result<(Arc<dyn FileSystem>, String), FsError> {
+        let candidates = self.resolve_paths(path);
+        for (fs, subpath) in candidates.iter() {
+            if subpath.is_empty() || fs.metadata(subpath.as_str()).is_ok() {
+                return Err(FsError::AlreadyExists);
+            }
+        }
+
+        let mut last_error = FsError::NotFound;
+        for (fs, subpath) in candidates {
+            match validate_create_parent(fs.as_ref(), subpath.as_str()) {
+                Ok(()) => return Ok((fs, subpath)),
+                Err(FsError::NotFound) => last_error = FsError::NotFound,
+                Err(error) => return Err(error),
+            }
+        }
+
+        Err(last_error)
     }
 
     pub fn open(&self, path: &str) -> Result<FileHandle, FsError> {
-        let (fs, subpath) = self.resolve_path(path)?;
-        fs.open(&subpath)
+        let mut last_error = FsError::NotFound;
+        for (fs, subpath) in self.resolve_paths(path) {
+            match fs.open(&subpath) {
+                Ok(handle) => return Ok(handle),
+                Err(FsError::NotFound) => last_error = FsError::NotFound,
+                Err(error) => return Err(error),
+            }
+        }
+
+        Err(last_error)
     }
 
     pub fn read_dir(&self, path: &str) -> Result<Vec<String>, FsError> {
-        let (fs, subpath) = self.resolve_path(path)?;
-        fs.read_dir(&subpath)
+        let mut entries = Vec::new();
+        let mut found = false;
+        let mut last_error = FsError::NotFound;
+        for (fs, subpath) in self.resolve_paths(path) {
+            match fs.read_dir(&subpath) {
+                Ok(fs_entries) => {
+                    found = true;
+                    append_unique(&mut entries, fs_entries);
+                }
+                Err(FsError::NotFound) => last_error = FsError::NotFound,
+                Err(error) => {
+                    if !found {
+                        last_error = error;
+                    }
+                }
+            }
+        }
+
+        if !found {
+            return Err(last_error);
+        }
+
+        self.append_mount_points(path, &mut entries);
+        Ok(entries)
     }
 
     pub fn create(&self, path: &str, directory: bool) -> Result<(), FsError> {
-        let (fs, subpath) = self.resolve_path(path)?;
+        let (fs, subpath) = self.create_target(path)?;
         fs.create(&subpath, directory)
     }
 
     pub fn remove(&self, path: &str) -> Result<(), FsError> {
-        let (fs, subpath) = self.resolve_path(path)?;
+        let (fs, subpath) = self.existing_path(path)?;
         fs.remove(&subpath)
     }
 
@@ -178,18 +262,40 @@ impl Vfs {
     }
 
     pub fn stat(&self, path: &str) -> Result<FileMetadata, FsError> {
-        let (fs, subpath) = self.resolve_path(path)?;
+        let (fs, subpath) = self.existing_path(path)?;
         fs.metadata(&subpath)
     }
 
     pub fn chmod(&self, path: &str, mode: u16) -> Result<(), FsError> {
-        let (fs, subpath) = self.resolve_path(path)?;
+        let (fs, subpath) = self.existing_path(path)?;
         fs.chmod(&subpath, mode)
     }
 
     pub fn chown(&self, path: &str, uid: u32, gid: u32) -> Result<(), FsError> {
-        let (fs, subpath) = self.resolve_path(path)?;
+        let (fs, subpath) = self.existing_path(path)?;
         fs.chown(&subpath, uid, gid)
+    }
+
+    fn append_mount_points(&self, path: &str, entries: &mut Vec<String>) {
+        let path = normalize_mount_parent(path);
+        let mounts = self.mounts.read();
+        for mount in mounts.iter() {
+            let Some(name) = direct_mount_child(path.as_str(), mount.mount_point.as_str()) else {
+                continue;
+            };
+
+            if !entries.iter().any(|entry| entry == name.as_str()) {
+                entries.push(name);
+            }
+        }
+    }
+}
+
+fn append_unique(entries: &mut Vec<String>, new_entries: Vec<String>) {
+    for entry in new_entries {
+        if !entries.iter().any(|existing| existing == entry.as_str()) {
+            entries.push(entry);
+        }
     }
 }
 
@@ -202,4 +308,63 @@ fn mount_matches(path: &str, mount_point: &str) -> bool {
         || path
             .strip_prefix(mount_point)
             .is_some_and(|suffix| suffix.starts_with('/'))
+}
+
+fn normalize_mount_parent(path: &str) -> String {
+    if path.is_empty() || path == "/" {
+        return "/".to_string();
+    }
+
+    let trimmed = path.trim_end_matches('/');
+    if trimmed.is_empty() {
+        "/".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn direct_mount_child(parent: &str, mount_point: &str) -> Option<String> {
+    if mount_point == "/" {
+        return None;
+    }
+
+    let mount = mount_point.trim_end_matches('/');
+    let mount = if mount.is_empty() { "/" } else { mount };
+
+    if parent == "/" {
+        let rest = mount.strip_prefix('/')?;
+        if rest.is_empty() || rest.contains('/') {
+            return None;
+        }
+        return Some(rest.to_string());
+    }
+
+    let rest = mount.strip_prefix(parent)?.strip_prefix('/')?;
+    if rest.is_empty() || rest.contains('/') {
+        None
+    } else {
+        Some(rest.to_string())
+    }
+}
+
+fn validate_create_parent(fs: &dyn FileSystem, path: &str) -> Result<(), FsError> {
+    if path.is_empty() {
+        return Err(FsError::AlreadyExists);
+    }
+
+    let Some(parent) = parent_path(path) else {
+        return Ok(());
+    };
+
+    match fs.metadata(parent) {
+        Ok(metadata) if metadata.is_dir => Ok(()),
+        Ok(_) => Err(FsError::NotADirectory),
+        Err(error) => Err(error),
+    }
+}
+
+fn parent_path(path: &str) -> Option<&str> {
+    path.rsplit_once('/')
+        .map(|(parent, _)| parent)
+        .filter(|parent| !parent.is_empty())
 }

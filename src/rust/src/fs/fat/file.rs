@@ -40,6 +40,12 @@ impl FatFile {
     }
 }
 
+impl Drop for FatFile {
+    fn drop(&mut self) {
+        let _ = self.file.lock().flush();
+    }
+}
+
 unsafe impl Send for FatFile {}
 unsafe impl Sync for FatFile {}
 
@@ -49,11 +55,7 @@ impl FileOps for FatFile {
     }
 
     fn write(&mut self, buf: &[u8]) -> Result<usize, FsError> {
-        let res = self.file.lock().write(buf).map_err(|_| FsError::IoError);
-        self.file.lock().truncate().map_err(|_| FsError::IoError)?;
-        self.file.lock().flush().map_err(|_| FsError::IoError)?;
-
-        res
+        self.file.lock().write(buf).map_err(|_| FsError::IoError)
     }
 
     fn seek(&mut self, pos: usize) -> Result<usize, FsError> {
@@ -62,6 +64,14 @@ impl FileOps for FatFile {
             .seek(SeekFrom::Start(pos as u64))
             .map_err(|_| FsError::IoError)
             .map(|d| d as usize)
+    }
+
+    fn truncate(&mut self, size: usize) -> Result<(), FsError> {
+        let mut file = self.file.lock();
+        file.seek(SeekFrom::Start(size as u64))
+            .map_err(|_| FsError::IoError)?;
+        file.truncate().map_err(|_| FsError::IoError)?;
+        file.flush().map_err(|_| FsError::IoError)
     }
 
     fn stat(&self) -> Result<FileMetadata, FsError> {

@@ -40,7 +40,7 @@ impl TaskState {
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Registers {
     pub edi: u32,
     pub esi: u32,

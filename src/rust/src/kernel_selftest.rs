@@ -154,6 +154,53 @@ fn test_vfs_devices(runner: &mut Runner) {
         "vfs write /dev/null",
         matches!(null.ops.write(data), Ok(written) if written == data.len()),
     );
+
+    let root_entries = KERNEL.vfs.read().read_dir("/").unwrap_or_default();
+    runner.check(
+        "vfs root lists /dev mount",
+        root_entries.iter().any(|entry| entry == "dev"),
+    );
+    runner.check(
+        "vfs root lists /tmp mount",
+        root_entries.iter().any(|entry| entry == "tmp"),
+    );
+    runner.check(
+        "vfs root lists /bin lower fs",
+        root_entries.iter().any(|entry| entry == "bin"),
+    );
+    runner.check(
+        "vfs stat /bin lower fs",
+        KERNEL
+            .vfs
+            .read()
+            .stat("/bin")
+            .is_ok_and(|metadata| metadata.is_dir),
+    );
+    let overlay_path = "/kernel-selftest-root-overlay";
+    let _ = KERNEL.vfs.read().remove(overlay_path);
+    runner.check(
+        "vfs root overlay mkdir",
+        KERNEL.vfs.read().mkdir(overlay_path).is_ok(),
+    );
+    let root_entries = KERNEL.vfs.read().read_dir("/").unwrap_or_default();
+    runner.check(
+        "vfs root merges overlay and lower",
+        root_entries
+            .iter()
+            .any(|entry| entry == "kernel-selftest-root-overlay")
+            && root_entries.iter().any(|entry| entry == "bin"),
+    );
+    let _ = KERNEL.vfs.read().remove(overlay_path);
+    runner.check(
+        "vfs create missing parent",
+        matches!(
+            KERNEL
+                .vfs
+                .read()
+                .create("/kernel-selftest-missing/file", false),
+            Err(crate::fs::FsError::NotFound)
+        ),
+    );
 }
 
 fn test_vfs_memfs(runner: &mut Runner) {

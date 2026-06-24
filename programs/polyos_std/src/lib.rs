@@ -9,6 +9,7 @@ pub mod stdio;
 #[allow(warnings)]
 pub mod bindings;
 pub mod cli;
+pub mod fs;
 pub mod io;
 mod memory;
 pub mod prelude;

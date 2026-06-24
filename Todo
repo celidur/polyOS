@@ -1,53 +1,107 @@
-* Task
-    - [ ] read https://wiki.osdev.org/Brendan%27s_Multi-tasking_Tutorial to implement multi-tasking properly
-    - [ ] fix get and set from user to be aligned with a page
+* Unix/POSIX compliance roadmap
 
-* SysCall
-    - [x] open
-    - [x] close
-    - [x] read
-    - [x] write
-    - [x] seek
+* Core syscall ABI
+    - [x] use Linux i386 syscall numbers where the ABI matches
+    - [x] return negative errno values from new/updated kernel syscalls
+    - [x] add userspace errno
+    - [x] add libc wrappers that translate -errno to -1 and errno
+    - [x] keep PolyOS-private syscall numbers in the 500+ range
+    - [x] migrate remaining PolyOS-private syscalls behind debug/test APIs only
+    - [x] route BSD socket libc wrappers through Linux i386 socketcall(102)
+    - [x] route userspace sleep through nanosleep instead of PolyOS sleep
+    - [x] route public reboot wrapper through Linux i386 reboot(88)
+    - [x] expose semaphores through POSIX-like sem_init/sem_wait/sem_post/sem_destroy wrappers
+    - [x] convert network and semaphore syscalls to precise -errno values
 
-* FileSystem
-    - [ ] add mount
-    - [ ] add unmount
-    - [ ] ramfs
-        - [ ] create /tmp directory
-        - [ ] create /proc directory
-    - [ ] fat16
-        - [ ] increase the directory sector if no space for new entry
-        - [x] find new entry for file if rename it with longer name
-        - [ ] add file
-        - [ ] remove file
-        - [ ] add directory
-        - [ ] remove directory
+* Process model
+    - [x] fork creates a new process
+    - [x] waitpid writes Unix-style encoded exit status
+    - [x] waitpid supports WNOHANG
+    - [x] complete execve envp support
+    - [x] keep zombies until waited and reparent orphan processes
+    - [x] add kill syscall and Unix wait status for signal termination
+    - [x] add sigaction/signal libc wrappers and SIGCHLD/SIGINT/SIGPIPE constants
+    - [x] deliver userspace signal handlers with sigreturn
+    - [x] send SIGCHLD on child exit
+    - [ ] add process groups, sessions, foreground TTY
 
-* Process
-    - [ ] add fork
-    - [ ] add kernel process
-    - [ ] implement waitpid
-    - [ ] implement inter-process communication
-    - [ ] implement signal
-    - [ ] elf loader
-        - [ ] implement shared library
+* File descriptors
+    - [x] stdin/stdout/stderr start as fd 0/1/2
+    - [x] fork shares open file descriptions
+    - [x] add dup
+    - [x] add dup2
+    - [x] add fcntl with FD_CLOEXEC and F_DUPFD
+    - [x] make exec close FD_CLOEXEC descriptors only
+    - [x] add O_NONBLOCK status flag support
+    - [x] add O_TRUNC and O_APPEND behavior
+    - [x] pipe read returns EOF when writers are closed
+    - [x] pipe write reports broken pipe when readers are closed
+    - [ ] wake blocked pipe readers/writers instead of polling
 
-* Timer
-    - [ ] implement timer
+* Filesystem
+    - [x] normalize ., .., repeated slash, and relative paths
+    - [x] list direct VFS mount points in parent directories
+    - [x] add per-process cwd
+    - [x] add chdir
+    - [x] add getcwd
+    - [x] add mkdir
+    - [x] add rmdir
+    - [x] add unlink
+    - [x] add getdents
+    - [x] add libc readdir wrapper
+    - [x] improve stat/fstat file type and mode bits
+    - [x] add lstat
+    - [x] reject rmdir on non-empty memfs directories with ENOTEMPTY
+    - [x] avoid FAT truncate/flush on every write
+    - [ ] add chmod, chown, umask with real uid/gid later
+    - [ ] make FAT create/remove directory entries robust
 
-* Shell
-    - [ ] ls
-    - [ ] cd
-    - [ ] mkdir
-    - [ ] rmdir
-    - [ ] touch
-    - [ ] rm
-    - [ ] cat
-    - [ ] echo
-    - [ ] cp
-    - [ ] mv
-    - [ ] pwd
-    - [ ] add history command
+* Shell / userspace utilities
+    - [x] add builtins: help, cd, pwd, ls, cat, touch, cp, mv, mkdir, rmdir, rm, stat, echo
+    - [x] make execve resolve relative paths with cwd
+    - [x] make FAT directory names shell-friendly for short 8.3 entries
+    - [x] hide dotfiles in ls by default and add ls -a
+    - [x] add basic /bin and /bin/*.elf executable lookup
+    - [x] add redirection: >, >>, <
+    - [x] add pipelines with pipe/dup2
+    - [x] add real PATH environment lookup instead of fixed /bin fallback
+    - [x] add environment variables
 
-* VGA
-    - [x] fix VGA_90x60_TEXT need sometime to be set 2 times
+* Memory
+    - [x] add brk syscall
+    - [x] add userspace sbrk
+    - [x] move C malloc/free onto userspace sbrk
+    - [x] migrate Rust userspace allocator away from PolyOS malloc syscall
+    - [ ] add mmap, munmap, mprotect
+    - [ ] expand COW tests for heap, globals, stack, and fd state
+
+* TTY / terminal
+    - [x] expose console/screen/serial/keyboard devices through devfs
+    - [ ] add /dev/tty
+    - [ ] add termios: tcgetattr, tcsetattr
+    - [ ] add canonical/raw input modes
+    - [ ] send SIGINT on Ctrl-C to the foreground process group
+
+* Time
+    - [x] timer interrupt and sleep syscall
+    - [x] add nanosleep
+    - [x] add clock_gettime
+    - [x] add gettimeofday
+    - [x] make sleep a libc wrapper over nanosleep
+
+* Networking
+    - [x] network device abstraction
+    - [x] rtl8139 in QEMU
+    - [x] DHCP, ARP, ICMP, DNS basics
+    - [x] socket, sendto, recvfrom basics
+    - [x] add bind, connect, listen, accept
+    - [x] add send, recv, getsockname, getpeername, setsockopt
+    - [ ] move DNS resolver behavior toward userspace libc
+
+* Selftests
+    - [x] userspace selftest program
+    - [x] kernel selftest syscall for memory, paging, VFS, devfs, ELF loader
+    - [x] selftest covers errno, brk/sbrk, dup/dup2, fcntl, O_TRUNC/O_APPEND, cwd, mkdir/rmdir/unlink, ENOTEMPTY, stat/lstat, getdents, opendir/readdir
+    - [x] selftest covers fork, pipe, semaphore, waitpid, zombies, orphan reparenting, COW stack, environment variables
+    - [x] optional selftest net mode covers DHCP and ping gateway
+    - [ ] add automated host-side QEMU log checker

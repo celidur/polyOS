@@ -14,6 +14,8 @@ pub const MAX_PATH: usize = 256;
 pub const TOTAL_GDT_SEGMENTS: usize = 6;
 
 pub const PROGRAM_VIRTUAL_ADDRESS: usize = 0x00400000;
+pub const USER_HEAP_START: usize = 0x00800000;
+pub const USER_HEAP_END: usize = 0x01000000;
 pub const USER_PROGRAM_STACK_SIZE: usize = 1024 * 16; // 16KB
 pub const USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START: usize = 0x003FF000;
 pub const USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END: usize =

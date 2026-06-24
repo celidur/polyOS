@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 use lazy_static::lazy_static;
 use spin::RwLock;
 
-const MAX_SYSCALLS: usize = 256;
+const MAX_SYSCALLS: usize = 1024;
 
 pub type SyscallHandler = fn(frame: &InterruptFrame) -> u32;
 

@@ -38,26 +38,26 @@ impl SemaphoreTable {
         id
     }
 
-    fn wait(&mut self, id: usize, task_manager: &mut TaskManager) -> Result<bool, ()> {
+    fn wait(&mut self, id: usize, task_manager: &mut TaskManager) -> Result<bool, i32> {
         self.semaphores
             .get_mut(&id)
-            .ok_or(())?
+            .ok_or(abi::EINVAL)?
             .wait(task_manager)
-            .map_err(|_| ())
+            .map_err(|_| abi::ESRCH)
     }
 
-    fn signal(&mut self, id: usize, task_manager: &mut TaskManager) -> Result<(), ()> {
+    fn signal(&mut self, id: usize, task_manager: &mut TaskManager) -> Result<(), i32> {
         self.semaphores
             .get_mut(&id)
-            .ok_or(())
+            .ok_or(abi::EINVAL)
             .map(|semaphore| semaphore.signal(task_manager))
     }
 
-    fn close(&mut self, id: usize, task_manager: &mut TaskManager) -> Result<(), ()> {
+    fn close(&mut self, id: usize, task_manager: &mut TaskManager) -> Result<(), i32> {
         self.semaphores
             .remove(&id)
-            .ok_or(())
-            .map(|mut semaphore| semaphore.close(task_manager, abi::error()))
+            .ok_or(abi::EINVAL)
+            .map(|mut semaphore| semaphore.close(task_manager, abi::errno(abi::EINVAL)))
     }
 }
 
@@ -66,11 +66,11 @@ pub fn syscall_semaphore_create(_frame: &InterruptFrame) -> u32 {
         let current_task = tm.get_current()?;
         Some(current_task.read().get_stack_item(0) as i32)
     }) else {
-        return abi::error();
+        return abi::errno(abi::ESRCH);
     };
 
     if count < 0 {
-        return abi::error();
+        return abi::errno(abi::EINVAL);
     }
 
     SEMAPHORES.lock().create(count as isize) as u32
@@ -81,7 +81,7 @@ pub fn syscall_semaphore_wait(_frame: &InterruptFrame) -> u32 {
         let current_task = tm.get_current()?;
         Some(current_task.read().get_stack_item(0) as usize)
     }) else {
-        return abi::error();
+        return abi::errno(abi::ESRCH);
     };
 
     let wait_result = KERNEL.with_task_manager(|tm| SEMAPHORES.lock().wait(id, tm));
@@ -92,7 +92,7 @@ pub fn syscall_semaphore_wait(_frame: &InterruptFrame) -> u32 {
             task_current_set_return_value(0);
             task_next();
         }
-        Err(_) => abi::error(),
+        Err(errno) => abi::errno(errno),
     }
 }
 
@@ -101,12 +101,12 @@ pub fn syscall_semaphore_signal(_frame: &InterruptFrame) -> u32 {
         let current_task = tm.get_current()?;
         Some(current_task.read().get_stack_item(0) as usize)
     }) else {
-        return abi::error();
+        return abi::errno(abi::ESRCH);
     };
 
     match KERNEL.with_task_manager(|tm| SEMAPHORES.lock().signal(id, tm)) {
         Ok(()) => 0,
-        Err(()) => abi::error(),
+        Err(errno) => abi::errno(errno),
     }
 }
 
@@ -115,11 +115,11 @@ pub fn syscall_semaphore_close(_frame: &InterruptFrame) -> u32 {
         let current_task = tm.get_current()?;
         Some(current_task.read().get_stack_item(0) as usize)
     }) else {
-        return abi::error();
+        return abi::errno(abi::ESRCH);
     };
 
     match KERNEL.with_task_manager(|tm| SEMAPHORES.lock().close(id, tm)) {
         Ok(()) => 0,
-        Err(()) => abi::error(),
+        Err(errno) => abi::errno(errno),
     }
 }

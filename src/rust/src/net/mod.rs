@@ -38,6 +38,7 @@ pub enum NetworkError {
     Unsupported,
     BadSocket,
     WouldBlock,
+    NotConnected,
 }
 
 #[repr(u32)]
@@ -96,6 +97,10 @@ struct NetworkSocket {
     domain: u32,
     socket_type: u32,
     protocol: u32,
+    local_ip: [u8; 4],
+    local_port: u16,
+    peer_ip: Option<[u8; 4]>,
+    peer_port: u16,
     recv_queue: VecDeque<SocketPacket>,
 }
 
@@ -289,6 +294,10 @@ pub fn socket_open(domain: u32, socket_type: u32, protocol: u32) -> Result<u32, 
         domain,
         socket_type,
         protocol,
+        local_ip: [0; 4],
+        local_port: 0,
+        peer_ip: None,
+        peer_port: 0,
         recv_queue: VecDeque::new(),
     });
     Ok(id)
@@ -333,6 +342,50 @@ pub fn socket_send_to(
     }
 }
 
+pub fn socket_bind(socket_id: u32, local_ip: [u8; 4], local_port: u16) -> Result<(), NetworkError> {
+    let mut stack = STACK.lock();
+    let socket = stack
+        .sockets
+        .iter_mut()
+        .find(|socket| socket.id == socket_id)
+        .ok_or(NetworkError::BadSocket)?;
+
+    socket.local_ip = local_ip;
+    socket.local_port = local_port;
+    Ok(())
+}
+
+pub fn socket_connect(
+    socket_id: u32,
+    peer_ip: [u8; 4],
+    peer_port: u16,
+) -> Result<(), NetworkError> {
+    let mut stack = STACK.lock();
+    let socket = stack
+        .sockets
+        .iter_mut()
+        .find(|socket| socket.id == socket_id)
+        .ok_or(NetworkError::BadSocket)?;
+
+    socket.peer_ip = Some(peer_ip);
+    socket.peer_port = peer_port;
+    Ok(())
+}
+
+pub fn socket_send(socket_id: u32, len: usize) -> Result<usize, NetworkError> {
+    let peer_ip = {
+        let stack = STACK.lock();
+        let socket = stack
+            .sockets
+            .iter()
+            .find(|socket| socket.id == socket_id)
+            .ok_or(NetworkError::BadSocket)?;
+        socket.peer_ip.ok_or(NetworkError::NotConnected)?
+    };
+
+    socket_send_to(socket_id, len, peer_ip, 0)
+}
+
 pub fn socket_recv_from(socket_id: u32, max_len: usize) -> Result<SocketPacket, NetworkError> {
     let mut stack = STACK.lock();
     let socket = stack
@@ -352,6 +405,55 @@ pub fn socket_recv_from(socket_id: u32, max_len: usize) -> Result<SocketPacket, 
     }
 
     Ok(packet)
+}
+
+pub fn socket_local_addr(socket_id: u32) -> Result<([u8; 4], u16), NetworkError> {
+    let stack = STACK.lock();
+    let socket = stack
+        .sockets
+        .iter()
+        .find(|socket| socket.id == socket_id)
+        .ok_or(NetworkError::BadSocket)?;
+
+    let ip = if socket.local_ip == [0; 4] {
+        stack
+            .interfaces
+            .first()
+            .map(|interface| interface.dhcp.config.address)
+            .unwrap_or([0; 4])
+    } else {
+        socket.local_ip
+    };
+
+    Ok((ip, socket.local_port))
+}
+
+pub fn socket_peer_addr(socket_id: u32) -> Result<([u8; 4], u16), NetworkError> {
+    let stack = STACK.lock();
+    let socket = stack
+        .sockets
+        .iter()
+        .find(|socket| socket.id == socket_id)
+        .ok_or(NetworkError::BadSocket)?;
+
+    Ok((
+        socket.peer_ip.ok_or(NetworkError::NotConnected)?,
+        socket.peer_port,
+    ))
+}
+
+pub fn socket_setsockopt(
+    socket_id: u32,
+    _level: u32,
+    _optname: u32,
+    _optlen: u32,
+) -> Result<(), NetworkError> {
+    let stack = STACK.lock();
+    if stack.sockets.iter().any(|socket| socket.id == socket_id) {
+        Ok(())
+    } else {
+        Err(NetworkError::BadSocket)
+    }
 }
 
 pub fn send_dhcp_discover() -> Result<(), NetworkError> {

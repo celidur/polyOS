@@ -1,25 +1,27 @@
 #[derive(Clone, Copy)]
 pub struct Semaphore {
-    id: i32,
+    sem: crate::bindings::sem_t,
 }
 
 impl Semaphore {
     pub fn create(initial_count: i32) -> Result<Self, i32> {
-        let id = unsafe { crate::bindings::sem_create(initial_count) };
+        let mut sem = 0 as crate::bindings::sem_t;
+        let result = unsafe { crate::bindings::sem_init(&mut sem, 0, initial_count as u32) };
 
-        if id >= 0 {
-            Ok(Self { id })
+        if result == 0 {
+            Ok(Self { sem })
         } else {
-            Err(id)
+            Err(result)
         }
     }
 
     pub fn id(self) -> i32 {
-        self.id
+        self.sem as i32
     }
 
     pub fn wait(self) -> Result<(), i32> {
-        let result = unsafe { crate::bindings::sem_wait(self.id) };
+        let mut sem = self.sem;
+        let result = unsafe { crate::bindings::sem_wait(&mut sem) };
 
         if result == 0 {
             Ok(())
@@ -29,7 +31,8 @@ impl Semaphore {
     }
 
     pub fn signal(self) -> Result<(), i32> {
-        let result = unsafe { crate::bindings::sem_signal(self.id) };
+        let mut sem = self.sem;
+        let result = unsafe { crate::bindings::sem_post(&mut sem) };
 
         if result == 0 {
             Ok(())
@@ -39,7 +42,8 @@ impl Semaphore {
     }
 
     pub fn close(self) -> Result<(), i32> {
-        let result = unsafe { crate::bindings::sem_close(self.id) };
+        let mut sem = self.sem;
+        let result = unsafe { crate::bindings::sem_destroy(&mut sem) };
 
         if result == 0 {
             Ok(())

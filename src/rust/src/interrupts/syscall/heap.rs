@@ -1,32 +1,16 @@
-use core::ffi::c_void;
-
 use crate::{interrupts::InterruptFrame, kernel::KERNEL, memory::print_memory};
 
-pub fn syscall_malloc(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_brk(_frame: &InterruptFrame) -> u32 {
     KERNEL.with_task_manager(|tm| {
-        let current_task = if let Some(t) = tm.get_current() {
-            t
-        } else {
+        let Some(current_task) = tm.get_current() else {
             return 0;
         };
-        let size = current_task.read().get_stack_item(0);
-        let process = current_task.read().process.clone();
-        process.malloc(size as usize) as u32
-    })
-}
 
-pub fn syscall_free(_frame: &InterruptFrame) -> u32 {
-    KERNEL.with_task_manager(|tm| {
-        let current_task = if let Some(t) = tm.get_current() {
-            t
-        } else {
-            return 0;
-        };
-        let ptr = current_task.read().get_stack_item(0) as *mut c_void;
-        let process = current_task.read().process.clone();
-        process.free(ptr);
-
-        0
+        let requested_break = current_task.read().get_stack_item(0);
+        current_task
+            .read()
+            .process
+            .set_program_break(requested_break)
     })
 }
 

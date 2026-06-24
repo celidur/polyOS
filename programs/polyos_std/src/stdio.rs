@@ -17,7 +17,7 @@ impl Write for ConsoleWriter {
 
 pub fn print(args: fmt::Arguments) {
     let mut writer = ConsoleWriter;
-    writer.write_fmt(args).unwrap();
+    let _ = writer.write_fmt(args);
 }
 
 #[macro_export]
@@ -47,7 +47,7 @@ impl Write for SerialWriter {
 
 pub fn serial_print(args: fmt::Arguments) {
     let mut writer = SerialWriter;
-    writer.write_fmt(args).unwrap();
+    let _ = writer.write_fmt(args);
 }
 
 #[macro_export]
@@ -107,9 +107,17 @@ fn read_byte() -> u8 {
             return byte;
         }
 
-        unsafe {
-            crate::bindings::polyos_sleep(1);
-        }
+        sleep_ms(1);
+    }
+}
+
+fn sleep_ms(duration_ms: u32) {
+    let req = crate::bindings::timespec {
+        tv_sec: (duration_ms / 1000) as crate::bindings::time_t,
+        tv_nsec: ((duration_ms % 1000) * 1_000_000) as i32,
+    };
+    unsafe {
+        crate::bindings::nanosleep(&req, core::ptr::null_mut());
     }
 }
 

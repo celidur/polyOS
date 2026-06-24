@@ -3,8 +3,7 @@ TARGET = ./$(PARENT_DIR).elf
 
 all:  $(TARGET)
 
-$(TARGET): 
-	cd ../
+$(TARGET):
 	cargo build -Zjson-target-spec --release
 	cp ./target/i686-polyos/release/$(PARENT_DIR) $(TARGET)
 

@@ -25,7 +25,7 @@ int main(int argc, char **argv)
         } else if (strncmp(buffer, "clear", 6) == 0){
             clear_screen();
         } else if (strncmp(buffer, "reboot", 7) == 0){
-            reboot();
+            reboot(RB_AUTOBOOT);
         } else {
             int status = polyos_system_run(buffer);
             if (status < 0 || status == 127){

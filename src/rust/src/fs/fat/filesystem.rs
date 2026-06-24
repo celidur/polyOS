@@ -49,14 +49,7 @@ impl FileSystem for Fat16FileSystem {
         let mut res = Vec::new();
         for r in parent_dir.iter() {
             let e = r.map_err(|_| FsError::NotFound)?;
-            let short = e.short_file_name_as_bytes();
-            let name = if let Some(name) = e.long_file_name_as_ucs2_units() {
-                String::from_utf16_lossy(name)
-            } else {
-                String::from_utf8_lossy(short).to_string()
-            };
-
-            res.push(name);
+            res.push(fat_entry_name(&e));
         }
         Ok(res)
     }
@@ -86,6 +79,16 @@ impl FileSystem for Fat16FileSystem {
     }
 
     fn metadata(&self, path: &str) -> Result<FileMetadata, FsError> {
+        if path.is_empty() {
+            return Ok(FileMetadata {
+                uid: 0,
+                gid: 0,
+                mode: 0o755,
+                size: 0,
+                is_dir: true,
+            });
+        }
+
         let fs = self.fs.lock();
         let root_dir = fs.root_dir();
         let parent_dir = path.rsplit('/').nth(1).unwrap_or("");
@@ -132,4 +135,16 @@ impl FileSystem for Fat16FileSystem {
     fn chown(&self, _path: &str, _uid: u32, _gid: u32) -> Result<(), FsError> {
         Err(FsError::Unsupported)
     }
+}
+
+fn fat_entry_name(
+    entry: &fatfs::DirEntry<'_, BufStream, fatfs::NullTimeProvider, fatfs::LossyOemCpConverter>,
+) -> String {
+    if let Some(name) = entry.long_file_name_as_ucs2_units() {
+        return String::from_utf16_lossy(name);
+    }
+
+    String::from_utf8_lossy(entry.short_file_name_as_bytes())
+        .to_ascii_lowercase()
+        .to_string()
 }

@@ -16,8 +16,8 @@ pub fn main(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         #[unsafe(export_name = "main")]
-        extern "C" fn rust_main(argc: i32, argv: *const *const u8) -> ! {
-            polyos_std::process::initialize(argc, argv);
+        extern "C" fn rust_main(argc: i32, argv: *const *const u8, envp: *const *const u8) -> ! {
+            polyos_std::process::initialize(argc, argv, envp);
             rust_main_wrapper()
         }
 

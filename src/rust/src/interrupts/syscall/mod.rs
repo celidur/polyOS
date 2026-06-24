@@ -7,6 +7,7 @@ mod misc;
 mod network;
 mod process;
 mod register;
+mod signal;
 mod sync;
 mod types;
 mod user;

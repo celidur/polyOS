@@ -21,6 +21,7 @@ enum
 #define O_CREAT 0x40
 #define O_TRUNC 0x200
 #define O_APPEND 0x400
+#define O_NONBLOCK 0x800
 
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
@@ -60,18 +61,7 @@ struct winsize
     u16 ws_ypixel;
 };
 
-typedef unsigned int FILE_STAT_FLAGS;
-enum
-{
-    FILE_STAT_READ_ONLY = 0b00000001,
-};
-
-struct file_stat
-{
-    int size;
-    FILE_STAT_FLAGS flags;
-};
-
+typedef struct DIR DIR;
 
 int putchar(int c);
 int printf(const char *fmt, ...);
@@ -81,10 +71,24 @@ int open(const char *pathname, int flags, int mode);
 ssize_t read(int fd, void *buf, size_t count);
 ssize_t write(int fd, const void *buf, size_t count);
 off_t lseek(int fd, off_t offset, int whence);
+int stat(const char *pathname, struct file_stat *stat);
+int lstat(const char *pathname, struct file_stat *stat);
 int fstat(int fd, struct file_stat *stat);
 int ioctl(int fd, unsigned long request, unsigned long arg);
+int fcntl(int fd, int cmd, long arg);
 int close(int fd);
 int pipe(int pipefd[2]);
+int dup(int oldfd);
+int dup2(int oldfd, int newfd);
+int unlink(const char *pathname);
+int mkdir(const char *pathname, int mode);
+int rmdir(const char *pathname);
+int chdir(const char *pathname);
+char *getcwd(char *buf, size_t size);
+int getdents(int fd, struct dirent *dirp, size_t count);
+DIR *opendir(const char *pathname);
+struct dirent *readdir(DIR *dir);
+int closedir(DIR *dir);
 
 int fopen(const char *filename, const char *mode);
 int fread(int fd, void *ptr, int size);
