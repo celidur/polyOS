@@ -1,9 +1,12 @@
-use core::arch::naked_asm;
+use core::arch::{asm, naked_asm};
 
 use crate::{
     interrupts::{
-        interrupt::InterruptSource, interrupt_frame::InterruptFrame, register::RegisterInterrupt,
-        syscall::syscall_handle, utils::eoi_irq,
+        interrupt::InterruptSource,
+        interrupt_frame::{InterruptErrorFrame, InterruptFrame},
+        register::RegisterInterrupt,
+        syscall::syscall_handle,
+        utils::eoi_irq,
     },
     kernel::KERNEL,
     schedule::task::{task_current_save_state, task_page},
@@ -11,8 +14,11 @@ use crate::{
 
 #[unsafe(no_mangle)]
 pub extern "C" fn interrupt_handler(interrupt: u32, frame: &InterruptFrame) {
+    let previous_cr3 = current_page_directory();
     KERNEL.kernel_page();
-    task_current_save_state(frame);
+    if frame.is_user_mode() {
+        task_current_save_state(frame);
+    }
     eoi_irq(interrupt);
 
     if let InterruptSource::Plain(int) = InterruptSource::new(interrupt as u16) {
@@ -23,20 +29,28 @@ pub extern "C" fn interrupt_handler(interrupt: u32, frame: &InterruptFrame) {
         }
     }
 
-    task_page();
+    restore_page_directory(previous_cr3);
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn interrupt_handler_error(error_code: u32, interrupt: u32, frame: &InterruptFrame) {
+pub extern "C" fn interrupt_handler_error(
+    error_code: u32,
+    interrupt: u32,
+    frame: &InterruptErrorFrame,
+) {
+    let previous_cr3 = current_page_directory();
+    let frame = frame.without_error_code();
     KERNEL.kernel_page();
-    task_current_save_state(frame);
+    if frame.is_user_mode() {
+        task_current_save_state(&frame);
+    }
     if let InterruptSource::Error(int) = InterruptSource::new(interrupt as u16)
         && let Some(cb) = int.get_callback()
     {
-        cb(frame, error_code);
+        cb(&frame, error_code);
     }
 
-    task_page();
+    restore_page_directory(previous_cr3);
 }
 
 #[unsafe(no_mangle)]
@@ -70,4 +84,17 @@ pub extern "C" fn syscall_wrapper() {
 
 pub unsafe extern "C" fn default_handler() {
     panic!("Unhandled interrupt");
+}
+
+fn current_page_directory() -> u32 {
+    let cr3: u32;
+    unsafe {
+        asm!("mov {}, cr3", out(reg) cr3, options(nomem, nostack, preserves_flags));
+    }
+    cr3
+}
+fn restore_page_directory(cr3: u32) {
+    unsafe {
+        asm!("mov cr3, {}", in(reg) cr3, options(nostack, preserves_flags));
+    }
 }

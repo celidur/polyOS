@@ -17,6 +17,7 @@ pub type TaskId = usize;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WaitReason {
     Io,
+    Futex { pid: u32, address: u32 },
     Process(usize),
     PipeRead(usize),
     PipeWrite(usize),
@@ -66,6 +67,7 @@ pub struct Task {
     #[allow(dead_code)]
     pub time_slice: u32,
     pub state: TaskState,
+    pub clear_child_tid: u32,
 }
 
 impl Task {
@@ -77,6 +79,7 @@ impl Task {
             priority,
             time_slice: 0,
             state: TaskState::Runnable,
+            clear_child_tid: 0,
         }
     }
 
@@ -93,6 +96,7 @@ impl Task {
             priority,
             time_slice: 0,
             state: TaskState::Runnable,
+            clear_child_tid: 0,
         }
     }
 

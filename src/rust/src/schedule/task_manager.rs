@@ -26,7 +26,6 @@ pub struct TaskManager {
     tasks: BTreeMap<TaskId, RwLock<Task>>,
     ready: [VecDeque<TaskId>; MAX_PRIORITY],
     current: Option<TaskId>,
-    next_task_id: TaskId,
     tick: u64,
 }
 
@@ -36,15 +35,13 @@ impl TaskManager {
             tasks: BTreeMap::new(),
             ready: [VecDeque::new()],
             current: None,
-            next_task_id: 0,
             tick: 0,
         }
     }
 
     pub fn spawn(&mut self, process: Arc<Process>) -> Result<TaskId, KernelError> {
         let priority = 0;
-        let id = self.next_task_id;
-        self.next_task_id += 1;
+        let id = process.pid as usize;
         let task = Task::new(id, process, priority);
         let nn = RwLock::new(task);
         self.tasks.insert(id, nn);
@@ -59,12 +56,62 @@ impl TaskManager {
         priority: usize,
     ) -> Result<TaskId, KernelError> {
         let priority = priority.min(MAX_PRIORITY - 1);
-        let id = self.next_task_id;
-        self.next_task_id += 1;
+        let id = process.pid as usize;
         let task = Task::from_registers(id, process, priority, registers);
         self.tasks.insert(id, RwLock::new(task));
         self.queue_ready(id, priority);
         Ok(id)
+    }
+
+    pub fn spawn_thread(
+        &mut self,
+        process: Arc<Process>,
+        registers: Registers,
+        priority: usize,
+        clear_child_tid: u32,
+    ) -> Result<TaskId, KernelError> {
+        let id = super::allocate_id();
+        let mut task = Task::from_registers(id, process, priority, registers);
+        task.clear_child_tid = clear_child_tid;
+        self.tasks.insert(id, RwLock::new(task));
+        self.queue_ready(id, priority);
+        Ok(id)
+    }
+
+    pub fn process_task_count(&self, pid: u32) -> usize {
+        self.tasks
+            .values()
+            .filter(|task| task.read().process.pid == pid)
+            .count()
+    }
+
+    pub fn remove_process_tasks(&mut self, pid: u32, keep: Option<TaskId>) {
+        let ids: Vec<_> = self
+            .tasks
+            .iter()
+            .filter_map(|(&id, task)| {
+                (task.read().process.pid == pid && Some(id) != keep).then_some(id)
+            })
+            .collect();
+        for id in ids {
+            self.remove(id);
+        }
+    }
+
+    pub fn wake_reason(&mut self, reason: WaitReason, limit: usize) -> usize {
+        let ids: Vec<_> = self
+            .tasks
+            .iter()
+            .filter_map(|(&id, task)| {
+                (task.read().state == TaskState::Blocked { reason }).then_some(id)
+            })
+            .take(limit)
+            .collect();
+        let count = ids.len();
+        for id in ids {
+            let _ = self.wake_task_with_return_value(id, 0);
+        }
+        count
     }
 
     pub fn task_page(&self) -> Result<(), KernelError> {
@@ -279,11 +326,19 @@ impl TaskManager {
             return Err(KernelError::NoTasks);
         };
 
-        let mut task = nn_task.write();
-        task.registers = Task::entry_registers(&process);
-        task.process = process;
-        task.state = TaskState::Runnable;
+        let priority = nn_task.read().priority;
+        self.remove(cur);
+        let id = process.pid as usize;
+        self.tasks
+            .insert(id, RwLock::new(Task::new(id, process, priority)));
+        self.current = Some(id);
         Ok(())
+    }
+
+    pub fn first_process_task(&self, pid: u32) -> Option<TaskId> {
+        self.tasks
+            .iter()
+            .find_map(|(&id, task)| (task.read().process.pid == pid).then_some(id))
     }
 
     fn queue_ready(&mut self, task_id: TaskId, priority: usize) {

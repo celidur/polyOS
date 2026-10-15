@@ -1,11 +1,13 @@
 #ifndef POLYOS_ERRNO_H
 #define POLYOS_ERRNO_H
 
-extern int errno;
+int *__errno_location(void);
+#define errno (*__errno_location())
 
 #define EPERM 1
 #define ENOENT 2
 #define ESRCH 3
+#define EINTR 4
 #define EIO 5
 #define EBADF 9
 #define ECHILD 10
@@ -21,6 +23,7 @@ extern int errno;
 #define EMFILE 24
 #define ENOTTY 25
 #define EPIPE 32
+#define EDEADLK 35
 #define ENOSYS 38
 #define ENOTEMPTY 39
 #define EMSGSIZE 90

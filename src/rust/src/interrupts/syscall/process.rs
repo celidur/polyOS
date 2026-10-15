@@ -6,7 +6,6 @@ use crate::{
     kernel::KERNEL,
     schedule::{
         process::{ACCESS_EXECUTE, ProcessArguments},
-        process_manager::process_terminate,
         task::{WaitReason, task_next},
     },
 };
@@ -29,8 +28,6 @@ pub fn syscall_execve(path_ptr: u32, argv_ptr: u32, envp_ptr: u32) -> u32 {
     let exec = KERNEL.with_task_manager(|tm| {
         let current_task = tm.get_current()?;
         let task = current_task.read();
-
-
 
         if path_ptr == 0 {
             return None;
@@ -99,12 +96,6 @@ pub fn syscall_fork() -> u32 {
             abi::errno(abi::EAGAIN)
         }
     }
-}
-
-pub fn syscall_exit(code: u32) -> u32 {
-    process_terminate(code as i32);
-
-    task_next();
 }
 
 pub fn syscall_getpid() -> u32 {

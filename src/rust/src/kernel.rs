@@ -139,12 +139,12 @@ impl Kernel {
         unsafe {
             asm!(
                 "
-                mov ax, 0x10
                 mov ds, ax
                 mov es, ax
                 mov fs, ax
                 mov gs, ax
                 ",
+                in("ax") 0x10_u16,
                 options(nomem, nostack, preserves_flags)
             );
         }

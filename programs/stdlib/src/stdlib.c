@@ -8,6 +8,9 @@ typedef struct malloc_block {
     struct malloc_block *next;
 } malloc_block_t;
 
+static volatile int heap_lock;
+static void lock_heap(void) { while (__sync_lock_test_and_set(&heap_lock, 1)) sched_yield(); }
+static void unlock_heap(void) { __sync_lock_release(&heap_lock); }
 static malloc_block_t *malloc_head = NULL;
 static int environ_owned = 0;
 
@@ -122,6 +125,7 @@ void* malloc(size_t size)
         return NULL;
     }
 
+    lock_heap();
     size = align_size(size);
     malloc_block_t *block = find_free_block(size);
     if (!block) {
@@ -129,11 +133,13 @@ void* malloc(size_t size)
     }
 
     if (!block) {
+        unlock_heap();
         return NULL;
     }
 
     split_block(block, size);
     block->free = 0;
+    unlock_heap();
     return (void *)(block + 1);
 }
 
@@ -143,10 +149,12 @@ void free(void* ptr)
         return;
     }
 
+    lock_heap();
     malloc_block_t *block = ((malloc_block_t *)ptr) - 1;
     block->free = 1;
     coalesce_free_blocks();
     release_tail_blocks();
+    unlock_heap();
 }
 
 static int env_name_len(const char *entry)
@@ -374,3 +382,8 @@ char* hex(uint32_t i){
     return &str[loc];
 
 }
+
+void __heap_after_fork(void) { heap_lock = 0; }
+
+void __heap_before_fork(void) { lock_heap(); }
+void __heap_parent_after_fork(void) { unlock_heap(); }

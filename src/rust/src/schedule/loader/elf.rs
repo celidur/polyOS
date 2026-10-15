@@ -186,12 +186,34 @@ impl ElfFile {
 
         let memory = Page::new(stat.size as usize).ok_or(ElfError::Io)?;
 
-        file.ops
-            .read(memory.as_mut_slice())
-            .map_err(|_| ElfError::Io)?;
+        // A filesystem read may stop at a cluster boundary. Executables must be
+        // read completely before interpreting any program-header offsets.
+        let mut remaining = memory.as_mut_slice();
+        while !remaining.is_empty() {
+            let count = file.ops.read(remaining).map_err(|_| ElfError::Io)?;
+            if count == 0 {
+                return Err(ElfError::Io);
+            }
+            remaining = &mut remaining[count..];
+        }
+        if (stat.size as usize) < core::mem::size_of::<ElfHeader>() {
+            return Err(ElfError::InvalidFormat);
+        }
 
         let header = unsafe { &*(memory.as_ptr() as *const ElfHeader) };
         header.validate()?;
+        let phdr_end = (header.e_phoff as usize)
+            .checked_add(
+                (header.e_phnum as usize)
+                    .checked_mul(core::mem::size_of::<Elf32Phdr>())
+                    .ok_or(ElfError::InvalidFormat)?,
+            )
+            .ok_or(ElfError::InvalidFormat)?;
+        if header.e_phentsize as usize != core::mem::size_of::<Elf32Phdr>()
+            || phdr_end > stat.size as usize
+        {
+            return Err(ElfError::InvalidFormat);
+        }
 
         let mut elf = Self {
             memory,
@@ -205,19 +227,29 @@ impl ElfFile {
     fn load_segments(&mut self, header: &ElfHeader) -> Result<(), ElfError> {
         for phdr in header.program_headers() {
             if phdr.p_type == 1 {
-                self.process_load_segment(phdr);
+                self.process_load_segment(phdr)?;
             }
         }
         Ok(())
     }
 
-    fn process_load_segment(&mut self, phdr: &Elf32Phdr) {
+    fn process_load_segment(&mut self, phdr: &Elf32Phdr) -> Result<(), ElfError> {
+        if phdr.p_memsz < phdr.p_filesz
+            || (phdr.p_offset as usize)
+                .checked_add(phdr.p_filesz as usize)
+                .map_or(true, |end| end > self.memory.as_slice().len())
+        {
+            return Err(ElfError::InvalidFormat);
+        }
         let virtual_address = phdr.p_vaddr & 0xFFFFF000;
         let page_offset = (phdr.p_vaddr - virtual_address) as usize;
-        let size = page_offset + phdr.p_memsz as usize;
-        let Some(segment_memory) = Page::<u8>::new(size) else {
-            return;
-        };
+        let size = page_offset
+            .checked_add(phdr.p_memsz as usize)
+            .ok_or(ElfError::InvalidFormat)?;
+        if size == 0 {
+            return Ok(());
+        }
+        let segment_memory = Page::<u8>::new(size).ok_or(ElfError::Io)?;
 
         let source = unsafe {
             core::slice::from_raw_parts(
@@ -237,6 +269,7 @@ impl ElfFile {
             memory_size: phdr.p_memsz as usize,
             memory: segment_memory,
         });
+        Ok(())
     }
 
     pub fn header(&self) -> &ElfHeader {

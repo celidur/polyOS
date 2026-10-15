@@ -61,3 +61,41 @@ pub fn write_value<T>(directory: &PageDirectory, user_ptr: u32, value: &T) -> Re
         core::mem::size_of::<T>() as u32,
     )
 }
+
+/// Validate user pages before copying, resolving COW before a kernel write.
+pub fn validate_range(
+    process: &crate::schedule::process::Process,
+    ptr: u32,
+    len: u32,
+    write: bool,
+) -> Result<(), ()> {
+    use crate::memory::{PRESENT, USER_ACCESS, WRITABLE};
+    if len == 0 {
+        return Ok(());
+    }
+    let end = ptr.checked_add(len - 1).ok_or(())?;
+    if ptr == 0 {
+        return Err(());
+    }
+    let mut page = ptr & !4095;
+    loop {
+        let mut entry = process.page_directory.get(page).map_err(|_| ())?;
+        if entry & (PRESENT | USER_ACCESS) != PRESENT | USER_ACCESS {
+            return Err(());
+        }
+        if write && entry & WRITABLE == 0 {
+            if !process.handle_cow_fault(page).map_err(|_| ())? {
+                return Err(());
+            }
+            entry = process.page_directory.get(page).map_err(|_| ())?;
+            if entry & WRITABLE == 0 {
+                return Err(());
+            }
+        }
+        if page == end & !4095 {
+            break;
+        }
+        page = page.checked_add(4096).ok_or(())?;
+    }
+    Ok(())
+}

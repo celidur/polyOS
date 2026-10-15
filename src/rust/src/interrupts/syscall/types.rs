@@ -43,6 +43,11 @@ pub enum SyscallId {
     Chown = 182,
     GetCwd = 183,
     ClockGetTime = 265,
+    Clone = 120,
+    GetTid = 224,
+    ExitGroup = 252,
+    SchedYield = 158,
+    Futex = 240,
     // PolyOS-private debug/control calls. Keep custom IDs at 500+.
     PrintMemory = 503,
     NetworkInfo = 520,
@@ -116,6 +121,11 @@ impl SyscallId {
             562 => Some(Self::SemaphoreSignal),
             563 => Some(Self::SemaphoreClose),
             590 => Some(Self::KernelSelfTest),
+            120 => Some(Self::Clone),
+            224 => Some(Self::GetTid),
+            252 => Some(Self::ExitGroup),
+            158 => Some(Self::SchedYield),
+            240 => Some(Self::Futex),
             _ => None,
         }
     }

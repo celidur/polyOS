@@ -21,3 +21,29 @@ The selective runtime port keeps the device registry and driver abstractions fro
 The ABI migration requires rebuilding all userspace executables together with the
 kernel. The legacy private seven-argument receive call passes an explicit argument
 block in EBX; it does not extend the register ABI with hidden stack arguments.
+
+## Threads
+
+A process owns its address space, descriptors and signal dispositions. A task owns
+its registers, scheduling state and optional `clear_child_tid` address. Process and
+thread IDs use one allocator, so the initial thread has TID == PID without ID
+collisions. `schedule/thread.rs` implements exit policy; the task manager owns task
+creation, removal, and futex wait queues. `exec` removes siblings and restores the
+process leader identity. Group exit removes every task before freeing process
+memory. Exiting only the leader leaves surviving threads runnable.
+
+Libc `pthread.c` owns join/detach state, stacks and thread-specific values. A stack
+is reclaimed only after the kernel clears its completion word on thread exit.
+Detached stacks are collected by the next create/detach operation, bounded by the
+64-entry registry. The shared heap is locked, errno uses per-thread storage, and
+fork snapshots the heap and thread registry under locks before resetting the
+child's registry to the calling thread. TLS destructors run outside registry locks.
+
+This port targets the existing single-CPU scheduler. It implements shared-address-
+space clone with PARENT_SETTID and CHILD_CLEARTID, plus private futex wait/wake.
+Compiler TLS setup, nonzero stack guards and timed futex waits are rejected rather
+than silently accepted. Thread-specific keys and destructors are supported.
+
+The thread tests also exposed prerequisites fixed here: partial ELF reads, the
+segment-register inline-assembly clobber, and preserving user state across kernel
+interrupts and page-fault frames containing an error code.

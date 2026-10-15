@@ -1,3 +1,4 @@
+use super::thread;
 use crate::interrupts::InterruptFrame;
 
 use super::abi;
@@ -13,9 +14,30 @@ use super::sync::*;
 use super::types::SyscallId;
 
 pub fn syscall_init() {
+    syscall_register(
+        SyscallId::Clone,
+        SyscallHandler::Args5(thread::syscall_clone),
+    );
+    syscall_register(
+        SyscallId::GetTid,
+        SyscallHandler::Args0(thread::syscall_gettid),
+    );
+    syscall_register(
+        SyscallId::ExitGroup,
+        SyscallHandler::Args1(thread::syscall_exit_group),
+    );
+    syscall_register(
+        SyscallId::SchedYield,
+        SyscallHandler::Args0(thread::syscall_sched_yield),
+    );
+    syscall_register(
+        SyscallId::Futex,
+        SyscallHandler::Args4(thread::syscall_futex),
+    );
+
     syscall_register(SyscallId::Execve, SyscallHandler::Args3(syscall_execve));
     syscall_register(SyscallId::Fork, SyscallHandler::Args0(syscall_fork));
-    syscall_register(SyscallId::Exit, SyscallHandler::Args1(syscall_exit));
+    syscall_register(SyscallId::Exit, SyscallHandler::Args1(thread::syscall_exit));
     syscall_register(SyscallId::WaitPid, SyscallHandler::Args3(syscall_waitpid));
     syscall_register(SyscallId::GetPid, SyscallHandler::Args0(syscall_getpid));
     syscall_register(SyscallId::GetUid, SyscallHandler::Args0(syscall_getuid));

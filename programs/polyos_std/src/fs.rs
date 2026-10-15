@@ -41,7 +41,7 @@ pub struct DirEntry {
 }
 
 pub fn errno() -> i32 {
-    unsafe { crate::bindings::errno }
+    unsafe { *crate::bindings::__errno_location() }
 }
 
 pub fn open(path: &str, flags: i32, mode: i32) -> Result<i32, i32> {
@@ -56,11 +56,7 @@ pub fn open(path: &str, flags: i32, mode: i32) -> Result<i32, i32> {
 
 pub fn close(fd: i32) -> Result<(), i32> {
     let result = unsafe { crate::bindings::close(fd) };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(errno())
-    }
+    if result == 0 { Ok(()) } else { Err(errno()) }
 }
 
 pub fn stat(path: &str) -> Result<FileStat, i32> {
@@ -74,51 +70,31 @@ pub fn lstat(path: &str) -> Result<FileStat, i32> {
 pub fn mkdir(path: &str, mode: i32) -> Result<(), i32> {
     let path = nul_terminated(path);
     let result = unsafe { crate::bindings::mkdir(path.as_ptr() as *const i8, mode) };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(errno())
-    }
+    if result == 0 { Ok(()) } else { Err(errno()) }
 }
 
 pub fn rmdir(path: &str) -> Result<(), i32> {
     let path = nul_terminated(path);
     let result = unsafe { crate::bindings::rmdir(path.as_ptr() as *const i8) };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(errno())
-    }
+    if result == 0 { Ok(()) } else { Err(errno()) }
 }
 
 pub fn unlink(path: &str) -> Result<(), i32> {
     let path = nul_terminated(path);
     let result = unsafe { crate::bindings::unlink(path.as_ptr() as *const i8) };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(errno())
-    }
+    if result == 0 { Ok(()) } else { Err(errno()) }
 }
 
 pub fn chmod(path: &str, mode: i32) -> Result<(), i32> {
     let path = nul_terminated(path);
     let result = unsafe { crate::bindings::chmod(path.as_ptr() as *const i8, mode) };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(errno())
-    }
+    if result == 0 { Ok(()) } else { Err(errno()) }
 }
 
 pub fn chown(path: &str, uid: u32, gid: u32) -> Result<(), i32> {
     let path = nul_terminated(path);
     let result = unsafe { crate::bindings::chown(path.as_ptr() as *const i8, uid, gid) };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(errno())
-    }
+    if result == 0 { Ok(()) } else { Err(errno()) }
 }
 
 pub fn umask(mask: i32) -> i32 {
@@ -128,11 +104,7 @@ pub fn umask(mask: i32) -> i32 {
 pub fn chdir(path: &str) -> Result<(), i32> {
     let path = nul_terminated(path);
     let result = unsafe { crate::bindings::chdir(path.as_ptr() as *const i8) };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(errno())
-    }
+    if result == 0 { Ok(()) } else { Err(errno()) }
 }
 
 pub fn getcwd() -> Result<String, i32> {
@@ -153,11 +125,7 @@ pub fn read_dir(path: &str) -> Result<Vec<DirEntry>, i32> {
     loop {
         let mut entries: [crate::bindings::dirent; 16] = unsafe { mem::zeroed() };
         let bytes = unsafe {
-            crate::bindings::getdents(
-                fd,
-                entries.as_mut_ptr(),
-                mem::size_of_val(&entries),
-            )
+            crate::bindings::getdents(fd, entries.as_mut_ptr(), mem::size_of_val(&entries))
         };
 
         if bytes < 0 {
@@ -205,12 +173,12 @@ fn stat_with(
 
 fn dirent_name(entry: &crate::bindings::dirent) -> String {
     let bytes = unsafe {
-        core::slice::from_raw_parts(
-            entry.d_name.as_ptr() as *const u8,
-            entry.d_name.len(),
-        )
+        core::slice::from_raw_parts(entry.d_name.as_ptr() as *const u8, entry.d_name.len())
     };
-    let len = bytes.iter().position(|byte| *byte == 0).unwrap_or(bytes.len());
+    let len = bytes
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(bytes.len());
     core::str::from_utf8(&bytes[..len])
         .unwrap_or("")
         .to_string()

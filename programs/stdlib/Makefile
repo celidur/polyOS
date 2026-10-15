@@ -9,7 +9,7 @@ NASM = nasm
 
 C_SOURCES = $(wildcard $(SRC_DIR)/*.c)
 ASM_SOURCES = $(wildcard $(SRC_DIR)/*.asm)
-HEADERS = $(wildcard ./include/*.h)
+HEADERS = $(wildcard ./include/*.h ./src/*.h)
 C_OBJS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES))
 ASM_OBJS = $(patsubst $(SRC_DIR)/%.asm, $(BUILD_DIR)/%.asm.o, $(ASM_SOURCES))
 OBJS = $(C_OBJS) $(ASM_OBJS)

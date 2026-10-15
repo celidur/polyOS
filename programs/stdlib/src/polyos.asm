@@ -98,7 +98,7 @@ SYSCALL __sys_execve, SYS_EXECVE, 3
 SYSCALL __sys_fork, SYS_FORK, 0
 SYSCALL __sys_kill, SYS_KILL, 2
 SYSCALL __sys_sigaction, SYS_SIGACTION, 3
-SYSCALL exit, SYS_EXIT, 1
+SYSCALL exit, 252, 1
 SYSCALL print_memory, POLYOS_SYS_PRINT_MEMORY, 0
 SYSCALL __sys_open, SYS_OPEN, 3
 SYSCALL __sys_read, SYS_READ, 3
@@ -179,3 +179,39 @@ __polyos_syscall6:
     pop ebx
     pop ebp
     ret
+
+; clone(flags, stack, parent_tid, tls, child_tid, entry, arg), raw errno result.
+global __polyos_clone:function
+__polyos_clone:
+    push ebp
+    mov ebp, esp
+    push ebx
+    push esi
+    push edi
+    mov ecx, [ebp+12]
+    and ecx, -16
+    sub ecx, 8
+    mov eax, [ebp+28]
+    mov [ecx], eax
+    mov eax, [ebp+32]
+    mov [ecx+4], eax
+    mov eax, 120
+    mov ebx, [ebp+8]
+    mov edx, [ebp+16]
+    mov esi, [ebp+20]
+    mov edi, [ebp+24]
+    int 0x80
+    test eax, eax
+    jz .child
+    pop edi
+    pop esi
+    pop ebx
+    pop ebp
+    ret
+.child:
+    mov edx, [esp]
+    mov ecx, [esp+4]
+    sub esp, 4
+    push ecx
+    call edx
+    ud2

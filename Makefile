@@ -89,7 +89,7 @@ stdlib:
 	+$(MAKE) -C programs/stdlib all
 
 $(PROGRAM_NAMES): stdlib
-	@if [ -f programs/$@/Makefile ]; then \
+	@set -e; if [ -f programs/$@/Makefile ]; then \
 		$(MAKE) -C programs/$@ all; \
 		cp programs/$@/$@.elf ./file/bin/$@.elf; \
 	fi

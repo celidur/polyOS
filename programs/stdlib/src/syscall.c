@@ -76,7 +76,23 @@ int execve(const char *pathname, char *const argv[], char *const envp[])
 
 pid_t fork(void)
 {
-    return syscall_ret(__sys_fork());
+    extern void __heap_before_fork(void);
+    extern void __pthread_before_fork(void);
+    extern void __heap_parent_after_fork(void);
+    extern void __pthread_parent_after_fork(void);
+    __heap_before_fork();
+    __pthread_before_fork();
+    int result = __sys_fork();
+    if (result == 0) {
+        extern void __pthread_after_fork(void);
+        extern void __heap_after_fork(void);
+        __pthread_after_fork();
+        __heap_after_fork();
+    } else {
+        __pthread_parent_after_fork();
+        __heap_parent_after_fork();
+    }
+    return syscall_ret(result);
 }
 
 pid_t waitpid(pid_t pid, int *status, int options)

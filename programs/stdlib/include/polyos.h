@@ -121,6 +121,8 @@ int execve(const char *pathname, char *const argv[], char *const envp[]);
 pid_t fork();
 pid_t waitpid(pid_t pid, int *status, int options);
 pid_t getpid();
+pid_t gettid(void);
+int sched_yield(void);
 pid_t getppid();
 uid_t getuid();
 gid_t getgid();

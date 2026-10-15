@@ -31,7 +31,6 @@ pub struct ProcessManager {
     table: BTreeMap<ProcessId, Arc<Process>>,
     zombies: BTreeMap<ProcessId, ZombieProcess>,
     exit_waiters: BTreeMap<ProcessId, VecDeque<ExitWaiter>>,
-    id: ProcessId,
 }
 
 #[derive(Clone, Copy)]
@@ -53,7 +52,6 @@ impl ProcessManager {
             table: BTreeMap::new(),
             zombies: BTreeMap::new(),
             exit_waiters: BTreeMap::new(),
-            id: 0,
         }
     }
     pub fn spawn(
@@ -62,8 +60,7 @@ impl ProcessManager {
         parent: Option<ProcessId>,
         arg: Option<ProcessArguments>,
     ) -> Result<ProcessId, KernelError> {
-        let pid = self.id;
-        self.id += 1;
+        let pid = super::allocate_id() as ProcessId;
         let process = Arc::new(Process::new(pid, parent, filename, arg)?);
         self.table.insert(pid, process.clone());
         if let Some(parent_pid) = parent
@@ -74,7 +71,7 @@ impl ProcessManager {
 
         let res = KERNEL.with_task_manager(|tm| tm.spawn(process.clone()))?;
 
-        process.tasks.write().replace(res);
+        process.main_task.write().replace(res);
 
         Ok(pid)
     }
@@ -85,8 +82,7 @@ impl ProcessManager {
         child_registers: Registers,
         priority: usize,
     ) -> Result<ProcessId, KernelError> {
-        let pid = self.id;
-        self.id += 1;
+        let pid = super::allocate_id() as ProcessId;
 
         let process = Arc::new(Process::fork_from(pid, &parent)?);
         self.table.insert(pid, process.clone());
@@ -96,7 +92,7 @@ impl ProcessManager {
             tm.spawn_with_registers(process.clone(), child_registers, priority)
         })?;
 
-        process.tasks.write().replace(task_id);
+        process.main_task.write().replace(task_id);
 
         Ok(pid)
     }
@@ -113,7 +109,7 @@ impl ProcessManager {
     ) -> Result<(), KernelError> {
         let old_process = self.table.get(&pid).cloned().ok_or(KernelError::NoTasks)?;
         let parent = old_process.parent_pid();
-        let task_id = *old_process.tasks.read();
+        let task_id = Some(pid as usize);
         let children = old_process.children.lock().clone();
         let cwd = old_process.cwd.lock().clone();
         let umask = *old_process.umask.lock();
@@ -130,10 +126,14 @@ impl ProcessManager {
         process.set_umask(umask);
         process.replace_signal_actions(signal_actions);
         process.children.lock().extend(children);
-        *process.tasks.write() = task_id;
+        *process.main_task.write() = task_id;
 
         let process = Arc::new(process);
         self.table.insert(pid, process.clone());
+        KERNEL.with_task_manager(|tm| {
+            let current = tm.get_current().map(|task| task.read().id);
+            tm.remove_process_tasks(pid, current);
+        });
         old_process.cleanup();
 
         KERNEL.with_task_manager(|tm| tm.exec_current(process))
@@ -231,7 +231,7 @@ impl ProcessManager {
             return Err(KernelError::NoTasks);
         }
 
-        let Some(task_id) = *process.tasks.read() else {
+        let Some(task_id) = *process.main_task.read() else {
             return Err(KernelError::NoTasks);
         };
 
@@ -288,15 +288,10 @@ impl ProcessManager {
         };
 
         self.reparent_children(pid);
+        KERNEL.with_task_manager(|tm| tm.remove_process_tasks(pid, None));
         process.close_descriptors();
         process.cleanup();
         process.mark_zombie(wait_status);
-        KERNEL.with_task_manager(|tm| {
-            let task = process.tasks.read();
-            if let Some(task) = task.as_ref() {
-                tm.remove(*task);
-            }
-        });
 
         // pid 0 is the init-like reaper, so orphaned children do not linger as zombies.
         let mut should_reap = matches!(process.parent_pid(), None | Some(0));

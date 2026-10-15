@@ -961,8 +961,10 @@ static void test_register_abi(void)
     expect("unknown syscall ENOSYS", result == -ENOSYS, result);
 }
 
+extern void test_threads(void (*expect)(const char *, int, int));
 int main(int argc, char **argv)
 {
+    if (argc > 1 && strncmp(argv[1], "--thread-exec-child", sizeof("--thread-exec-child")) == 0) return getpid() == gettid() ? 43 : 99;
     printf("selftest: start\n");
 
     expect("kernel selftest", kernel_selftest() == 0, -1);
@@ -980,6 +982,7 @@ int main(int argc, char **argv)
     test_waitpid_zombie_reparent();
     test_signals();
     test_environment();
+    test_threads(expect);
 
     if (wants_network(argc, argv)) {
         test_network();
