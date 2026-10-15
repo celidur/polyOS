@@ -92,6 +92,7 @@ pub struct Process {
     pub filetype: ProcessFileType,
     pub executable_path: String,
     pub page_directory: PageDirectory,
+    pub mappings: Mutex<crate::memory::address_space::AddressSpace>,
     pub stack: Page<u8>,
     pub start_stack: usize,
     pub brk: Mutex<u32>,
@@ -202,6 +203,7 @@ impl Process {
             filetype: ProcessFileType::Elf(elf),
             executable_path: filename.to_string(),
             page_directory,
+            mappings: Mutex::new(Default::default()),
             stack: Page::new(USER_PROGRAM_STACK_SIZE)?,
             start_stack: USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
             entrypoint,
@@ -244,6 +246,7 @@ impl Process {
             filetype: ProcessFileType::Binary(memory),
             executable_path: filename.to_string(),
             page_directory,
+            mappings: Mutex::new(Default::default()),
             stack: Page::new(USER_PROGRAM_STACK_SIZE).ok_or(KernelError::Allocation)?,
             start_stack: USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
             entrypoint: PROGRAM_VIRTUAL_ADDRESS as u32,
@@ -314,6 +317,7 @@ impl Process {
             filetype: parent.filetype.clone(),
             executable_path: parent.executable_path.clone(),
             page_directory,
+            mappings: Mutex::new(parent.mappings.lock().clone()),
             stack: parent.stack.clone(),
             start_stack: parent.start_stack,
             entrypoint: parent.entrypoint,
@@ -732,7 +736,7 @@ impl Process {
         Ok(true)
     }
 
-    fn remove_cow_pages_in_range(&self, start: u32, size: u32) {
+    pub(crate) fn remove_cow_pages_in_range(&self, start: u32, size: u32) {
         let end = start.saturating_add(size);
         self.cow_pages
             .lock()

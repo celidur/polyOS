@@ -19,3 +19,5 @@ pub use dispatcher::{syscall_handle, syscall_init};
 pub use types::SyscallId;
 
 mod inspection;
+
+mod virtual_memory;

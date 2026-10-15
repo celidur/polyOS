@@ -243,4 +243,18 @@ typedef struct {u32 p_type,p_offset,p_vaddr,p_paddr,p_filesz,p_memsz,p_flags,p_a
 struct dl_phdr_info {uintptr_t dlpi_addr;const char *dlpi_name;const Elf32_Phdr *dlpi_phdr;u16 dlpi_phnum;};
 int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *,size_t,void *),void *data);
 
+
+#define PROT_NONE 0
+#define PROT_READ 1
+#define PROT_WRITE 2
+#define PROT_EXEC 4
+#define MAP_PRIVATE 2
+#define MAP_FIXED 0x10
+#define MAP_ANONYMOUS 0x20
+#define MAP_ANON MAP_ANONYMOUS
+#define MAP_FAILED ((void *)-1)
+void *mmap(void *address,size_t length,int prot,int flags,int fd,off_t offset);
+int munmap(void *address,size_t length);
+int mprotect(void *address,size_t length,int prot);
+
 #endif

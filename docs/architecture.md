@@ -104,3 +104,18 @@ implemented and report zero. The scheduler currently reports one CPU. The loader
 copies ELF headers and auxiliary-vector entries into user memory; libc implements
 getauxval, sysconf and dl_iterate_phdr from these values. Proc files retain a stable
 snapshot for the lifetime of an open descriptor.
+
+## Virtual memory
+
+`memory/address_space.rs` owns mmap pages, address selection, replacement and
+permissions. The process retains mappings and copied pages across fork; exec drops
+the old address space. mprotect validates the entire range before changing it,
+including mappings temporarily marked PROT_NONE. Newly writable shared pages are
+made copy-on-write even when they were read-only at fork.
+
+Supported mappings are private anonymous pages and private file snapshots within
+a dedicated user arena. File mappings preserve descriptor offsets, zero-fill the
+last page and reject ranges beyond the file's final page. Shared mappings and
+file writeback are unsupported. Non-PAE i386 cannot enforce execute-disable or
+write-only pages; PROT_NONE and write protection are enforced. Mappings are limited
+to 32 MiB per call and kernel allocation failures return ENOMEM.
