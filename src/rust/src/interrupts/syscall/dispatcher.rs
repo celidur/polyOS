@@ -1,3 +1,4 @@
+use super::filesystem;
 use super::ipc;
 use super::thread;
 use crate::interrupts::InterruptFrame;
@@ -15,7 +16,51 @@ use super::sync::*;
 use super::types::SyscallId;
 
 pub fn syscall_init() {
-    syscall_register(SyscallId::Writev, SyscallHandler::Args3(ipc::syscall_writev));
+    syscall_register(
+        SyscallId::Access,
+        SyscallHandler::Args2(filesystem::syscall_access),
+    );
+    syscall_register(
+        SyscallId::Readlink,
+        SyscallHandler::Args3(filesystem::syscall_readlink),
+    );
+    syscall_register(
+        SyscallId::Ftruncate,
+        SyscallHandler::Args2(filesystem::syscall_ftruncate),
+    );
+    syscall_register(
+        SyscallId::Fchmod,
+        SyscallHandler::Args2(filesystem::syscall_fchmod),
+    );
+    syscall_register(
+        SyscallId::Stat64,
+        SyscallHandler::Args2(filesystem::syscall_stat64),
+    );
+    syscall_register(
+        SyscallId::Lstat64,
+        SyscallHandler::Args2(filesystem::syscall_lstat64),
+    );
+    syscall_register(
+        SyscallId::Fstat64,
+        SyscallHandler::Args2(filesystem::syscall_fstat64),
+    );
+    syscall_register(
+        SyscallId::GetDents64,
+        SyscallHandler::Args3(filesystem::syscall_getdents64),
+    );
+    syscall_register(
+        SyscallId::OpenAt,
+        SyscallHandler::Args4(filesystem::syscall_openat),
+    );
+    syscall_register(
+        SyscallId::FstatAt,
+        SyscallHandler::Args4(filesystem::syscall_fstatat),
+    );
+
+    syscall_register(
+        SyscallId::Writev,
+        SyscallHandler::Args3(ipc::syscall_writev),
+    );
     syscall_register(SyscallId::Poll, SyscallHandler::Args3(ipc::syscall_poll));
     syscall_register(SyscallId::Pipe2, SyscallHandler::Args2(ipc::syscall_pipe2));
 

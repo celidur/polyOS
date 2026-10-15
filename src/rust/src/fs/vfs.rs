@@ -26,6 +26,8 @@ pub enum FsError {
     NoSpace,
     InvalidArgument,
     BadAddress,
+    BadDescriptor,
+    TooManyFiles,
     IsADirectory,
     WouldBlock,
     BrokenPipe,
@@ -54,6 +56,9 @@ pub trait FileSystemDriver: Send + Sync + Debug {
 }
 
 pub trait FileSystem: Send + Sync {
+    fn read_link(&self, _path: &str) -> Result<String, FsError> {
+        Err(FsError::InvalidArgument)
+    }
     fn open(&self, path: &str) -> Result<FileHandle, FsError>;
     fn read_dir(&self, path: &str) -> Result<Vec<String>, FsError>;
     fn create(&self, path: &str, directory: bool) -> Result<(), FsError>;
@@ -65,7 +70,15 @@ pub trait FileSystem: Send + Sync {
 }
 
 pub trait FileOps {
-    fn poll(&self, events: u16) -> u16 { events & 5 }
+    fn position(&self) -> Result<usize, FsError> {
+        Err(FsError::Unsupported)
+    }
+    fn chmod(&mut self, _mode: u16) -> Result<(), FsError> {
+        Err(FsError::Unsupported)
+    }
+    fn poll(&self, events: u16) -> u16 {
+        events & 5
+    }
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, FsError>;
     fn write(&mut self, buf: &[u8]) -> Result<usize, FsError>;
     fn seek(&mut self, pos: usize) -> Result<usize, FsError>;
@@ -205,6 +218,8 @@ impl Vfs {
     }
 
     pub fn open(&self, path: &str) -> Result<FileHandle, FsError> {
+        let resolved = self.follow_links(path)?;
+        let path = resolved.as_str();
         let mut last_error = FsError::NotFound;
         for (fs, subpath) in self.resolve_paths(path) {
             match fs.open(&subpath) {
@@ -262,7 +277,28 @@ impl Vfs {
         self.remove(path)
     }
 
+    pub fn read_link(&self, path: &str) -> Result<String, FsError> {
+        let (fs, subpath) = self.existing_path(path)?;
+        fs.read_link(&subpath)
+    }
+    pub fn follow_links(&self, path: &str) -> Result<String, FsError> {
+        let mut path = path.to_string();
+        for _ in 0..8 {
+            match self.read_link(&path) {
+                Ok(target) => {
+                    let base = path.rsplit_once('/').map(|(p, _)| p).unwrap_or("/");
+                    path = super::path::resolve(base, &target).ok_or(FsError::InvalidPath)?;
+                }
+                Err(FsError::InvalidArgument) => return Ok(path),
+                Err(error) => return Err(error),
+            }
+        }
+        Err(FsError::InvalidPath)
+    }
     pub fn stat(&self, path: &str) -> Result<FileMetadata, FsError> {
+        self.lstat(&self.follow_links(path)?)
+    }
+    pub fn lstat(&self, path: &str) -> Result<FileMetadata, FsError> {
         let (fs, subpath) = self.existing_path(path)?;
         fs.metadata(&subpath)
     }

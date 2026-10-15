@@ -27,10 +27,6 @@ pub struct ProcessFd {
 }
 
 impl ProcessFd {
-    pub(crate) fn new(descriptor: ProcessDescriptor) -> Self {
-        Self::new_with_status_flags(descriptor, 0)
-    }
-
     pub(crate) fn new_with_status_flags(descriptor: ProcessDescriptor, status_flags: u32) -> Self {
         Self {
             descriptor,
@@ -93,6 +89,14 @@ impl SocketHandle {
 }
 
 impl ProcessDescriptor {
+    pub fn position(&self) -> Result<usize, FsError> {
+        match self {
+            Self::File(f) => f.lock().ops.position(),
+            Self::Directory(d) => Ok(d.lock().offset),
+            _ => Err(FsError::Unsupported),
+        }
+    }
+
     pub fn pipe_endpoint(&self, write: bool) -> Option<(Arc<Mutex<Pipe>>, PipeEnd)> {
         match self {
             Self::Pipe { pipe, end } => Some((pipe.clone(), *end)),

@@ -173,8 +173,18 @@ struct MemFsFile {
 }
 
 impl FileOps for MemFsFile {
+    fn position(&self) -> Result<usize, FsError> {
+        Ok(self.offset)
+    }
+    fn chmod(&mut self, mode: u16) -> Result<(), FsError> {
+        self.inner.lock().meta.mode = mode & 0o777;
+        Ok(())
+    }
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, FsError> {
         let node = self.inner.lock();
+        if self.offset >= node.data.len() {
+            return Ok(0);
+        }
         let available = node.data.len().saturating_sub(self.offset);
         let to_read = available.min(buf.len());
         buf[..to_read].copy_from_slice(&node.data[self.offset..self.offset + to_read]);
@@ -184,8 +194,10 @@ impl FileOps for MemFsFile {
 
     fn write(&mut self, buf: &[u8]) -> Result<usize, FsError> {
         let mut node = self.inner.lock();
-        let end = self.offset + buf.len();
+        let end = self.offset.checked_add(buf.len()).ok_or(FsError::NoSpace)?;
         if end > node.data.len() {
+            let extra = end - node.data.len();
+            node.data.try_reserve(extra).map_err(|_| FsError::NoSpace)?;
             node.data.resize(end, 0);
         }
         node.data[self.offset..end].copy_from_slice(buf);
@@ -195,16 +207,16 @@ impl FileOps for MemFsFile {
     }
 
     fn seek(&mut self, pos: usize) -> Result<usize, FsError> {
-        let node = self.inner.lock();
-        self.offset = pos.min(node.data.len());
+        self.offset = pos;
         Ok(self.offset)
     }
 
     fn truncate(&mut self, size: usize) -> Result<(), FsError> {
         let mut node = self.inner.lock();
+        let extra = size.saturating_sub(node.data.len());
+        node.data.try_reserve(extra).map_err(|_| FsError::NoSpace)?;
         node.data.resize(size, 0);
         node.meta.size = node.data.len() as u64;
-        self.offset = self.offset.min(node.data.len());
         Ok(())
     }
 

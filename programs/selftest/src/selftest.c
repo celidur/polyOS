@@ -106,7 +106,7 @@ static int test_file_io(void)
     char buf[64];
     struct file_stat stat;
 
-    int fd = open(path, O_CREAT | O_RDWR, 0);
+    int fd = open(path, O_CREAT | O_RDWR, 0600);
     expect("open/create /tmp file", fd >= 0, fd);
     if (fd < 0) {
         return 0;
@@ -962,6 +962,7 @@ static void test_register_abi(void)
 }
 
 extern void test_udp(void (*expect)(const char *, int, int));
+extern void test_filesystem(void (*expect)(const char *, int, int));
 extern void test_ipc(void (*expect)(const char *, int, int));
 extern void test_threads(void (*expect)(const char *, int, int));
 int main(int argc, char **argv)
@@ -986,6 +987,7 @@ int main(int argc, char **argv)
     test_environment();
     test_threads(expect);
     test_ipc(expect);
+    test_filesystem(expect);
 
     if (wants_network(argc, argv)) {
         test_network();

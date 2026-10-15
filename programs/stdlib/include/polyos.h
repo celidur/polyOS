@@ -94,6 +94,36 @@ struct sockaddr_in {
 
 void polyos_terminal_readline(char* out, int max, bool output_while_typing);
 int polyos_system_run(const char *command);
+#define AT_FDCWD (-100)
+#define AT_SYMLINK_NOFOLLOW 0x100
+#define AT_EMPTY_PATH 0x1000
+#define O_EXCL 0x80
+#define O_DIRECTORY 0x10000
+#define F_OK 0
+#define X_OK 1
+#define W_OK 2
+#define R_OK 4
+#define S_IFLNK 0120000
+#define S_ISLNK(mode) (((mode) & S_IFMT) == S_IFLNK)
+struct stat64 {
+    u64 st_dev; u32 __pad0; u32 __st_ino;
+    u32 st_mode, st_nlink, st_uid, st_gid;
+    u64 st_rdev; u32 __pad1; s64 st_size; u32 st_blksize; u64 st_blocks;
+    u32 st_atime, st_atime_nsec, st_mtime, st_mtime_nsec, st_ctime, st_ctime_nsec;
+    u64 st_ino;
+} __attribute__((packed));
+struct dirent64 { u64 d_ino; s64 d_off; u16 d_reclen; u8 d_type; char d_name[]; } __attribute__((packed));
+int openat(int dirfd, const char *path, int flags, int mode);
+int ftruncate(int fd, off_t length);
+int fchmod(int fd, int mode);
+int access(const char *path, int mode);
+ssize_t readlink(const char *path, char *buf, size_t size);
+int fstatat(int dirfd, const char *path, struct file_stat *out, int flags);
+int fstatat64(int dirfd, const char *path, struct stat64 *out, int flags);
+int stat64(const char *path, struct stat64 *out);
+int lstat64(const char *path, struct stat64 *out);
+int fstat64(int fd, struct stat64 *out);
+int getdents64(int fd, void *buffer, size_t size);
 int open(const char *pathname, int flags, int mode);
 ssize_t read(int fd, void *buf, size_t count);
 ssize_t write(int fd, const void *buf, size_t count);

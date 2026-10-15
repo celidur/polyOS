@@ -460,7 +460,7 @@ fn apply_redirections<'a>(command: &ParsedCommand<'a>) -> Result<(), Redirection
             Redirect::Append(path) => (path, fs::O_CREAT | fs::O_WRONLY | fs::O_APPEND),
         };
 
-        let fd = fs::open(path, flags, 0).map_err(|error| RedirectionError { path, error })?;
+        let fd = fs::open(path, flags, 0o666).map_err(|error| RedirectionError { path, error })?;
         io::dup2(fd, bindings::STDOUT_FILENO as i32).map_err(|_| RedirectionError {
             path,
             error: fs::errno(),
@@ -849,7 +849,7 @@ fn touch_files(paths: &[&str]) {
     }
 
     for path in paths {
-        match fs::open(path, fs::O_CREAT | fs::O_RDWR, 0) {
+        match fs::open(path, fs::O_CREAT | fs::O_RDWR, 0o666) {
             Ok(fd) => {
                 let _ = fs::close(fd);
             }
@@ -893,7 +893,7 @@ fn copy_file(src: &str, dst: &str) -> Result<(), i32> {
 
     let src_fd = fs::open(src, fs::O_RDONLY, 0)?;
     let _ = fs::unlink(dst);
-    let dst_fd = match fs::open(dst, fs::O_CREAT | fs::O_WRONLY, 0) {
+    let dst_fd = match fs::open(dst, fs::O_CREAT | fs::O_WRONLY, 0o666) {
         Ok(fd) => fd,
         Err(error) => {
             let _ = fs::close(src_fd);

@@ -70,7 +70,7 @@ int fopen(const char *filename, const char *mode){
         }
     }
 
-    return open(filename, flags, 0);
+    return open(filename, flags, 0666);
 }
 
 int fread(int fd, void *ptr, int size){

@@ -3,22 +3,16 @@ use spin::Mutex;
 
 use crate::{
     constant::MAX_PATH,
-    fs::{FileHandle, FsError, Pipe, PipeEnd, PipeError, file::FileStat},
+    fs::{FsError, Pipe, PipeEnd, PipeError, file::FileStat},
     kernel::KERNEL,
     schedule::{
-        process::{
-            ACCESS_EXECUTE, ACCESS_READ, ACCESS_WRITE, DirectoryHandle, FD_CLOEXEC, O_NONBLOCK,
-            Process, ProcessDescriptor,
-        },
+        process::{ACCESS_EXECUTE, FD_CLOEXEC, O_NONBLOCK, Process, ProcessDescriptor},
         task::{Task, TaskId, WaitReason, task_next},
     },
 };
 
 use super::{abi, user};
 
-const O_ACCMODE: u32 = 0x3;
-const O_CREAT: u32 = 0x40;
-const O_TRUNC: u32 = 0x200;
 const O_APPEND: u32 = 0x400;
 const SEEK_SET: u32 = 0;
 const SEEK_END: u32 = 2;
@@ -48,75 +42,18 @@ enum PipeSyscallResult {
 }
 
 pub fn syscall_open(path_ptr: u32, flags: u32, mode: u32) -> u32 {
-    let Some((process, path, flags, mode)) = with_current_task(|task| {
-        if path_ptr == 0 {
-            return None;
-        }
-
-        let path = user::read_c_string(task, path_ptr, MAX_PATH)?;
-        let path = task.process.resolve_path(path.as_str())?;
-        Some((task.process.clone(), path, flags, mode as u16))
-    }) else {
-        return abi::errno(abi::EFAULT);
-    };
-
-    let mut handle = {
-        let vfs = KERNEL.vfs.read();
-        match vfs.open(path.as_str()) {
-            Ok(handle) => handle,
-            Err(_) if flags & O_CREAT != 0 => {
-                if let Err(error) = vfs.create(path.as_str(), false) {
-                    return fs_errno(error);
-                }
-                apply_created_mode(&process, path.as_str(), mode, false);
-
-                match vfs.open(path.as_str()) {
-                    Ok(handle) => handle,
-                    Err(error) => return fs_errno(error),
-                }
-            }
-            Err(error) => {
-                if let Some(fd) = insert_directory_fd(&process, path.as_str(), flags) {
-                    return fd;
-                }
-
-                return fs_errno(error);
-            }
-        }
-    };
-
-    let required_permissions = match open_required_permissions(flags) {
-        Ok(permissions) => permissions,
-        Err(error) => return fs_errno(error),
-    };
-
-    if required_permissions != 0 {
-        match handle.ops.stat() {
-            Ok(metadata) if !process.has_permission(&metadata, required_permissions) => {
-                return abi::errno(abi::EACCES);
-            }
-            Ok(_) => {}
-            Err(error) => return fs_errno(error),
-        }
-    }
-
-    if flags & O_TRUNC != 0 && flags & O_ACCMODE != 0 {
-        if let Err(error) = handle.ops.truncate(0) {
-            // Character devices like /dev/null do not need a real truncate.
-            // Treat unsupported truncation as a no-op so open() still succeeds.
-            if !matches!(error, FsError::Unsupported) {
-                return fs_errno(error);
-            }
-        }
-    }
-
-    insert_file_fd(&process, handle, flags)
+    super::filesystem::syscall_openat((-100i32) as u32, path_ptr, flags, mode)
 }
 
 pub fn syscall_read(fd: u32, buf_ptr: u32, len: u32) -> u32 {
-    let Some((process, fd, buf_ptr, len)) =
-        with_current_task(|task| Some((task.process.clone(), fd as i32, buf_ptr, len as usize)))
-    else {
+    let Some((process, fd, buf_ptr, len)) = with_current_task(|task| {
+        Some((
+            task.process.clone(),
+            fd as i32,
+            buf_ptr,
+            len.min(65536) as usize,
+        ))
+    }) else {
         return abi::errno(abi::EFAULT);
     };
 
@@ -124,6 +61,13 @@ pub fn syscall_read(fd: u32, buf_ptr: u32, len: u32) -> u32 {
         return abi::errno(abi::EFAULT);
     }
 
+    if process
+        .get_status_flags(fd)
+        .map(|f| f & 3 == 1)
+        .unwrap_or(false)
+    {
+        return abi::errno(abi::EBADF);
+    }
     let descriptor = match process.get_fd(fd) {
         Some(descriptor) => descriptor,
         None => return abi::errno(abi::EBADF),
@@ -157,9 +101,14 @@ pub fn syscall_read(fd: u32, buf_ptr: u32, len: u32) -> u32 {
 }
 
 pub fn syscall_write(fd: u32, buf_ptr: u32, len: u32) -> u32 {
-    let Some((process, fd, ptr, len)) =
-        with_current_task(|task| Some((task.process.clone(), fd as i32, buf_ptr, len as usize)))
-    else {
+    let Some((process, fd, ptr, len)) = with_current_task(|task| {
+        Some((
+            task.process.clone(),
+            fd as i32,
+            buf_ptr,
+            len.min(65536) as usize,
+        ))
+    }) else {
         return abi::errno(abi::EFAULT);
     };
 
@@ -179,6 +128,13 @@ pub fn syscall_write(fd: u32, buf_ptr: u32, len: u32) -> u32 {
 }
 
 pub(super) fn write_buffer(process: Arc<Process>, fd: i32, data: Vec<u8>) -> u32 {
+    if process
+        .get_status_flags(fd)
+        .map(|f| f & 3 == 0)
+        .unwrap_or(false)
+    {
+        return abi::errno(abi::EBADF);
+    }
     let Some(descriptor) = process.get_fd(fd) else {
         return abi::errno(abi::EBADF);
     };
@@ -323,15 +279,19 @@ pub fn syscall_lseek(fd: u32, offset: u32, whence: u32) -> u32 {
     };
 
     let position = match whence {
-        SEEK_SET => offset as i32,
+        SEEK_SET => offset as i32 as i64,
+        1 => match descriptor.position() {
+            Ok(pos) => pos as i64 + offset as i32 as i64,
+            Err(error) => return fs_errno(error),
+        },
         SEEK_END => match descriptor.stat() {
-            Ok(meta) => meta.size as i32 + offset as i32,
+            Ok(meta) => meta.size as i64 + offset as i32 as i64,
             Err(error) => return fs_errno(error),
         },
         _ => return abi::errno(abi::EINVAL),
     };
 
-    if position < 0 {
+    if position < 0 || position > i32::MAX as i64 {
         return abi::errno(abi::EINVAL);
     }
 
@@ -616,7 +576,7 @@ pub fn syscall_stat(path_ptr: u32, stat_ptr: u32) -> u32 {
 }
 
 pub fn syscall_lstat(path_ptr: u32, stat_ptr: u32) -> u32 {
-    syscall_stat(path_ptr, stat_ptr)
+    super::filesystem::legacy_lstat(path_ptr, stat_ptr)
 }
 
 pub fn syscall_getdents(fd: u32, dirent_ptr: u32, len: u32) -> u32 {
@@ -660,53 +620,6 @@ pub fn syscall_getdents(fd: u32, dirent_ptr: u32, len: u32) -> u32 {
     written as u32
 }
 
-fn insert_file_fd(process: &Process, handle: FileHandle, flags: u32) -> u32 {
-    match process
-        .insert_fd_with_status_flags(ProcessDescriptor::File(Arc::new(Mutex::new(handle))), flags)
-    {
-        Ok(fd) => fd as u32,
-        Err(_) => abi::errno(abi::EMFILE),
-    }
-}
-
-fn insert_directory_fd(process: &Process, path: &str, flags: u32) -> Option<u32> {
-    let vfs = KERNEL.vfs.read();
-    let metadata = vfs.stat(path).ok()?;
-    if !metadata.is_dir {
-        return None;
-    }
-
-    match flags & O_ACCMODE {
-        0 => {}
-        1 | 2 => return Some(abi::errno(abi::EISDIR)),
-        _ => return Some(abi::errno(abi::EINVAL)),
-    }
-
-    if flags & O_TRUNC != 0 {
-        return Some(abi::errno(abi::EISDIR));
-    }
-
-    if !process.has_permission(&metadata, ACCESS_READ) {
-        return Some(abi::errno(abi::EACCES));
-    }
-
-    let entries = vfs.read_dir(path).ok()?;
-    let directory = DirectoryHandle {
-        path: path.into(),
-        entries,
-        offset: 0,
-        metadata,
-    };
-
-    match process.insert_fd_with_status_flags(
-        ProcessDescriptor::Directory(Arc::new(Mutex::new(directory))),
-        flags,
-    ) {
-        Ok(fd) => Some(fd as u32),
-        Err(_) => Some(abi::errno(abi::EMFILE)),
-    }
-}
-
 fn remove_path(path_ptr: u32, directory: bool) -> u32 {
     let Some(path) = current_resolved_path(path_ptr) else {
         return abi::errno(abi::EFAULT);
@@ -724,21 +637,6 @@ fn remove_path(path_ptr: u32, directory: bool) -> u32 {
         Ok(()) => 0,
         Err(error) => fs_errno(error),
     }
-}
-
-fn open_required_permissions(flags: u32) -> Result<u16, FsError> {
-    let mut permissions = match flags & O_ACCMODE {
-        0 => ACCESS_READ,
-        1 => ACCESS_WRITE,
-        2 => ACCESS_READ | ACCESS_WRITE,
-        _ => return Err(FsError::InvalidArgument),
-    };
-
-    if flags & O_TRUNC != 0 {
-        permissions |= ACCESS_WRITE;
-    }
-
-    Ok(permissions)
 }
 
 fn apply_created_mode(process: &Process, path: &str, mode: u16, directory: bool) {
@@ -819,6 +717,8 @@ pub(super) fn fs_errno(error: FsError) -> u32 {
         FsError::InvalidPath | FsError::InvalidArgument => abi::EINVAL,
         FsError::IoError => abi::EIO,
         FsError::BadAddress => abi::EFAULT,
+        FsError::BadDescriptor => abi::EBADF,
+        FsError::TooManyFiles => abi::EMFILE,
         FsError::Unsupported => abi::ENOTSUP,
         FsError::PermissionDenied => abi::EACCES,
         FsError::NotEmpty => abi::ENOTEMPTY,
@@ -838,7 +738,7 @@ fn pipe_fs_error(error: PipeError) -> FsError {
     }
 }
 
-fn metadata_to_stat(meta: &crate::fs::FileMetadata) -> FileStat {
+pub(super) fn metadata_to_stat(meta: &crate::fs::FileMetadata) -> FileStat {
     FileStat {
         size: meta.size as u32,
         flags: 0,
@@ -849,7 +749,10 @@ fn metadata_to_stat(meta: &crate::fs::FileMetadata) -> FileStat {
     }
 }
 
-fn stat_mode(meta: &crate::fs::FileMetadata) -> u32 {
+pub(super) fn stat_mode(meta: &crate::fs::FileMetadata) -> u32 {
+    if meta.mode & 0o170000 != 0 {
+        return meta.mode as u32;
+    }
     let file_type = if meta.is_dir { 0o040000 } else { 0o100000 };
     file_type | meta.mode as u32
 }

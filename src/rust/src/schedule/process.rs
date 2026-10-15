@@ -34,14 +34,12 @@ pub const SIGSTOP: u32 = 19;
 pub const SIGNAL_FRAME_MAGIC: u32 = 0x5349_4731;
 pub const FD_CLOEXEC: u32 = 1;
 pub const ACCESS_EXECUTE: u16 = 0o1;
-pub const ACCESS_WRITE: u16 = 0o2;
-pub const ACCESS_READ: u16 = 0o4;
 const O_ACCMODE: u32 = 0x3;
 pub const O_APPEND: u32 = 0x400;
 pub const O_NONBLOCK: u32 = 0x800;
 const SETTABLE_STATUS_FLAGS: u32 = O_APPEND | O_NONBLOCK;
 
-pub use crate::fs::descriptor::{DirectoryHandle, ProcessDescriptor, ProcessFd, SocketHandle};
+pub use crate::fs::descriptor::{ProcessDescriptor, ProcessFd, SocketHandle};
 
 #[derive(Clone)]
 pub enum ProcessFileType {
@@ -92,6 +90,7 @@ pub struct Process {
     pub umask: Mutex<u16>,
     pub env: Mutex<Vec<String>>,
     pub filetype: ProcessFileType,
+    pub executable_path: String,
     pub page_directory: PageDirectory,
     pub stack: Page<u8>,
     pub start_stack: usize,
@@ -166,6 +165,7 @@ impl Process {
             state: Mutex::new(ProcessState::Running),
             main_task: RwLock::new(None),
             filetype: ProcessFileType::Elf(elf),
+            executable_path: filename.to_string(),
             page_directory,
             stack: Page::new(USER_PROGRAM_STACK_SIZE)?,
             start_stack: USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
@@ -207,6 +207,7 @@ impl Process {
             state: Mutex::new(ProcessState::Running),
             main_task: RwLock::new(None),
             filetype: ProcessFileType::Binary(memory),
+            executable_path: filename.to_string(),
             page_directory,
             stack: Page::new(USER_PROGRAM_STACK_SIZE).ok_or(KernelError::Allocation)?,
             start_stack: USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
@@ -226,7 +227,10 @@ impl Process {
 
         for fd in 0..FIRST_PROCESS_FD {
             table[fd] = KERNEL.vfs.read().open("/dev/console").ok().map(|handle| {
-                ProcessFd::new(ProcessDescriptor::File(Arc::new(Mutex::new(handle))))
+                ProcessFd::new_with_status_flags(
+                    ProcessDescriptor::File(Arc::new(Mutex::new(handle))),
+                    if fd == 0 { 0 } else { 1 },
+                )
             });
         }
 
@@ -273,6 +277,7 @@ impl Process {
             state: Mutex::new(ProcessState::Running),
             main_task: RwLock::new(None),
             filetype: parent.filetype.clone(),
+            executable_path: parent.executable_path.clone(),
             page_directory,
             stack: parent.stack.clone(),
             start_stack: parent.start_stack,
@@ -583,38 +588,7 @@ impl Process {
     }
 
     pub fn resolve_path(&self, path: &str) -> Option<String> {
-        if path.is_empty() {
-            return None;
-        }
-
-        let mut components = Vec::new();
-        if !path.starts_with('/') {
-            for component in self.cwd.lock().split('/') {
-                if !component.is_empty() {
-                    components.push(component.to_string());
-                }
-            }
-        }
-
-        for component in path.split('/') {
-            match component {
-                "" | "." => {}
-                ".." => {
-                    components.pop();
-                }
-                component => components.push(component.to_string()),
-            }
-        }
-
-        let mut resolved = String::from("/");
-        for (index, component) in components.iter().enumerate() {
-            if index != 0 {
-                resolved.push('/');
-            }
-            resolved.push_str(component);
-        }
-
-        Some(resolved)
+        crate::fs::path::resolve(&self.cwd.lock(), path)
     }
 
     pub fn set_cwd(&self, path: String) {

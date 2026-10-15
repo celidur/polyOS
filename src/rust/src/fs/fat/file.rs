@@ -18,6 +18,7 @@ pub struct FatFile {
         Mutex<fatfs::File<'static, BufStream, fatfs::NullTimeProvider, fatfs::LossyOemCpConverter>>,
     fs: Arc<Mutex<fatfs::FileSystem<BufStream>>>,
     path: Arc<str>,
+    offset: usize,
 }
 
 impl FatFile {
@@ -33,6 +34,7 @@ impl FatFile {
             file: Mutex::new(file),
             fs,
             path: Arc::from(path),
+            offset: 0,
         })
     }
 }
@@ -47,26 +49,56 @@ unsafe impl Send for FatFile {}
 unsafe impl Sync for FatFile {}
 
 impl FileOps for FatFile {
+    fn position(&self) -> Result<usize, FsError> {
+        Ok(self.offset)
+    }
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, FsError> {
-        self.file.lock().read(buf).map_err(fat_error)
+        let mut file = self.file.lock();
+        let position = file
+            .seek(SeekFrom::Start(self.offset as u64))
+            .map_err(fat_error)?;
+        if position < self.offset as u64 {
+            return Ok(0);
+        }
+        let count = file.read(buf).map_err(fat_error)?;
+        self.offset += count;
+        Ok(count)
     }
 
     fn write(&mut self, buf: &[u8]) -> Result<usize, FsError> {
-        self.file.lock().write(buf).map_err(fat_error)
+        if buf.is_empty() {
+            return Ok(0);
+        }
+        let mut file = self.file.lock();
+        let mut position = file
+            .seek(SeekFrom::Start(self.offset as u64))
+            .map_err(fat_error)? as usize;
+        let zeros = [0u8; 512];
+        while position < self.offset {
+            let n = (self.offset - position).min(zeros.len());
+            file.write_all(&zeros[..n]).map_err(fat_error)?;
+            position += n;
+        }
+        let count = file.write(buf).map_err(fat_error)?;
+        self.offset += count;
+        file.flush().map_err(fat_error)?;
+        Ok(count)
     }
 
     fn seek(&mut self, pos: usize) -> Result<usize, FsError> {
-        self.file
-            .lock()
-            .seek(SeekFrom::Start(pos as u64))
-            .map_err(fat_error)
-            .map(|d| d as usize)
+        self.offset = pos;
+        Ok(pos)
     }
 
     fn truncate(&mut self, size: usize) -> Result<(), FsError> {
         let mut file = self.file.lock();
-        file.seek(SeekFrom::Start(size as u64))
-            .map_err(fat_error)?;
+        let mut position = file.seek(SeekFrom::Start(size as u64)).map_err(fat_error)? as usize;
+        let zeros = [0u8; 512];
+        while position < size {
+            let n = (size - position).min(zeros.len());
+            file.write_all(&zeros[..n]).map_err(fat_error)?;
+            position += n;
+        }
         file.truncate().map_err(fat_error)?;
         file.flush().map_err(fat_error)
     }

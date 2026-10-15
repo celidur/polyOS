@@ -10,7 +10,7 @@ use crate::{
         disk::DISK_DRIVER,
         driver::{DeviceProbeStage, probe_stage},
     },
-    fs::{DevFsDriver, FatDriver, MemFsDriver, MountOptions, Vfs},
+    fs::{DevFsDriver, FatDriver, MemFsDriver, MountOptions, ProcFsDriver, Vfs},
     interrupts,
     memory::{self, PageDirectory},
     schedule::{process_manager::ProcessManager, task_manager::TaskManager},
@@ -102,6 +102,19 @@ impl Kernel {
                 },
             )
             .expect("Failed to mount memfs at /tmp");
+        self.vfs
+            .write()
+            .register_fs_driver("procfs", Arc::new(ProcFsDriver));
+        self.vfs
+            .read()
+            .mount(
+                "/proc",
+                &MountOptions {
+                    fs_name: "procfs".to_string(),
+                    block_device_id: None,
+                },
+            )
+            .expect("Failed to mount procfs");
     }
 
     fn probe_devices(&self, stage: DeviceProbeStage) {

@@ -65,6 +65,14 @@ static void *fork_worker(void *arg) {
         return (void *)1;
     return NULL;
 }
+static volatile int raw_gate, raw_done;
+static void raw_exit_worker(void *unused) {
+    extern long __polyos_syscall6(long,long,long,long,long,long,long);
+    while (!raw_gate) sched_yield();
+    raw_done = 1;
+    __polyos_syscall6(1,0,0,0,0,0,0);
+    for (;;) {}
+}
 void test_threads(void (*expect)(const char *, int, int)) {
     extern long __polyos_syscall6(long,long,long,long,long,long,long);
     u32 word = 1;
@@ -163,4 +171,24 @@ void test_threads(void (*expect)(const char *, int, int)) {
         expect("worker exec replaces all threads",
                waitpid(pid, &status, 0) == pid && WIFEXITED(status) && WEXITSTATUS(status) == 43,
                status);
+
+    pid = fork();
+    if (pid == 0) {
+        extern long __polyos_clone(long,void *,void *,void *,void *,void (*)(void *),void *);
+        char *stack = malloc(65536);
+        if (!stack) _exit(98);
+        u32 old_break = __polyos_syscall6(45,0,0,0,0,0,0);
+        u32 page = (old_break + 4095) & ~4095u;
+        if (__polyos_syscall6(45,page+4096,0,0,0,0,0) != page+4096) _exit(97);
+        *(u32 *)page = 1;
+        long child = __polyos_clone(0x210f00,stack+65536,NULL,NULL,(void *)page,raw_exit_worker,NULL);
+        if (child < 0) _exit(96);
+        __polyos_syscall6(45,old_break,0,0,0,0,0);
+        raw_gate = 1;
+        while (!raw_done) sched_yield();
+        sched_yield();
+        _exit(45);
+    }
+    expect("thread exit tolerates released completion mapping",
+           pid > 0 && waitpid(pid,&status,0)==pid && WIFEXITED(status) && WEXITSTATUS(status)==45,status);
 }

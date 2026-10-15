@@ -17,29 +17,9 @@ extern int __sys_sem_create(int initial_count);
 extern int __sys_sem_wait(int semid);
 extern int __sys_sem_signal(int semid);
 extern int __sys_sem_close(int semid);
-extern int __sys_open(const char *pathname, int flags, int mode);
-extern ssize_t __sys_read(int fd, void *buf, size_t count);
-extern ssize_t __sys_write(int fd, const void *buf, size_t count);
-extern off_t __sys_lseek(int fd, off_t offset, int whence);
-extern int __sys_stat(const char *pathname, struct file_stat *stat);
-extern int __sys_lstat(const char *pathname, struct file_stat *stat);
-extern int __sys_fstat(int fd, struct file_stat *stat);
 extern int __sys_ioctl(int fd, unsigned long request, unsigned long arg);
-extern int __sys_fcntl(int fd, int cmd, long arg);
-extern int __sys_close(int fd);
 extern int __sys_pipe(int pipefd[2]);
-extern int __sys_dup(int oldfd);
-extern int __sys_dup2(int oldfd, int newfd);
 extern void *__sys_brk(void *addr);
-extern int __sys_unlink(const char *pathname);
-extern int __sys_chmod(const char *pathname, int mode);
-extern int __sys_mkdir(const char *pathname, int mode);
-extern int __sys_rmdir(const char *pathname);
-extern int __sys_umask(int mask);
-extern int __sys_chdir(const char *pathname);
-extern int __sys_chown(const char *pathname, unsigned int uid, unsigned int gid);
-extern int __sys_getcwd(char *buf, size_t size);
-extern int __sys_getdents(int fd, struct dirent *dirp, size_t count);
 
 static int syscall_ret(int result)
 {
@@ -50,8 +30,6 @@ static int syscall_ret(int result)
 
     return result;
 }
-
-
 
 int execve(const char *pathname, char *const argv[], char *const envp[])
 {
@@ -142,19 +120,6 @@ int reboot(int cmd)
     return syscall_ret(__sys_reboot(LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, cmd, NULL));
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 int sem_init(sem_t *sem, int pshared, unsigned int value)
 {
     if (!sem) {
@@ -218,69 +183,14 @@ unsigned int sleep(unsigned int seconds)
     return nanosleep(&req, NULL) == 0 ? 0 : seconds;
 }
 
-int open(const char *pathname, int flags, int mode)
-{
-    return syscall_ret(__sys_open(pathname, flags, mode));
-}
-
-ssize_t read(int fd, void *buf, size_t count)
-{
-    return syscall_ret(__sys_read(fd, buf, count));
-}
-
-ssize_t write(int fd, const void *buf, size_t count)
-{
-    return syscall_ret(__sys_write(fd, buf, count));
-}
-
-off_t lseek(int fd, off_t offset, int whence)
-{
-    return syscall_ret(__sys_lseek(fd, offset, whence));
-}
-
-int fstat(int fd, struct file_stat *stat)
-{
-    return syscall_ret(__sys_fstat(fd, stat));
-}
-
-int stat(const char *pathname, struct file_stat *stat)
-{
-    return syscall_ret(__sys_stat(pathname, stat));
-}
-
-int lstat(const char *pathname, struct file_stat *stat)
-{
-    return syscall_ret(__sys_lstat(pathname, stat));
-}
-
 int ioctl(int fd, unsigned long request, unsigned long arg)
 {
     return syscall_ret(__sys_ioctl(fd, request, arg));
 }
 
-int fcntl(int fd, int cmd, long arg)
-{
-    return syscall_ret(__sys_fcntl(fd, cmd, arg));
-}
-
-int close(int fd)
-{
-    return syscall_ret(__sys_close(fd));
-}
-
 int pipe(int pipefd[2])
 {
     return syscall_ret(__sys_pipe(pipefd));
-}
-
-int dup(int oldfd)
-{
-    return syscall_ret(__sys_dup(oldfd));
-}
-
-int dup2(int oldfd, int newfd)
-{
-    return syscall_ret(__sys_dup2(oldfd, newfd));
 }
 
 int brk(void *addr)
@@ -312,55 +222,4 @@ void *sbrk(intptr_t increment)
 
     program_break = result;
     return old_break;
-}
-
-int unlink(const char *pathname)
-{
-    return syscall_ret(__sys_unlink(pathname));
-}
-
-int chmod(const char *pathname, int mode)
-{
-    return syscall_ret(__sys_chmod(pathname, mode));
-}
-
-int mkdir(const char *pathname, int mode)
-{
-    return syscall_ret(__sys_mkdir(pathname, mode));
-}
-
-int rmdir(const char *pathname)
-{
-    return syscall_ret(__sys_rmdir(pathname));
-}
-
-int umask(int mask)
-{
-    return __sys_umask(mask);
-}
-
-int chdir(const char *pathname)
-{
-    return syscall_ret(__sys_chdir(pathname));
-}
-
-int chown(const char *pathname, unsigned int uid, unsigned int gid)
-{
-    return syscall_ret(__sys_chown(pathname, uid, gid));
-}
-
-char *getcwd(char *buf, size_t size)
-{
-    int result = __sys_getcwd(buf, size);
-    if (result < 0 && result >= -4095) {
-        errno = -result;
-        return NULL;
-    }
-
-    return buf;
-}
-
-int getdents(int fd, struct dirent *dirp, size_t count)
-{
-    return syscall_ret(__sys_getdents(fd, dirp, count));
 }

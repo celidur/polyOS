@@ -41,7 +41,8 @@ child's registry to the calling thread. TLS destructors run outside registry loc
 
 This port targets the existing single-CPU scheduler. It implements shared-address-
 space clone with PARENT_SETTID and CHILD_CLEARTID, plus private futex wait/wake.
-Compiler TLS setup, nonzero stack guards and timed futex waits are rejected rather
+Joining/detaching the initial thread, compiler TLS setup, nonzero stack guards
+and timed futex waits are rejected rather
 than silently accepted. Thread-specific keys and destructors are supported.
 
 The thread tests also exposed prerequisites fixed here: partial ELF reads, the
@@ -75,3 +76,21 @@ Poll sleeps the calling task between readiness scans; console readiness does not
 consume input. Libc implements select over poll. Vectored writes gather at most
 64 KiB per call and may return a short write. Local send/recv support flags=0;
 unsupported flags are rejected.
+
+## Filesystem APIs
+
+`fs/path.rs` resolves cwd and directory-relative paths. `fs/open.rs` shares open
+policy between open and openat, including permissions, exclusive creation,
+close-on-exec and directory-only opens. A zero creation mode means no permissions;
+libc fopen and shell creation paths supply their intended default mode explicitly.
+`FileOps` owns descriptor chmod, truncation and position. Memfs preserves open
+objects after unlink. FAT maintains a logical offset, zero-fills gaps/extensions,
+and preserves the offset across truncate; FAT chmod remains unsupported.
+
+`interrupts/syscall/filesystem.rs` marshals access, readlink, ftruncate, fchmod,
+openat, fstatat, stat64 and getdents64. The 96-byte i386 stat64 and variable-length
+dirent64 records have explicit APIs; the existing PolyOS stat/dirent ABI remains
+available for existing programs. Inode/device IDs and timestamps are not yet backed
+by filesystem metadata and are reported as zero. Directory entries are snapshots
+at open time. The read-only procfs exposes `/proc/self/exe` through the VFS link
+interface, with stat/open following the link and lstat/readlink preserving it.
