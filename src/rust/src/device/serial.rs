@@ -63,6 +63,12 @@ impl SerialDriver {
             .expect("serial device not probed");
     }
 
+    pub fn readable(&self) -> bool {
+        self.device
+            .with_mut(|serial: &mut SerialPort| serial.port.ready_to_receive().is_ok())
+            .unwrap_or(false)
+    }
+
     pub fn read(&self) -> Option<u8> {
         self.device
             .with_mut(|serial_port: &mut SerialPort| serial_port.try_receive_byte().ok())
@@ -75,6 +81,14 @@ pub static SERIAL_DRIVER: SerialDriver = SerialDriver::new();
 struct SerialFile;
 
 impl FileOps for SerialFile {
+    fn poll(&self, events: u16) -> u16 {
+        (events & 4)
+            | if SERIAL_DRIVER.readable() {
+                events & 1
+            } else {
+                0
+            }
+    }
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, FsError> {
         let mut read = 0;
 

@@ -48,6 +48,9 @@ pub enum SyscallId {
     ExitGroup = 252,
     SchedYield = 158,
     Futex = 240,
+    Writev = 146,
+    Poll = 168,
+    Pipe2 = 331,
     // PolyOS-private debug/control calls. Keep custom IDs at 500+.
     PrintMemory = 503,
     SemaphoreCreate = 560,
@@ -112,6 +115,9 @@ impl SyscallId {
             252 => Some(Self::ExitGroup),
             158 => Some(Self::SchedYield),
             240 => Some(Self::Futex),
+            146 => Some(Self::Writev),
+            168 => Some(Self::Poll),
+            331 => Some(Self::Pipe2),
             _ => None,
         }
     }

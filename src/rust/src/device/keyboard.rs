@@ -161,6 +161,12 @@ impl KeyboardDriver {
         }
     }
 
+    pub fn readable(&self) -> bool {
+        self.device
+            .with_mut(|keyboard| !keyboard.input.is_empty())
+            .unwrap_or(false)
+    }
+
     pub fn read_byte(&self) -> Option<u8> {
         self.device
             .with_mut(|keyboard| keyboard.read_byte())
@@ -173,6 +179,13 @@ pub static KEYBOARD_DRIVER: KeyboardDriver = KeyboardDriver::new();
 struct KeyboardFile;
 
 impl FileOps for KeyboardFile {
+    fn poll(&self, events: u16) -> u16 {
+        if KEYBOARD_DRIVER.readable() {
+            events & 1
+        } else {
+            0
+        }
+    }
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, FsError> {
         let mut read = 0;
 

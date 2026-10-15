@@ -68,6 +68,7 @@ pub struct Task {
     pub time_slice: u32,
     pub state: TaskState,
     pub clear_child_tid: u32,
+    pub poll_deadline: Option<u64>,
 }
 
 impl Task {
@@ -80,6 +81,7 @@ impl Task {
             time_slice: 0,
             state: TaskState::Runnable,
             clear_child_tid: 0,
+            poll_deadline: None,
         }
     }
 
@@ -97,6 +99,7 @@ impl Task {
             time_slice: 0,
             state: TaskState::Runnable,
             clear_child_tid: 0,
+            poll_deadline: None,
         }
     }
 

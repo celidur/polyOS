@@ -22,6 +22,11 @@ struct network_info {
     u32 dns_rx;
 };
 
+#define AF_UNIX 1
+#define SOCK_STREAM 1
+#define SOCK_NONBLOCK 0x800
+#define SOCK_CLOEXEC 0x80000
+#define O_CLOEXEC 0x80000
 #define AF_INET 2
 #define SOCK_DGRAM 2
 #define SOCK_RAW 3
@@ -99,6 +104,24 @@ int ioctl(int fd, unsigned long request, unsigned long arg);
 int fcntl(int fd, int cmd, long arg);
 int close(int fd);
 int pipe(int pipefd[2]);
+int pipe2(int pipefd[2], int flags);
+int socketpair(int domain, int type, int protocol, int sv[2]);
+struct iovec { void *iov_base; size_t iov_len; };
+ssize_t writev(int fd, const struct iovec *iov, int count);
+#define POLLIN 1
+#define POLLOUT 4
+#define POLLERR 8
+#define POLLHUP 16
+#define POLLNVAL 32
+struct pollfd { int fd; short events; short revents; };
+int poll(struct pollfd *fds, unsigned int count, int timeout);
+#define FD_SETSIZE 128
+typedef struct { u32 bits[FD_SETSIZE / 32]; } fd_set;
+#define FD_ZERO(set) do { for (unsigned _i = 0; _i < FD_SETSIZE/32; ++_i) (set)->bits[_i] = 0; } while (0)
+#define FD_SET(fd,set) ((set)->bits[(fd)/32] |= 1u << ((fd)%32))
+#define FD_CLR(fd,set) ((set)->bits[(fd)/32] &= ~(1u << ((fd)%32)))
+#define FD_ISSET(fd,set) (((set)->bits[(fd)/32] >> ((fd)%32)) & 1)
+int select(int count, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
 int dup(int oldfd);
 int dup2(int oldfd, int newfd);
 int brk(void *addr);

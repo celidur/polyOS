@@ -13,3 +13,5 @@ pub use pipe::{Pipe, PipeEnd, PipeError};
 pub use vfs::{
     FileHandle, FileMetadata, FileOps, FileSystem, FileSystemDriver, FsError, MountOptions, Vfs,
 };
+
+pub mod descriptor;

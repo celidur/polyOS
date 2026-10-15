@@ -61,3 +61,17 @@ helpers (`network_control.c`), and DNS encoding/parsing (`resolver.c`). DNS uses
 connected UDP sockets; receive deadlines are a userspace convenience. UDP is
 limited to unfragmented Ethernet-sized packets; TCP is not implemented. Emulator
 tests verify DHCP, ICMP and actual UDP payload round trips against a local server.
+
+## I/O and local IPC
+
+`fs/descriptor.rs` owns open-file operations, reference counts, readiness and local
+socket endpoints. The process module owns the descriptor table and per-descriptor
+close-on-exec bits. File status flags are shared across dup/fork. Local stream
+socket pairs use two pipes, with the same blocking, EOF, wakeup and SIGPIPE rules.
+Writes up to the pipe capacity are atomic.
+
+`interrupts/syscall/ipc.rs` validates pipe2, socketpair, writev and poll arguments.
+Poll sleeps the calling task between readiness scans; console readiness does not
+consume input. Libc implements select over poll. Vectored writes gather at most
+64 KiB per call and may return a short write. Local send/recv support flags=0;
+unsupported flags are rejected.

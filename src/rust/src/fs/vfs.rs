@@ -65,6 +65,7 @@ pub trait FileSystem: Send + Sync {
 }
 
 pub trait FileOps {
+    fn poll(&self, events: u16) -> u16 { events & 5 }
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, FsError>;
     fn write(&mut self, buf: &[u8]) -> Result<usize, FsError>;
     fn seek(&mut self, pos: usize) -> Result<usize, FsError>;

@@ -48,6 +48,13 @@ pub fn syscall_socketcall(call: u32, args_ptr: u32) -> u32 {
     };
 
     match call {
+        8 => {
+            let args = match read_socketcall_args(&process, args_ptr, 4) {
+                Ok(a) => a,
+                Err(e) => return abi::errno(e),
+            };
+            super::ipc::socketpair(&process, args[0], args[1], args[2], args[3])
+        }
         SOCKETCALL_SOCKET => {
             let args = match read_socketcall_args(&process, args_ptr, 3) {
                 Ok(args) => args,
@@ -114,6 +121,16 @@ pub fn syscall_socketcall(call: u32, args_ptr: u32) -> u32 {
                 Ok(args) => args,
                 Err(errno) => return abi::errno(errno),
             };
+            if matches!(
+                process.get_fd(args[0] as i32),
+                Some(ProcessDescriptor::LocalSocket { .. })
+            ) {
+                if args[3] != 0 {
+                    return abi::errno(abi::ENOTSUP);
+                }
+                drop(process);
+                return super::file::syscall_write(args[0], args[1], args[2]);
+            }
             socket_send_for_process(&process, args[0], args[1], args[2], args[3])
         }
         SOCKETCALL_RECV => {
@@ -121,6 +138,16 @@ pub fn syscall_socketcall(call: u32, args_ptr: u32) -> u32 {
                 Ok(args) => args,
                 Err(errno) => return abi::errno(errno),
             };
+            if matches!(
+                process.get_fd(args[0] as i32),
+                Some(ProcessDescriptor::LocalSocket { .. })
+            ) {
+                if args[3] != 0 {
+                    return abi::errno(abi::ENOTSUP);
+                }
+                drop(process);
+                return super::file::syscall_read(args[0], args[1], args[2]);
+            }
             socket_recv_for_process(&process, args[0], args[1], args[2], args[3])
         }
         SOCKETCALL_SENDTO => {

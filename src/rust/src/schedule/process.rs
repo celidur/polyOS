@@ -13,7 +13,7 @@ use crate::{
         USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
     },
     error::KernelError,
-    fs::{FileHandle, FileMetadata, FsError, Pipe, PipeEnd, PipeError},
+    fs::FileMetadata,
     kernel::KERNEL,
     memory::{self, Page, PageDirectory},
     schedule::loader::elf::{ElfFile, PF_W},
@@ -39,212 +39,9 @@ pub const ACCESS_READ: u16 = 0o4;
 const O_ACCMODE: u32 = 0x3;
 pub const O_APPEND: u32 = 0x400;
 pub const O_NONBLOCK: u32 = 0x800;
-const OPEN_STATUS_FLAGS: u32 = O_ACCMODE | O_APPEND | O_NONBLOCK;
 const SETTABLE_STATUS_FLAGS: u32 = O_APPEND | O_NONBLOCK;
 
-#[derive(Clone)]
-pub enum ProcessDescriptor {
-    File(Arc<Mutex<FileHandle>>),
-    Directory(Arc<Mutex<DirectoryHandle>>),
-    Socket(Arc<Mutex<SocketHandle>>),
-    Pipe {
-        pipe: Arc<Mutex<Pipe>>,
-        end: PipeEnd,
-    },
-}
-
-#[derive(Clone)]
-pub struct ProcessFd {
-    descriptor: ProcessDescriptor,
-    flags: u32,
-    status_flags: u32,
-}
-
-impl ProcessFd {
-    fn new(descriptor: ProcessDescriptor) -> Self {
-        Self::new_with_status_flags(descriptor, 0)
-    }
-
-    fn new_with_status_flags(descriptor: ProcessDescriptor, status_flags: u32) -> Self {
-        Self {
-            descriptor,
-            flags: 0,
-            status_flags: status_flags & OPEN_STATUS_FLAGS,
-        }
-    }
-
-    fn duplicate_for_fork(&self) -> Self {
-        Self {
-            descriptor: self.descriptor.duplicate_for_fd_table(),
-            flags: self.flags,
-            status_flags: self.status_flags,
-        }
-    }
-
-    fn duplicate_for_dup(&self) -> Self {
-        Self {
-            descriptor: self.descriptor.duplicate_for_fd_table(),
-            flags: 0,
-            status_flags: self.status_flags,
-        }
-    }
-
-    fn close(self) {
-        self.descriptor.close();
-    }
-}
-
-#[derive(Clone)]
-pub struct DirectoryHandle {
-    pub path: String,
-    pub entries: Vec<String>,
-    pub offset: usize,
-    pub metadata: FileMetadata,
-}
-
-pub struct SocketHandle {
-    id: u32,
-    refs: usize,
-}
-
-impl SocketHandle {
-    pub fn new(id: u32) -> Self {
-        Self { id, refs: 1 }
-    }
-
-    pub fn id(&self) -> u32 {
-        self.id
-    }
-
-    fn duplicate(&mut self) {
-        self.refs = self.refs.saturating_add(1);
-    }
-
-    fn close(&mut self) -> Option<u32> {
-        self.refs = self.refs.saturating_sub(1);
-        (self.refs == 0).then_some(self.id)
-    }
-}
-
-impl ProcessDescriptor {
-    pub fn read(&self, buf: &mut [u8]) -> Result<usize, FsError> {
-        match self {
-            Self::File(file) => file.lock().ops.read(buf),
-            Self::Directory(_) => Err(FsError::IsADirectory),
-            Self::Pipe { pipe, end } => {
-                let (result, waiters) = {
-                    let mut pipe = pipe.lock();
-                    let result = pipe.read(*end, buf);
-                    let waiters = if matches!(result, Ok(read) if read > 0) {
-                        pipe.take_write_waiters()
-                    } else {
-                        Vec::new()
-                    };
-                    (result, waiters)
-                };
-                wake_tasks(waiters);
-                result.map_err(pipe_error)
-            }
-            Self::Socket(_) => Err(FsError::Unsupported),
-        }
-    }
-
-    pub fn write(&self, buf: &[u8]) -> Result<usize, FsError> {
-        match self {
-            Self::File(file) => file.lock().ops.write(buf),
-            Self::Directory(_) => Err(FsError::IsADirectory),
-            Self::Pipe { pipe, end } => {
-                let (result, waiters) = {
-                    let mut pipe = pipe.lock();
-                    let result = pipe.write(*end, buf);
-                    let waiters = if matches!(result, Ok(written) if written > 0) {
-                        pipe.take_read_waiters()
-                    } else {
-                        Vec::new()
-                    };
-                    (result, waiters)
-                };
-                wake_tasks(waiters);
-                result.map_err(pipe_error)
-            }
-            Self::Socket(_) => Err(FsError::Unsupported),
-        }
-    }
-
-    pub fn seek(&self, pos: usize) -> Result<usize, FsError> {
-        match self {
-            Self::File(file) => file.lock().ops.seek(pos),
-            Self::Directory(directory) => {
-                let mut directory = directory.lock();
-                directory.offset = pos.min(directory.entries.len());
-                Ok(directory.offset)
-            }
-            _ => Err(FsError::Unsupported),
-        }
-    }
-
-    pub fn ioctl(&self, request: u32, arg: u32, directory: &PageDirectory) -> Result<u32, FsError> {
-        match self {
-            Self::File(file) => file.lock().ops.ioctl(request, arg, directory),
-            Self::Directory(_) => Err(FsError::Unsupported),
-            _ => Err(FsError::Unsupported),
-        }
-    }
-
-    pub fn stat(&self) -> Result<FileMetadata, FsError> {
-        match self {
-            Self::File(file) => file.lock().ops.stat(),
-            Self::Directory(directory) => Ok(directory.lock().metadata.clone()),
-            _ => Err(FsError::Unsupported),
-        }
-    }
-
-    pub fn duplicate_for_fd_table(&self) -> Self {
-        match self {
-            Self::File(file) => Self::File(file.clone()),
-            Self::Directory(directory) => Self::Directory(directory.clone()),
-            Self::Socket(socket) => {
-                socket.lock().duplicate();
-                Self::Socket(socket.clone())
-            }
-            Self::Pipe { pipe, end } => {
-                pipe.lock().clone_end(*end);
-                Self::Pipe {
-                    pipe: pipe.clone(),
-                    end: *end,
-                }
-            }
-        }
-    }
-
-    pub fn close(self) {
-        match self {
-            Self::File(_) => {}
-            Self::Directory(_) => {}
-            Self::Socket(socket) => {
-                if let Some(socket_id) = socket.lock().close() {
-                    let _ = crate::net::socket_close(socket_id);
-                }
-            }
-            Self::Pipe { pipe, end } => {
-                let waiters = pipe.lock().close_end(end);
-                wake_tasks(waiters);
-            }
-        }
-    }
-}
-
-fn wake_tasks(waiters: Vec<TaskId>) {
-    if waiters.is_empty() {
-        return;
-    }
-
-    KERNEL.with_task_manager(|tm| {
-        for task_id in waiters {
-            let _ = tm.wake_task(task_id);
-        }
-    });
-}
+pub use crate::fs::descriptor::{DirectoryHandle, ProcessDescriptor, ProcessFd, SocketHandle};
 
 #[derive(Clone)]
 pub enum ProcessFileType {
@@ -730,7 +527,7 @@ impl Process {
             .lock()
             .get(fd as usize)
             .and_then(|fd| fd.as_ref())
-            .map(|fd| fd.status_flags)
+            .map(|fd| *fd.status_flags.lock())
     }
 
     pub fn set_status_flags(&self, fd: i32, flags: u32) -> Result<(), KernelError> {
@@ -743,8 +540,8 @@ impl Process {
             return Err(KernelError::Io);
         };
 
-        fd_entry.status_flags =
-            (fd_entry.status_flags & O_ACCMODE) | (flags & SETTABLE_STATUS_FLAGS);
+        let mut status = fd_entry.status_flags.lock();
+        *status = (*status & O_ACCMODE) | (flags & SETTABLE_STATUS_FLAGS);
         Ok(())
     }
 
@@ -998,12 +795,4 @@ fn push_stack_u32(
     stack[*stack_pointer..*stack_pointer + core::mem::size_of::<u32>()]
         .copy_from_slice(&value.to_ne_bytes());
     Ok(())
-}
-
-fn pipe_error(error: PipeError) -> FsError {
-    match error {
-        PipeError::WouldBlock => FsError::WouldBlock,
-        PipeError::BrokenPipe => FsError::BrokenPipe,
-        PipeError::WrongEnd => FsError::InvalidArgument,
-    }
 }

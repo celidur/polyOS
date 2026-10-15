@@ -120,7 +120,7 @@ pub fn syscall_read(fd: u32, buf_ptr: u32, len: u32) -> u32 {
         return abi::errno(abi::EFAULT);
     };
 
-    if buf_ptr == 0 {
+    if user::validate_range(&process, buf_ptr, len as u32, true).is_err() {
         return abi::errno(abi::EFAULT);
     }
 
@@ -129,8 +129,8 @@ pub fn syscall_read(fd: u32, buf_ptr: u32, len: u32) -> u32 {
         None => return abi::errno(abi::EBADF),
     };
 
-    if let ProcessDescriptor::Pipe { pipe, end } = &descriptor {
-        let result = syscall_pipe_read(&process, fd, pipe.clone(), *end, buf_ptr, len);
+    if let Some((pipe, end)) = descriptor.pipe_endpoint(false) {
+        let result = syscall_pipe_read(&process, fd, pipe, end, buf_ptr, len);
         return match result {
             PipeSyscallResult::Completed(value) => value,
             PipeSyscallResult::Block(reason) => {
@@ -175,12 +175,16 @@ pub fn syscall_write(fd: u32, buf_ptr: u32, len: u32) -> u32 {
         return abi::errno(abi::EFAULT);
     }
 
+    finish_write(write_buffer(process, fd, data))
+}
+
+pub(super) fn write_buffer(process: Arc<Process>, fd: i32, data: Vec<u8>) -> u32 {
     let Some(descriptor) = process.get_fd(fd) else {
         return abi::errno(abi::EBADF);
     };
 
-    if let ProcessDescriptor::Pipe { pipe, end } = &descriptor {
-        let result = syscall_pipe_write(&process, fd, pipe.clone(), *end, data.as_slice());
+    if let Some((pipe, end)) = descriptor.pipe_endpoint(true) {
+        let result = syscall_pipe_write(&process, fd, pipe, end, data.as_slice());
         return match result {
             PipeSyscallResult::Completed(value) => value,
             PipeSyscallResult::Block(reason) => {
@@ -438,50 +442,7 @@ pub fn syscall_fcntl(fd: u32, cmd: u32, arg: u32) -> u32 {
 }
 
 pub fn syscall_pipe(pipefd_ptr: u32) -> u32 {
-    let Some((process, pipefd_ptr)) =
-        with_current_task(|task| Some((task.process.clone(), pipefd_ptr)))
-    else {
-        return abi::errno(abi::EFAULT);
-    };
-
-    if pipefd_ptr == 0 {
-        return abi::errno(abi::EFAULT);
-    }
-
-    let pipe = Arc::new(Mutex::new(Pipe::new()));
-    let read_fd = match process.insert_fd(ProcessDescriptor::Pipe {
-        pipe: pipe.clone(),
-        end: PipeEnd::Read,
-    }) {
-        Ok(fd) => fd,
-        Err(_) => return abi::errno(abi::EMFILE),
-    };
-
-    let write_fd = match process.insert_fd(ProcessDescriptor::Pipe {
-        pipe,
-        end: PipeEnd::Write,
-    }) {
-        Ok(fd) => fd,
-        Err(_) => {
-            if let Some(descriptor) = process.remove_fd(read_fd) {
-                descriptor.close();
-            }
-            return abi::errno(abi::EMFILE);
-        }
-    };
-
-    let pipefd = [read_fd, write_fd];
-    if user::write_value(&process.page_directory, pipefd_ptr, &pipefd).is_err() {
-        if let Some(descriptor) = process.remove_fd(read_fd) {
-            descriptor.close();
-        }
-        if let Some(descriptor) = process.remove_fd(write_fd) {
-            descriptor.close();
-        }
-        return abi::errno(abi::EFAULT);
-    }
-
-    0
+    super::ipc::syscall_pipe2(pipefd_ptr, 0)
 }
 
 pub fn syscall_unlink(path_ptr: u32) -> u32 {
@@ -920,4 +881,23 @@ fn dirent_type(parent: &str, name: &str) -> u8 {
         Ok(_) => DT_REG,
         Err(_) => DT_UNKNOWN,
     }
+}
+
+pub(super) fn finish_write(result: u32) -> u32 {
+    if result != abi::errno(abi::EPIPE) {
+        return result;
+    }
+    let pid = KERNEL.with_task_manager(|tm| tm.get_current().map(|task| task.read().process.pid));
+    if let Some(pid) = pid {
+        crate::schedule::task::task_current_set_return_value(result);
+        let effect = KERNEL.with_process_manager(|pm| pm.signal(pid, 13));
+        if matches!(
+            effect,
+            Ok(crate::schedule::process_manager::SignalEffect::Delivered
+                | crate::schedule::process_manager::SignalEffect::Terminated)
+        ) {
+            task_next();
+        }
+    }
+    result
 }

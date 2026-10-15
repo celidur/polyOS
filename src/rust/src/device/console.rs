@@ -19,6 +19,14 @@ use crate::{
 struct ConsoleFile;
 
 impl FileOps for ConsoleFile {
+    fn poll(&self, events: u16) -> u16 {
+        (events & 4)
+            | if KEYBOARD_DRIVER.readable() || SERIAL_DRIVER.readable() {
+                events & 1
+            } else {
+                0
+            }
+    }
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, FsError> {
         read_from(buf, || {
             KEYBOARD_DRIVER

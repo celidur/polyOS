@@ -402,3 +402,18 @@ pub fn socket_peer_addr(socket_id: u32) -> Result<([u8; 4], u16), NetworkError> 
         socket.peer_port,
     ))
 }
+
+pub fn socket_poll(id: u32, events: u16) -> u16 {
+    let stack = STACK.lock();
+    match stack.sockets.iter().find(|socket| socket.id == id) {
+        Some(socket) => {
+            (events & 4)
+                | if socket.recv_queue.is_empty() {
+                    0
+                } else {
+                    events & 1
+                }
+        }
+        None => 32,
+    }
+}

@@ -36,6 +36,24 @@ impl Pipe {
         }
     }
 
+    pub fn poll(&self, end: PipeEnd, events: u16) -> u16 {
+        match end {
+            PipeEnd::Read => {
+                (if !self.buffer.is_empty() || self.writers == 0 {
+                    events & 1
+                } else {
+                    0
+                }) | (if self.writers == 0 { 16 } else { 0 })
+            }
+            PipeEnd::Write => {
+                (if self.buffer.len() < PIPE_CAPACITY {
+                    events & 4
+                } else {
+                    0
+                }) | (if self.readers == 0 { 8 } else { 0 })
+            }
+        }
+    }
     pub fn id(&self) -> usize {
         self as *const Self as usize
     }
@@ -104,7 +122,7 @@ impl Pipe {
         }
 
         let available = PIPE_CAPACITY.saturating_sub(self.buffer.len());
-        if available == 0 {
+        if available == 0 || (input.len() <= PIPE_CAPACITY && available < input.len()) {
             return Err(PipeError::WouldBlock);
         }
 

@@ -1,3 +1,4 @@
+use super::ipc;
 use super::thread;
 use crate::interrupts::InterruptFrame;
 
@@ -14,6 +15,10 @@ use super::sync::*;
 use super::types::SyscallId;
 
 pub fn syscall_init() {
+    syscall_register(SyscallId::Writev, SyscallHandler::Args3(ipc::syscall_writev));
+    syscall_register(SyscallId::Poll, SyscallHandler::Args3(ipc::syscall_poll));
+    syscall_register(SyscallId::Pipe2, SyscallHandler::Args2(ipc::syscall_pipe2));
+
     syscall_register(
         SyscallId::Clone,
         SyscallHandler::Args5(thread::syscall_clone),
