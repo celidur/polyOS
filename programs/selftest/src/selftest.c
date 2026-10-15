@@ -946,11 +946,27 @@ static int wants_network(int argc, char **argv)
     return argc > 1 && strncmp(argv[1], "net", 4) == 0;
 }
 
+static void test_register_abi(void)
+{
+    char cwd[256];
+    int result;
+    /* Deliberately pass bogus stack arguments: only EBX/ECX are the ABI. */
+    __asm__ volatile (
+        "pushl $0\n\tpushl $0\n\tint $0x80\n\taddl $8, %%esp"
+        : "=a"(result)
+        : "0"(183), "b"(cwd), "c"(sizeof(cwd))
+        : "memory", "cc");
+    expect("register ABI getcwd", result > 0 && cwd[0] == '/', result);
+    __asm__ volatile ("int $0x80" : "=a"(result) : "0"(1023) : "memory", "cc");
+    expect("unknown syscall ENOSYS", result == -ENOSYS, result);
+}
+
 int main(int argc, char **argv)
 {
     printf("selftest: start\n");
 
     expect("kernel selftest", kernel_selftest() == 0, -1);
+    test_register_abi();
     test_memory_and_sleep();
     test_time_syscalls();
     test_devices();

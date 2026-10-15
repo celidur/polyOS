@@ -1,5 +1,4 @@
 use crate::{
-    interrupts::InterruptFrame,
     kernel::KERNEL,
     schedule::{
         process::{SIGKILL, SIGNAL_FRAME_MAGIC, SIGSTOP, SignalAction, SignalFrame, valid_signal},
@@ -41,15 +40,11 @@ impl From<UserSignalAction> for SignalAction {
     }
 }
 
-pub fn syscall_kill(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_kill(pid: u32, signal: u32) -> u32 {
     let args = KERNEL.with_task_manager(|tm| {
         let current_task = tm.get_current()?;
         let task = current_task.read();
-        Some((
-            task.process.pid,
-            task.get_stack_item(0) as i32,
-            task.get_stack_item(1) as i32,
-        ))
+        Some((task.process.pid, pid as i32, signal as i32))
     });
 
     let Some((current_pid, pid, signal)) = args else {
@@ -82,16 +77,11 @@ pub fn syscall_kill(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_sigaction(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_sigaction(signum: u32, act_ptr: u32, oldact_ptr: u32) -> u32 {
     let args = KERNEL.with_task_manager(|tm| {
         let current_task = tm.get_current()?;
         let task = current_task.read();
-        Some((
-            task.process.clone(),
-            task.get_stack_item(0),
-            task.get_stack_item(1),
-            task.get_stack_item(2),
-        ))
+        Some((task.process.clone(), signum, act_ptr, oldact_ptr))
     });
 
     let Some((process, signal, act_ptr, oldact_ptr)) = args else {
@@ -138,11 +128,11 @@ pub fn syscall_sigaction(_frame: &InterruptFrame) -> u32 {
     0
 }
 
-pub fn syscall_sigreturn(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_sigreturn(frame_ptr: u32) -> u32 {
     let Some((process, frame_ptr)) = KERNEL.with_task_manager(|tm| {
         let current_task = tm.get_current()?;
         let task = current_task.read();
-        Some((task.process.clone(), task.get_stack_item(0)))
+        Some((task.process.clone(), frame_ptr))
     }) else {
         return abi::errno(abi::ESRCH);
     };

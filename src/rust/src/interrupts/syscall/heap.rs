@@ -1,12 +1,11 @@
-use crate::{interrupts::InterruptFrame, kernel::KERNEL, memory::print_memory};
+use crate::{kernel::KERNEL, memory::print_memory};
 
-pub fn syscall_brk(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_brk(requested_break: u32) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let Some(current_task) = tm.get_current() else {
             return 0;
         };
 
-        let requested_break = current_task.read().get_stack_item(0);
         current_task
             .read()
             .process
@@ -14,7 +13,7 @@ pub fn syscall_brk(_frame: &InterruptFrame) -> u32 {
     })
 }
 
-pub fn syscall_print_memory(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_print_memory() -> u32 {
     print_memory();
     0
 }

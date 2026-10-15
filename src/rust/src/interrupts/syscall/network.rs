@@ -1,5 +1,4 @@
 use crate::{
-    interrupts::InterruptFrame,
     kernel::KERNEL,
     net,
     schedule::process::{Process, ProcessDescriptor, SocketHandle},
@@ -60,7 +59,7 @@ const SOCKETCALL_SENDTO: u32 = 11;
 const SOCKETCALL_RECVFROM: u32 = 12;
 const SOCKETCALL_SETSOCKOPT: u32 = 14;
 
-pub fn syscall_network_info(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_network_info(ptr: u32) -> u32 {
     KERNEL.with_task_manager(|tm| {
         let current_task = if let Some(t) = tm.get_current() {
             t
@@ -68,7 +67,6 @@ pub fn syscall_network_info(_frame: &InterruptFrame) -> u32 {
             return abi::errno(abi::ESRCH);
         };
 
-        let ptr = current_task.read().get_stack_item(0);
         if ptr == 0 {
             return abi::errno(abi::EFAULT);
         }
@@ -99,7 +97,7 @@ pub fn syscall_network_info(_frame: &InterruptFrame) -> u32 {
     })
 }
 
-pub fn syscall_network_dhcp_discover(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_network_dhcp_discover() -> u32 {
     match net::send_dhcp_discover() {
         Ok(()) => 0,
         Err(error) => {
@@ -109,7 +107,7 @@ pub fn syscall_network_dhcp_discover(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_network_ping_gateway(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_network_ping_gateway() -> u32 {
     match net::ping_gateway() {
         Ok(()) => 0,
         Err(error) => {
@@ -119,15 +117,14 @@ pub fn syscall_network_ping_gateway(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_network_ping_ipv4(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_network_ping_ipv4(packed_ip: u32) -> u32 {
     KERNEL.with_task_manager(|tm| {
-        let current_task = if let Some(t) = tm.get_current() {
+        let _current_task = if let Some(t) = tm.get_current() {
             t
         } else {
             return abi::errno(abi::ESRCH);
         };
 
-        let packed_ip = current_task.read().get_stack_item(0);
         let target_ip = [
             ((packed_ip >> 24) & 0xff) as u8,
             ((packed_ip >> 16) & 0xff) as u8,
@@ -152,23 +149,19 @@ pub fn syscall_network_ping_ipv4(_frame: &InterruptFrame) -> u32 {
     })
 }
 
-pub fn syscall_network_dns_query(_frame: &InterruptFrame) -> u32 {
-    syscall_network_name_request(net::send_dns_query, "dns query")
+pub fn syscall_network_dns_query(name_ptr: u32) -> u32 {
+    syscall_network_name_request(name_ptr, net::send_dns_query, "dns query")
 }
 
-pub fn syscall_network_ping_name(_frame: &InterruptFrame) -> u32 {
-    syscall_network_name_request(net::ping_name, "ping")
+pub fn syscall_network_ping_name(name_ptr: u32) -> u32 {
+    syscall_network_name_request(name_ptr, net::ping_name, "ping")
 }
 
-pub fn syscall_socketcall(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_socketcall(call: u32, args_ptr: u32) -> u32 {
     let (process, call, args_ptr) = match KERNEL.with_task_manager(|tm| {
         let current_task = tm.get_current()?;
         let task = current_task.read();
-        Some((
-            task.process.clone(),
-            task.get_stack_item(0),
-            task.get_stack_item(1),
-        ))
+        Some((task.process.clone(), call, args_ptr))
     }) {
         Some(values) => values,
         None => return abi::errno(abi::ESRCH),
@@ -279,8 +272,8 @@ pub fn syscall_socketcall(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_network_recvfrom_wait(_frame: &InterruptFrame) -> u32 {
-    let args = match read_recvfrom_wait_args() {
+pub fn syscall_network_recvfrom_wait(args_ptr: u32) -> u32 {
+    let args = match read_recvfrom_wait_args(args_ptr) {
         Ok(args) => args,
         Err(errno) => return abi::errno(errno),
     };
@@ -290,12 +283,11 @@ pub fn syscall_network_recvfrom_wait(_frame: &InterruptFrame) -> u32 {
     };
 
     let timeout_ticks = KERNEL.with_task_manager(|tm| {
-        let current_task = tm.get_current()?;
-        Some(current_task.read().get_stack_item(6) as u64)
+        let task = tm.get_current()?.read();
+        user::read_u32(&task, args_ptr.checked_add(24)?).map(|value| value as u64)
     });
-
     let Some(timeout_ticks) = timeout_ticks else {
-        return abi::errno(abi::ESRCH);
+        return abi::errno(abi::EFAULT);
     };
 
     let start_tick = KERNEL.with_task_manager(|tm| tm.get_tick());
@@ -322,6 +314,7 @@ pub fn syscall_network_recvfrom_wait(_frame: &InterruptFrame) -> u32 {
 }
 
 fn syscall_network_name_request(
+    name_ptr: u32,
     request: fn(&str) -> Result<(), net::NetworkError>,
     label: &str,
 ) -> u32 {
@@ -333,7 +326,6 @@ fn syscall_network_name_request(
         };
 
         let task = current_task.read();
-        let name_ptr = task.get_stack_item(0);
         if name_ptr == 0 {
             return abi::errno(abi::EFAULT);
         }
@@ -689,19 +681,47 @@ fn write_sockaddr_in(
     user::write_value(&process.page_directory, addrlen_ptr, &sockaddr_len).map_err(|_| abi::EFAULT)
 }
 
-fn read_recvfrom_wait_args() -> Result<RecvFromArgs, i32> {
+fn read_recvfrom_wait_args(args_ptr: u32) -> Result<RecvFromArgs, i32> {
     KERNEL.with_task_manager(|tm| {
         let Some(current_task) = tm.get_current() else {
             return Err(abi::ESRCH);
         };
 
-        let socket_id = current_task.read().get_stack_item(0);
-        let buf_ptr = current_task.read().get_stack_item(1);
-        let len = current_task.read().get_stack_item(2);
-        let _flags = current_task.read().get_stack_item(3);
-        let src_ptr = current_task.read().get_stack_item(4);
-        let addrlen_ptr = current_task.read().get_stack_item(5);
-        let _timeout_ticks = current_task.read().get_stack_item(6);
+        let socket_id = user::read_u32(
+            &current_task.read(),
+            args_ptr.checked_add(0).ok_or(abi::EFAULT)?,
+        )
+        .ok_or(abi::EFAULT)?;
+        let buf_ptr = user::read_u32(
+            &current_task.read(),
+            args_ptr.checked_add(4).ok_or(abi::EFAULT)?,
+        )
+        .ok_or(abi::EFAULT)?;
+        let len = user::read_u32(
+            &current_task.read(),
+            args_ptr.checked_add(8).ok_or(abi::EFAULT)?,
+        )
+        .ok_or(abi::EFAULT)?;
+        let _flags = user::read_u32(
+            &current_task.read(),
+            args_ptr.checked_add(12).ok_or(abi::EFAULT)?,
+        )
+        .ok_or(abi::EFAULT)?;
+        let src_ptr = user::read_u32(
+            &current_task.read(),
+            args_ptr.checked_add(16).ok_or(abi::EFAULT)?,
+        )
+        .ok_or(abi::EFAULT)?;
+        let addrlen_ptr = user::read_u32(
+            &current_task.read(),
+            args_ptr.checked_add(20).ok_or(abi::EFAULT)?,
+        )
+        .ok_or(abi::EFAULT)?;
+        let _timeout_ticks = user::read_u32(
+            &current_task.read(),
+            args_ptr.checked_add(24).ok_or(abi::EFAULT)?,
+        )
+        .ok_or(abi::EFAULT)?;
 
         if buf_ptr == 0 {
             return Err(abi::EFAULT);

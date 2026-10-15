@@ -1,6 +1,5 @@
 use crate::{
     constant::TIMER_HZ,
-    interrupts::InterruptFrame,
     kernel::KERNEL,
     schedule::task::{task_current_set_return_value, task_next},
 };
@@ -33,11 +32,11 @@ struct TimeZone {
     tz_dsttime: i32,
 }
 
-pub fn syscall_nanosleep(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_nanosleep(req_ptr: u32, _rem_ptr: u32) -> u32 {
     let Some((process, req_ptr)) = KERNEL.with_task_manager(|tm| {
         let current_task = tm.get_current()?;
         let task = current_task.read();
-        Some((task.process.clone(), task.get_stack_item(0)))
+        Some((task.process.clone(), req_ptr))
     }) else {
         return abi::errno(abi::EFAULT);
     };
@@ -90,15 +89,11 @@ pub fn syscall_nanosleep(_frame: &InterruptFrame) -> u32 {
     task_next();
 }
 
-pub fn syscall_gettimeofday(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_gettimeofday(tv_ptr: u32, tz_ptr: u32) -> u32 {
     let Some((process, tv_ptr, tz_ptr)) = KERNEL.with_task_manager(|tm| {
         let current_task = tm.get_current()?;
         let task = current_task.read();
-        Some((
-            task.process.clone(),
-            task.get_stack_item(0),
-            task.get_stack_item(1),
-        ))
+        Some((task.process.clone(), tv_ptr, tz_ptr))
     }) else {
         return abi::errno(abi::EFAULT);
     };
@@ -124,15 +119,11 @@ pub fn syscall_gettimeofday(_frame: &InterruptFrame) -> u32 {
     0
 }
 
-pub fn syscall_clock_gettime(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_clock_gettime(clockid: u32, tp_ptr: u32) -> u32 {
     let Some((process, clock_id, tp_ptr)) = KERNEL.with_task_manager(|tm| {
         let current_task = tm.get_current()?;
         let task = current_task.read();
-        Some((
-            task.process.clone(),
-            task.get_stack_item(0),
-            task.get_stack_item(1),
-        ))
+        Some((task.process.clone(), clockid, tp_ptr))
     }) else {
         return abi::errno(abi::EFAULT);
     };
@@ -157,16 +148,11 @@ pub fn syscall_clock_gettime(_frame: &InterruptFrame) -> u32 {
     0
 }
 
-pub fn syscall_ioctl(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_ioctl(fd: u32, request: u32, arg: u32) -> u32 {
     let Some((process, fd, request, arg)) = KERNEL.with_task_manager(|tm| {
         let current_task = tm.get_current()?;
         let task = current_task.read();
-        Some((
-            task.process.clone(),
-            task.get_stack_item(0) as i32,
-            task.get_stack_item(1),
-            task.get_stack_item(2),
-        ))
+        Some((task.process.clone(), fd as i32, request, arg))
     }) else {
         return abi::errno(abi::EFAULT);
     };

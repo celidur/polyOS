@@ -14,7 +14,7 @@ extern int __sys_gettimeofday(struct timeval *tv, struct timezone *tz);
 extern int __sys_clock_gettime(clockid_t clockid, struct timespec *tp);
 extern int __sys_reboot(int magic1, int magic2, int cmd, void *arg);
 extern int __sys_socketcall(int call, unsigned long *args);
-extern int __sys_recvfrom_wait(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen, u32 timeout_ticks);
+extern int __sys_recvfrom_wait(const unsigned long *args);
 extern int __sys_sem_create(int initial_count);
 extern int __sys_sem_wait(int semid);
 extern int __sys_sem_signal(int semid);
@@ -180,7 +180,8 @@ int recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_
 
 int recvfrom_wait(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen, u32 timeout_ticks)
 {
-    return syscall_ret(__sys_recvfrom_wait(sockfd, buf, len, flags, src_addr, addrlen, timeout_ticks));
+    unsigned long args[] = {sockfd, (unsigned long)buf, len, flags, (unsigned long)src_addr, (unsigned long)addrlen, timeout_ticks};
+    return syscall_ret(__sys_recvfrom_wait(args));
 }
 
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)

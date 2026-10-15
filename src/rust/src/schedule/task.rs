@@ -136,21 +136,6 @@ impl Task {
         self.registers.ss = state.ss;
     }
 
-    pub fn page_task(&self) {
-        without_interrupts(|| {
-            user_registers();
-            self.process.page_directory.switch();
-        });
-    }
-
-    pub fn get_stack_item(&self, index: usize) -> u32 {
-        let stack_pointer = self.registers.esp as *const u32;
-        self.page_task();
-        let res = unsafe { *(stack_pointer.add(index)) };
-        KERNEL.kernel_page();
-        res
-    }
-
     #[allow(dead_code)]
     pub fn virtual_address_to_physical(&self, virtual_address: u32) -> Option<u32> {
         self.process

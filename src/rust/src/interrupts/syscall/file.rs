@@ -4,7 +4,6 @@ use spin::Mutex;
 use crate::{
     constant::MAX_PATH,
     fs::{FileHandle, FsError, Pipe, PipeEnd, PipeError, file::FileStat},
-    interrupts::InterruptFrame,
     kernel::KERNEL,
     schedule::{
         process::{
@@ -48,21 +47,16 @@ enum PipeSyscallResult {
     Block(WaitReason),
 }
 
-pub fn syscall_open(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_open(path_ptr: u32, flags: u32, mode: u32) -> u32 {
     let Some((process, path, flags, mode)) = with_current_task(|task| {
-        let path_ptr = task.get_stack_item(0);
+
         if path_ptr == 0 {
             return None;
         }
 
         let path = user::read_c_string(task, path_ptr, MAX_PATH)?;
         let path = task.process.resolve_path(path.as_str())?;
-        Some((
-            task.process.clone(),
-            path,
-            task.get_stack_item(1),
-            task.get_stack_item(2) as u16,
-        ))
+        Some((task.process.clone(), path, flags, mode as u16))
     }) else {
         return abi::errno(abi::EFAULT);
     };
@@ -120,15 +114,10 @@ pub fn syscall_open(_frame: &InterruptFrame) -> u32 {
     insert_file_fd(&process, handle, flags)
 }
 
-pub fn syscall_read(_frame: &InterruptFrame) -> u32 {
-    let Some((process, fd, buf_ptr, len)) = with_current_task(|task| {
-        Some((
-            task.process.clone(),
-            task.get_stack_item(0) as i32,
-            task.get_stack_item(1),
-            task.get_stack_item(2) as usize,
-        ))
-    }) else {
+pub fn syscall_read(fd: u32, buf_ptr: u32, len: u32) -> u32 {
+    let Some((process, fd, buf_ptr, len)) =
+        with_current_task(|task| Some((task.process.clone(), fd as i32, buf_ptr, len as usize)))
+    else {
         return abi::errno(abi::EFAULT);
     };
 
@@ -168,15 +157,10 @@ pub fn syscall_read(_frame: &InterruptFrame) -> u32 {
     read as u32
 }
 
-pub fn syscall_write(_frame: &InterruptFrame) -> u32 {
-    let Some((process, fd, ptr, len)) = with_current_task(|task| {
-        Some((
-            task.process.clone(),
-            task.get_stack_item(0) as i32,
-            task.get_stack_item(1),
-            task.get_stack_item(2) as usize,
-        ))
-    }) else {
+pub fn syscall_write(fd: u32, buf_ptr: u32, len: u32) -> u32 {
+    let Some((process, fd, ptr, len)) =
+        with_current_task(|task| Some((task.process.clone(), fd as i32, buf_ptr, len as usize)))
+    else {
         return abi::errno(abi::EFAULT);
     };
 
@@ -324,15 +308,10 @@ fn syscall_pipe_write(
     }
 }
 
-pub fn syscall_lseek(_frame: &InterruptFrame) -> u32 {
-    let Some((process, fd, offset, whence)) = with_current_task(|task| {
-        Some((
-            task.process.clone(),
-            task.get_stack_item(0) as i32,
-            task.get_stack_item(1),
-            task.get_stack_item(2),
-        ))
-    }) else {
+pub fn syscall_lseek(fd: u32, offset: u32, whence: u32) -> u32 {
+    let Some((process, fd, offset, whence)) =
+        with_current_task(|task| Some((task.process.clone(), fd as i32, offset, whence)))
+    else {
         return abi::errno(abi::EFAULT);
     };
 
@@ -359,14 +338,10 @@ pub fn syscall_lseek(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_fstat(_frame: &InterruptFrame) -> u32 {
-    let Some((process, fd, stat_ptr)) = with_current_task(|task| {
-        Some((
-            task.process.clone(),
-            task.get_stack_item(0) as i32,
-            task.get_stack_item(1),
-        ))
-    }) else {
+pub fn syscall_fstat(fd: u32, stat_ptr: u32) -> u32 {
+    let Some((process, fd, stat_ptr)) =
+        with_current_task(|task| Some((task.process.clone(), fd as i32, stat_ptr)))
+    else {
         return abi::errno(abi::EFAULT);
     };
 
@@ -392,9 +367,8 @@ pub fn syscall_fstat(_frame: &InterruptFrame) -> u32 {
     0
 }
 
-pub fn syscall_close(_frame: &InterruptFrame) -> u32 {
-    let Some((process, fd)) =
-        with_current_task(|task| Some((task.process.clone(), task.get_stack_item(0) as i32)))
+pub fn syscall_close(fd: u32) -> u32 {
+    let Some((process, fd)) = with_current_task(|task| Some((task.process.clone(), fd as i32)))
     else {
         return abi::errno(abi::EFAULT);
     };
@@ -408,9 +382,8 @@ pub fn syscall_close(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_dup(_frame: &InterruptFrame) -> u32 {
-    let Some((process, fd)) =
-        with_current_task(|task| Some((task.process.clone(), task.get_stack_item(0) as i32)))
+pub fn syscall_dup(fd: u32) -> u32 {
+    let Some((process, fd)) = with_current_task(|task| Some((task.process.clone(), fd as i32)))
     else {
         return abi::errno(abi::EFAULT);
     };
@@ -421,14 +394,10 @@ pub fn syscall_dup(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_dup2(_frame: &InterruptFrame) -> u32 {
-    let Some((process, old_fd, new_fd)) = with_current_task(|task| {
-        Some((
-            task.process.clone(),
-            task.get_stack_item(0) as i32,
-            task.get_stack_item(1) as i32,
-        ))
-    }) else {
+pub fn syscall_dup2(oldfd: u32, newfd: u32) -> u32 {
+    let Some((process, old_fd, new_fd)) =
+        with_current_task(|task| Some((task.process.clone(), oldfd as i32, newfd as i32)))
+    else {
         return abi::errno(abi::EFAULT);
     };
 
@@ -438,15 +407,10 @@ pub fn syscall_dup2(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_fcntl(_frame: &InterruptFrame) -> u32 {
-    let Some((process, fd, cmd, arg)) = with_current_task(|task| {
-        Some((
-            task.process.clone(),
-            task.get_stack_item(0) as i32,
-            task.get_stack_item(1),
-            task.get_stack_item(2),
-        ))
-    }) else {
+pub fn syscall_fcntl(fd: u32, cmd: u32, arg: u32) -> u32 {
+    let Some((process, fd, cmd, arg)) =
+        with_current_task(|task| Some((task.process.clone(), fd as i32, cmd, arg)))
+    else {
         return abi::errno(abi::EFAULT);
     };
 
@@ -474,9 +438,9 @@ pub fn syscall_fcntl(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_pipe(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_pipe(pipefd_ptr: u32) -> u32 {
     let Some((process, pipefd_ptr)) =
-        with_current_task(|task| Some((task.process.clone(), task.get_stack_item(0))))
+        with_current_task(|task| Some((task.process.clone(), pipefd_ptr)))
     else {
         return abi::errno(abi::EFAULT);
     };
@@ -521,20 +485,20 @@ pub fn syscall_pipe(_frame: &InterruptFrame) -> u32 {
     0
 }
 
-pub fn syscall_unlink(_frame: &InterruptFrame) -> u32 {
-    remove_path(false)
+pub fn syscall_unlink(path_ptr: u32) -> u32 {
+    remove_path(path_ptr, false)
 }
 
-pub fn syscall_rmdir(_frame: &InterruptFrame) -> u32 {
-    remove_path(true)
+pub fn syscall_rmdir(path_ptr: u32) -> u32 {
+    remove_path(path_ptr, true)
 }
 
-pub fn syscall_mkdir(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_mkdir(path_ptr: u32, mode: u32) -> u32 {
     let Some((process, path, mode)) = with_current_task(|task| {
         Some((
             task.process.clone(),
-            current_resolved_path_for_task(task, 0)?,
-            task.get_stack_item(1) as u16,
+            current_resolved_path_for_task(task, path_ptr)?,
+            mode as u16,
         ))
     }) else {
         return abi::errno(abi::EFAULT);
@@ -549,12 +513,9 @@ pub fn syscall_mkdir(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_chmod(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_chmod(path_ptr: u32, mode: u32) -> u32 {
     let Some((path, mode)) = with_current_task(|task| {
-        Some((
-            current_resolved_path_for_task(task, 0)?,
-            task.get_stack_item(1) as u16,
-        ))
+        Some((current_resolved_path_for_task(task, path_ptr)?, mode as u16))
     }) else {
         return abi::errno(abi::EFAULT);
     };
@@ -565,14 +526,10 @@ pub fn syscall_chmod(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_chown(_frame: &InterruptFrame) -> u32 {
-    let Some((path, mut uid, mut gid)) = with_current_task(|task| {
-        Some((
-            current_resolved_path_for_task(task, 0)?,
-            task.get_stack_item(1),
-            task.get_stack_item(2),
-        ))
-    }) else {
+pub fn syscall_chown(path_ptr: u32, uid: u32, gid: u32) -> u32 {
+    let Some((path, mut uid, mut gid)) =
+        with_current_task(|task| Some((current_resolved_path_for_task(task, path_ptr)?, uid, gid)))
+    else {
         return abi::errno(abi::EFAULT);
     };
 
@@ -596,16 +553,16 @@ pub fn syscall_chown(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_umask(_frame: &InterruptFrame) -> u32 {
-    with_current_task(|task| Some(task.process.set_umask(task.get_stack_item(0) as u16) as u32))
+pub fn syscall_umask(mask: u32) -> u32 {
+    with_current_task(|task| Some(task.process.set_umask(mask as u16) as u32))
         .unwrap_or_else(|| abi::errno(abi::EFAULT))
 }
 
-pub fn syscall_chdir(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_chdir(path_ptr: u32) -> u32 {
     let Some((process, path)) = with_current_task(|task| {
         Some((
             task.process.clone(),
-            current_resolved_path_for_task(task, 0)?,
+            current_resolved_path_for_task(task, path_ptr)?,
         ))
     }) else {
         return abi::errno(abi::EFAULT);
@@ -627,14 +584,10 @@ pub fn syscall_chdir(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_getcwd(_frame: &InterruptFrame) -> u32 {
-    let Some((process, buf_ptr, size)) = with_current_task(|task| {
-        Some((
-            task.process.clone(),
-            task.get_stack_item(0),
-            task.get_stack_item(1) as usize,
-        ))
-    }) else {
+pub fn syscall_getcwd(buf_ptr: u32, size: u32) -> u32 {
+    let Some((process, buf_ptr, size)) =
+        with_current_task(|task| Some((task.process.clone(), buf_ptr, size as usize)))
+    else {
         return abi::errno(abi::EFAULT);
     };
 
@@ -674,12 +627,12 @@ pub fn syscall_getcwd(_frame: &InterruptFrame) -> u32 {
     (bytes.len() + 1) as u32
 }
 
-pub fn syscall_stat(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_stat(path_ptr: u32, stat_ptr: u32) -> u32 {
     let Some((process, path, stat_ptr)) = with_current_task(|task| {
         Some((
             task.process.clone(),
-            current_resolved_path_for_task(task, 0)?,
-            task.get_stack_item(1),
+            current_resolved_path_for_task(task, path_ptr)?,
+            stat_ptr,
         ))
     }) else {
         return abi::errno(abi::EFAULT);
@@ -702,19 +655,14 @@ pub fn syscall_stat(_frame: &InterruptFrame) -> u32 {
     0
 }
 
-pub fn syscall_lstat(frame: &InterruptFrame) -> u32 {
-    syscall_stat(frame)
+pub fn syscall_lstat(path_ptr: u32, stat_ptr: u32) -> u32 {
+    syscall_stat(path_ptr, stat_ptr)
 }
 
-pub fn syscall_getdents(_frame: &InterruptFrame) -> u32 {
-    let Some((process, fd, dirent_ptr, len)) = with_current_task(|task| {
-        Some((
-            task.process.clone(),
-            task.get_stack_item(0) as i32,
-            task.get_stack_item(1),
-            task.get_stack_item(2) as usize,
-        ))
-    }) else {
+pub fn syscall_getdents(fd: u32, dirent_ptr: u32, len: u32) -> u32 {
+    let Some((process, fd, dirent_ptr, len)) =
+        with_current_task(|task| Some((task.process.clone(), fd as i32, dirent_ptr, len as usize)))
+    else {
         return abi::errno(abi::EFAULT);
     };
 
@@ -799,8 +747,8 @@ fn insert_directory_fd(process: &Process, path: &str, flags: u32) -> Option<u32>
     }
 }
 
-fn remove_path(directory: bool) -> u32 {
-    let Some(path) = current_resolved_path(0) else {
+fn remove_path(path_ptr: u32, directory: bool) -> u32 {
+    let Some(path) = current_resolved_path(path_ptr) else {
         return abi::errno(abi::EFAULT);
     };
 
@@ -843,12 +791,11 @@ fn apply_created_mode(process: &Process, path: &str, mode: u16, directory: bool)
     let _ = KERNEL.vfs.read().chmod(path, mode);
 }
 
-fn current_resolved_path(stack_index: u32) -> Option<String> {
-    with_current_task(|task| current_resolved_path_for_task(task, stack_index))
+fn current_resolved_path(path_ptr: u32) -> Option<String> {
+    with_current_task(|task| current_resolved_path_for_task(task, path_ptr))
 }
 
-fn current_resolved_path_for_task(task: &Task, stack_index: u32) -> Option<String> {
-    let path_ptr = task.get_stack_item(stack_index as usize);
+fn current_resolved_path_for_task(task: &Task, path_ptr: u32) -> Option<String> {
     if path_ptr == 0 {
         return None;
     }

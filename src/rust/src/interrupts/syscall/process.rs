@@ -3,7 +3,6 @@ use alloc::{string::String, string::ToString, vec::Vec};
 use crate::{
     constant::MAX_PATH,
     fs::FsError,
-    interrupts::InterruptFrame,
     kernel::KERNEL,
     schedule::{
         process::{ACCESS_EXECUTE, ProcessArguments},
@@ -18,20 +17,7 @@ const WNOHANG: u32 = 1;
 const MAX_EXEC_STRINGS: u32 = 512;
 const MAX_EXEC_STRING_LEN: usize = 1024;
 
-pub fn syscall_waitpid(_frame: &InterruptFrame) -> u32 {
-    let args = KERNEL.with_task_manager(|tm| {
-        let current_task = tm.get_current()?;
-        let task = current_task.read();
-        let child_pid = task.get_stack_item(0);
-        let status_ptr = task.get_stack_item(1);
-        let options = task.get_stack_item(2);
-        Some((child_pid, status_ptr, options))
-    });
-
-    let Some((child_pid, status_ptr, options)) = args else {
-        return abi::errno(abi::ECHILD);
-    };
-
+pub fn syscall_waitpid(child_pid: u32, status_ptr: u32, options: u32) -> u32 {
     if child_pid == 0 || options & !WNOHANG != 0 {
         return abi::errno(abi::EINVAL);
     }
@@ -39,14 +25,13 @@ pub fn syscall_waitpid(_frame: &InterruptFrame) -> u32 {
     wait_for_process_unix(child_pid, status_ptr, options & WNOHANG != 0)
 }
 
-pub fn syscall_execve(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_execve(path_ptr: u32, argv_ptr: u32, envp_ptr: u32) -> u32 {
     let exec = KERNEL.with_task_manager(|tm| {
         let current_task = tm.get_current()?;
         let task = current_task.read();
 
-        let path_ptr = task.get_stack_item(0);
-        let argv_ptr = task.get_stack_item(1);
-        let envp_ptr = task.get_stack_item(2);
+
+
         if path_ptr == 0 {
             return None;
         }
@@ -94,7 +79,7 @@ pub fn syscall_execve(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_fork(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_fork() -> u32 {
     let fork_context = KERNEL.with_task_manager(|tm| {
         let current_task = tm.get_current()?;
         let task = current_task.read();
@@ -116,18 +101,13 @@ pub fn syscall_fork(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_exit(_frame: &InterruptFrame) -> u32 {
-    let code = KERNEL.with_task_manager(|tm| {
-        let current_task = tm.get_current()?;
-        Some(current_task.read().get_stack_item(0) as i32)
-    });
-
-    process_terminate(code.unwrap_or(0));
+pub fn syscall_exit(code: u32) -> u32 {
+    process_terminate(code as i32);
 
     task_next();
 }
 
-pub fn syscall_getpid(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_getpid() -> u32 {
     KERNEL.with_task_manager(|tm| {
         tm.get_current()
             .map(|task| task.read().process.pid)
@@ -135,11 +115,11 @@ pub fn syscall_getpid(_frame: &InterruptFrame) -> u32 {
     })
 }
 
-pub fn syscall_getuid(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_getuid() -> u32 {
     current_process_id_field(|process| process.uid)
 }
 
-pub fn syscall_getppid(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_getppid() -> u32 {
     KERNEL.with_task_manager(|tm| {
         tm.get_current()
             .map(|task| task.read().process.parent_pid().unwrap_or(0))
@@ -147,15 +127,15 @@ pub fn syscall_getppid(_frame: &InterruptFrame) -> u32 {
     })
 }
 
-pub fn syscall_getgid(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_getgid() -> u32 {
     current_process_id_field(|process| process.gid)
 }
 
-pub fn syscall_geteuid(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_geteuid() -> u32 {
     current_process_id_field(|process| process.euid)
 }
 
-pub fn syscall_getegid(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_getegid() -> u32 {
     current_process_id_field(|process| process.egid)
 }
 

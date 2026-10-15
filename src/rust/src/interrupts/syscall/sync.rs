@@ -3,7 +3,6 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 
 use crate::{
-    interrupts::InterruptFrame,
     kernel::KERNEL,
     schedule::{
         semaphore::Semaphore,
@@ -61,10 +60,10 @@ impl SemaphoreTable {
     }
 }
 
-pub fn syscall_semaphore_create(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_semaphore_create(initial_count: u32) -> u32 {
     let Some(count) = KERNEL.with_task_manager(|tm| {
-        let current_task = tm.get_current()?;
-        Some(current_task.read().get_stack_item(0) as i32)
+        tm.get_current()?;
+        Some(initial_count as i32)
     }) else {
         return abi::errno(abi::ESRCH);
     };
@@ -76,10 +75,10 @@ pub fn syscall_semaphore_create(_frame: &InterruptFrame) -> u32 {
     SEMAPHORES.lock().create(count as isize) as u32
 }
 
-pub fn syscall_semaphore_wait(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_semaphore_wait(semid: u32) -> u32 {
     let Some(id) = KERNEL.with_task_manager(|tm| {
-        let current_task = tm.get_current()?;
-        Some(current_task.read().get_stack_item(0) as usize)
+        tm.get_current()?;
+        Some(semid as usize)
     }) else {
         return abi::errno(abi::ESRCH);
     };
@@ -96,10 +95,10 @@ pub fn syscall_semaphore_wait(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_semaphore_signal(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_semaphore_signal(semid: u32) -> u32 {
     let Some(id) = KERNEL.with_task_manager(|tm| {
-        let current_task = tm.get_current()?;
-        Some(current_task.read().get_stack_item(0) as usize)
+        tm.get_current()?;
+        Some(semid as usize)
     }) else {
         return abi::errno(abi::ESRCH);
     };
@@ -110,10 +109,10 @@ pub fn syscall_semaphore_signal(_frame: &InterruptFrame) -> u32 {
     }
 }
 
-pub fn syscall_semaphore_close(_frame: &InterruptFrame) -> u32 {
+pub fn syscall_semaphore_close(semid: u32) -> u32 {
     let Some(id) = KERNEL.with_task_manager(|tm| {
-        let current_task = tm.get_current()?;
-        Some(current_task.read().get_stack_item(0) as usize)
+        tm.get_current()?;
+        Some(semid as usize)
     }) else {
         return abi::errno(abi::ESRCH);
     };
