@@ -19,8 +19,8 @@ The selective runtime port keeps the device registry and driver abstractions fro
   conveniences. The assembly syscall entry preserves cdecl callee-saved registers.
 
 The ABI migration requires rebuilding all userspace executables together with the
-kernel. The legacy private seven-argument receive call passes an explicit argument
-block in EBX; it does not extend the register ABI with hidden stack arguments.
+kernel. Socket operations use socketcall argument blocks. Private network syscalls
+are replaced by standard sockets and ioctls on the registered `/dev/net0` device.
 
 ## Threads
 
@@ -47,3 +47,17 @@ than silently accepted. Thread-specific keys and destructors are supported.
 The thread tests also exposed prerequisites fixed here: partial ELF reads, the
 segment-register inline-assembly clobber, and preserving user state across kernel
 interrupts and page-fault frames containing an error code.
+
+## Networking
+
+`net/socket.rs` owns socket binding, ephemeral ports, peer filtering, UDP delivery
+and payload transmission. The stack retains the `NetworkDevice` driver interface.
+`device/network_control.rs` exposes configuration and DHCP through `/dev/net0`.
+`memory/user.rs` validates mapped user pages and handles user copies for syscall
+and ioctl adapters. Device code does not decode syscall registers.
+
+Libc separates socket wrappers (`network.c`), configuration and compatibility
+helpers (`network_control.c`), and DNS encoding/parsing (`resolver.c`). DNS uses
+connected UDP sockets; receive deadlines are a userspace convenience. UDP is
+limited to unfragmented Ethernet-sized packets; TCP is not implemented. Emulator
+tests verify DHCP, ICMP and actual UDP payload round trips against a local server.

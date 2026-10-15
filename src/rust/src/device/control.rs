@@ -10,3 +10,6 @@ pub struct WinSize {
     pub ws_xpixel: u16,
     pub ws_ypixel: u16,
 }
+
+pub const POLYOS_IOCTL_NET_INFO: u32 = 0x5101;
+pub const POLYOS_IOCTL_NET_DHCP_DISCOVER: u32 = 0x5102;

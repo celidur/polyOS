@@ -5,6 +5,8 @@ import re
 import select
 import signal
 import shutil
+import socket
+import threading
 import subprocess
 import sys
 import time
@@ -24,6 +26,7 @@ def main():
     parser = argparse.ArgumentParser(description="Boot PolyOS in QEMU and run /bin/selftest.elf")
     parser.add_argument("--no-build", action="store_true", help="skip make all")
     parser.add_argument("--timeout", type=float, default=90.0, help="maximum seconds to wait")
+    parser.add_argument("--network", action="store_true", help="test DHCP, ICMP and local UDP echo")
     args = parser.parse_args()
 
     if not args.no_build:
@@ -48,6 +51,19 @@ def main():
         "none",
     ]
 
+    echo_socket = None
+    if args.network:
+        echo_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        echo_socket.bind(("127.0.0.1", 31337))
+        def echo():
+            while True:
+                try:
+                    data, peer = echo_socket.recvfrom(2048)
+                    echo_socket.sendto(data, peer)
+                except OSError:
+                    return
+        threading.Thread(target=echo, daemon=True).start()
+
     proc = subprocess.Popen(
         command,
         cwd=ROOT,
@@ -62,7 +78,7 @@ def main():
     failed = False
     deadline = time.monotonic() + args.timeout
     command_text = "/bin/selftest.elf"
-    command_text += "\n"
+    command_text += " net\n" if args.network else "\n"
 
     try:
         while time.monotonic() < deadline:
@@ -96,6 +112,8 @@ def main():
                 failed = not passed
                 break
     finally:
+        if echo_socket:
+            echo_socket.close()
         log_path.write_bytes(output)
         if proc.poll() is None:
             try:

@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+mod socket;
+pub use socket::*;
 
 mod arp;
 mod dhcp;
@@ -39,6 +41,7 @@ pub enum NetworkError {
     BadSocket,
     WouldBlock,
     NotConnected,
+    AddressInUse,
 }
 
 #[repr(u32)]
@@ -107,6 +110,8 @@ struct NetworkSocket {
 pub struct SocketPacket {
     pub src_ip: [u8; 4],
     pub src_port: u16,
+    pub dst_ip: [u8; 4],
+    pub dst_port: u16,
     pub data: Vec<u8>,
 }
 
@@ -261,10 +266,34 @@ pub fn receive(interface_id: InterfaceId, frame: &[u8]) -> Option<Vec<u8>> {
             return Some(response);
         }
 
-        handle_icmp_frame(interface_id, interface, frame)
+        (
+            socket_packet_from_udp_payload(frame),
+            handle_icmp_frame(interface_id, interface, frame),
+        )
     };
 
-    if let Some((socket_id, packet)) = socket_packet {
+    if let Some(packet) = socket_packet.0 {
+        if let Some(socket_id) = udp_socket_id_for_packet(&stack.sockets, &packet) {
+            serial_println!(
+                "net{}: rx udp {}.{}.{}.{}:{} -> {}.{}.{}.{}:{} len={}",
+                interface_id,
+                packet.src_ip[0],
+                packet.src_ip[1],
+                packet.src_ip[2],
+                packet.src_ip[3],
+                packet.src_port,
+                packet.dst_ip[0],
+                packet.dst_ip[1],
+                packet.dst_ip[2],
+                packet.dst_ip[3],
+                packet.dst_port,
+                packet.data.len()
+            );
+            enqueue_socket_packet(&mut stack, socket_id, packet);
+        }
+    }
+
+    if let Some((socket_id, packet)) = socket_packet.1 {
         enqueue_socket_packet(&mut stack, socket_id, packet);
     }
 
@@ -274,185 +303,6 @@ pub fn receive(interface_id: InterfaceId, frame: &[u8]) -> Option<Vec<u8>> {
 pub fn notify_tx(interface_id: InterfaceId) {
     if let Some(interface) = STACK.lock().interfaces.get_mut(interface_id) {
         interface.packets_tx += 1;
-    }
-}
-
-pub fn socket_open(domain: u32, socket_type: u32, protocol: u32) -> Result<u32, NetworkError> {
-    if domain != AF_INET {
-        return Err(NetworkError::Unsupported);
-    }
-
-    if socket_type != SOCK_RAW || protocol != IPPROTO_ICMP {
-        return Err(NetworkError::Unsupported);
-    }
-
-    let mut stack = STACK.lock();
-    let id = stack.next_socket_id;
-    stack.next_socket_id = stack.next_socket_id.wrapping_add(1).max(3);
-    stack.sockets.push(NetworkSocket {
-        id,
-        domain,
-        socket_type,
-        protocol,
-        local_ip: [0; 4],
-        local_port: 0,
-        peer_ip: None,
-        peer_port: 0,
-        recv_queue: VecDeque::new(),
-    });
-    Ok(id)
-}
-
-pub fn socket_close(socket_id: u32) -> Result<(), NetworkError> {
-    let mut stack = STACK.lock();
-    let Some(index) = stack
-        .sockets
-        .iter()
-        .position(|socket| socket.id == socket_id)
-    else {
-        return Err(NetworkError::BadSocket);
-    };
-
-    stack.sockets.remove(index);
-    Ok(())
-}
-
-pub fn socket_send_to(
-    socket_id: u32,
-    len: usize,
-    dest_ip: [u8; 4],
-    _dest_port: u16,
-) -> Result<usize, NetworkError> {
-    let (socket_type, protocol) = {
-        let stack = STACK.lock();
-        let socket = stack
-            .sockets
-            .iter()
-            .find(|socket| socket.id == socket_id)
-            .ok_or(NetworkError::BadSocket)?;
-        (socket.socket_type, socket.protocol)
-    };
-
-    match (socket_type, protocol) {
-        (SOCK_RAW, IPPROTO_ICMP) => {
-            ping_ipv4_from_socket(socket_id, dest_ip)?;
-            Ok(len)
-        }
-        _ => Err(NetworkError::Unsupported),
-    }
-}
-
-pub fn socket_bind(socket_id: u32, local_ip: [u8; 4], local_port: u16) -> Result<(), NetworkError> {
-    let mut stack = STACK.lock();
-    let socket = stack
-        .sockets
-        .iter_mut()
-        .find(|socket| socket.id == socket_id)
-        .ok_or(NetworkError::BadSocket)?;
-
-    socket.local_ip = local_ip;
-    socket.local_port = local_port;
-    Ok(())
-}
-
-pub fn socket_connect(
-    socket_id: u32,
-    peer_ip: [u8; 4],
-    peer_port: u16,
-) -> Result<(), NetworkError> {
-    let mut stack = STACK.lock();
-    let socket = stack
-        .sockets
-        .iter_mut()
-        .find(|socket| socket.id == socket_id)
-        .ok_or(NetworkError::BadSocket)?;
-
-    socket.peer_ip = Some(peer_ip);
-    socket.peer_port = peer_port;
-    Ok(())
-}
-
-pub fn socket_send(socket_id: u32, len: usize) -> Result<usize, NetworkError> {
-    let peer_ip = {
-        let stack = STACK.lock();
-        let socket = stack
-            .sockets
-            .iter()
-            .find(|socket| socket.id == socket_id)
-            .ok_or(NetworkError::BadSocket)?;
-        socket.peer_ip.ok_or(NetworkError::NotConnected)?
-    };
-
-    socket_send_to(socket_id, len, peer_ip, 0)
-}
-
-pub fn socket_recv_from(socket_id: u32, max_len: usize) -> Result<SocketPacket, NetworkError> {
-    let mut stack = STACK.lock();
-    let socket = stack
-        .sockets
-        .iter_mut()
-        .find(|socket| socket.id == socket_id)
-        .ok_or(NetworkError::BadSocket)?;
-
-    let mut packet = if let Some(packet) = socket.recv_queue.pop_front() {
-        packet
-    } else {
-        return Err(NetworkError::WouldBlock);
-    };
-
-    if packet.data.len() > max_len {
-        packet.data.truncate(max_len);
-    }
-
-    Ok(packet)
-}
-
-pub fn socket_local_addr(socket_id: u32) -> Result<([u8; 4], u16), NetworkError> {
-    let stack = STACK.lock();
-    let socket = stack
-        .sockets
-        .iter()
-        .find(|socket| socket.id == socket_id)
-        .ok_or(NetworkError::BadSocket)?;
-
-    let ip = if socket.local_ip == [0; 4] {
-        stack
-            .interfaces
-            .first()
-            .map(|interface| interface.dhcp.config.address)
-            .unwrap_or([0; 4])
-    } else {
-        socket.local_ip
-    };
-
-    Ok((ip, socket.local_port))
-}
-
-pub fn socket_peer_addr(socket_id: u32) -> Result<([u8; 4], u16), NetworkError> {
-    let stack = STACK.lock();
-    let socket = stack
-        .sockets
-        .iter()
-        .find(|socket| socket.id == socket_id)
-        .ok_or(NetworkError::BadSocket)?;
-
-    Ok((
-        socket.peer_ip.ok_or(NetworkError::NotConnected)?,
-        socket.peer_port,
-    ))
-}
-
-pub fn socket_setsockopt(
-    socket_id: u32,
-    _level: u32,
-    _optname: u32,
-    _optlen: u32,
-) -> Result<(), NetworkError> {
-    let stack = STACK.lock();
-    if stack.sockets.iter().any(|socket| socket.id == socket_id) {
-        Ok(())
-    } else {
-        Err(NetworkError::BadSocket)
     }
 }
 
@@ -1018,39 +868,6 @@ fn handle_icmp_frame(
     socket_id.and_then(|socket_id| {
         socket_packet_from_ipv4(frame, reply.src_ip, 0).map(|packet| (socket_id, packet))
     })
-}
-
-fn socket_packet_from_ipv4(frame: &[u8], src_ip: [u8; 4], src_port: u16) -> Option<SocketPacket> {
-    let ipv4 = ipv4_packet(frame)?;
-    let ip_offset = 14;
-    let ip_len = ipv4.payload_offset + ipv4.payload_len - ip_offset;
-    if frame.len() < ip_offset + ip_len {
-        return None;
-    }
-
-    let mut data = Vec::new();
-    data.extend_from_slice(&frame[ip_offset..ip_offset + ip_len]);
-    Some(SocketPacket {
-        src_ip,
-        src_port,
-        data,
-    })
-}
-
-fn enqueue_socket_packet(stack: &mut NetworkStack, socket_id: u32, packet: SocketPacket) {
-    let Some(socket) = stack
-        .sockets
-        .iter_mut()
-        .find(|socket| socket.id == socket_id)
-    else {
-        return;
-    };
-
-    if socket.recv_queue.len() >= SOCKET_RECV_QUEUE_LIMIT {
-        let _ = socket.recv_queue.pop_front();
-    }
-
-    socket.recv_queue.push_back(packet);
 }
 
 fn print_ping_start(request: &PingRequest) {

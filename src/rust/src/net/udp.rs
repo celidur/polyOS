@@ -27,6 +27,14 @@ pub fn parse(frame: &[u8]) -> Option<UdpPacket> {
         return None;
     }
 
+    if read_be16(frame, 20) & 0x3fff != 0 {
+        return None;
+    }
+    if read_be16(frame, udp + 6) != 0
+        && udp_checksum(ipv4.src, ipv4.dst, &frame[udp..udp + udp_len]) != 0xffff
+    {
+        return None;
+    }
     Some(UdpPacket {
         src_ip: ipv4.src,
         dst_ip: ipv4.dst,

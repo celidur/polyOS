@@ -25,6 +25,7 @@ pub enum FsError {
     NotEmpty,
     NoSpace,
     InvalidArgument,
+    BadAddress,
     IsADirectory,
     WouldBlock,
     BrokenPipe,

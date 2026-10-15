@@ -98,36 +98,8 @@ pub fn syscall_init() {
         SyscallHandler::Args3(syscall_linux_reboot),
     );
     syscall_register(
-        SyscallId::NetworkInfo,
-        SyscallHandler::Args1(syscall_network_info),
-    );
-    syscall_register(
-        SyscallId::NetworkDhcpDiscover,
-        SyscallHandler::Args0(syscall_network_dhcp_discover),
-    );
-    syscall_register(
-        SyscallId::NetworkPingGateway,
-        SyscallHandler::Args0(syscall_network_ping_gateway),
-    );
-    syscall_register(
-        SyscallId::NetworkPingIpv4,
-        SyscallHandler::Args1(syscall_network_ping_ipv4),
-    );
-    syscall_register(
-        SyscallId::NetworkDnsQuery,
-        SyscallHandler::Args1(syscall_network_dns_query),
-    );
-    syscall_register(
-        SyscallId::NetworkPingName,
-        SyscallHandler::Args1(syscall_network_ping_name),
-    );
-    syscall_register(
         SyscallId::SocketCall,
         SyscallHandler::Args2(syscall_socketcall),
-    );
-    syscall_register(
-        SyscallId::NetworkRecvFromWait,
-        SyscallHandler::Args1(syscall_network_recvfrom_wait),
     );
     syscall_register(
         SyscallId::SemaphoreCreate,

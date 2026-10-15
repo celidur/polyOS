@@ -160,7 +160,8 @@ pub fn syscall_ioctl(fd: u32, request: u32, arg: u32) -> u32 {
     match process.get_fd(fd) {
         Some(descriptor) => match descriptor.ioctl(request, arg, &process.page_directory) {
             Ok(result) => result,
-            Err(_) => abi::errno(abi::ENOTTY),
+            Err(crate::fs::FsError::Unsupported) => abi::errno(abi::ENOTTY),
+            Err(error) => super::file::fs_errno(error),
         },
         _ => abi::errno(abi::EBADF),
     }

@@ -3,30 +3,10 @@ use crate::{
     net,
     schedule::process::{Process, ProcessDescriptor, SocketHandle},
 };
-use alloc::sync::Arc;
+use alloc::{sync::Arc, vec::Vec};
 use spin::Mutex;
 
 use super::{abi, user};
-
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct NetworkStat {
-    pub present: u32,
-    pub dhcp_state: u32,
-    pub mac: [u8; 6],
-    pub _padding: [u8; 2],
-    pub ipv4: [u8; 4],
-    pub subnet_mask: [u8; 4],
-    pub router: [u8; 4],
-    pub dns: [u8; 4],
-    pub packets_rx: u64,
-    pub packets_tx: u64,
-    pub arp_entries: u32,
-    pub ping_tx: u32,
-    pub ping_rx: u32,
-    pub dns_tx: u32,
-    pub dns_rx: u32,
-}
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -39,9 +19,7 @@ struct SockAddrIn {
 
 #[derive(Clone, Copy)]
 struct RecvFromArgs {
-    socket_id: u32,
     buf_ptr: u32,
-    len: u32,
     src_ptr: u32,
     addrlen_ptr: u32,
 }
@@ -58,104 +36,6 @@ const SOCKETCALL_RECV: u32 = 10;
 const SOCKETCALL_SENDTO: u32 = 11;
 const SOCKETCALL_RECVFROM: u32 = 12;
 const SOCKETCALL_SETSOCKOPT: u32 = 14;
-
-pub fn syscall_network_info(ptr: u32) -> u32 {
-    KERNEL.with_task_manager(|tm| {
-        let current_task = if let Some(t) = tm.get_current() {
-            t
-        } else {
-            return abi::errno(abi::ESRCH);
-        };
-
-        if ptr == 0 {
-            return abi::errno(abi::EFAULT);
-        }
-
-        let mut stat = NetworkStat::default();
-        if let Some(info) = net::info() {
-            stat.present = 1;
-            stat.dhcp_state = info.dhcp_state as u32;
-            stat.mac = info.mac;
-            stat.ipv4 = info.ipv4.address;
-            stat.subnet_mask = info.ipv4.subnet_mask;
-            stat.router = info.ipv4.router;
-            stat.dns = info.ipv4.dns;
-            stat.packets_rx = info.packets_rx;
-            stat.packets_tx = info.packets_tx;
-            stat.arp_entries = info.arp_entries;
-            stat.ping_tx = info.ping_tx;
-            stat.ping_rx = info.ping_rx;
-            stat.dns_tx = info.dns_tx;
-            stat.dns_rx = info.dns_rx;
-        }
-
-        if user::write_value(&current_task.read().process.page_directory, ptr, &stat).is_err() {
-            return abi::errno(abi::EFAULT);
-        }
-
-        0
-    })
-}
-
-pub fn syscall_network_dhcp_discover() -> u32 {
-    match net::send_dhcp_discover() {
-        Ok(()) => 0,
-        Err(error) => {
-            serial_println!("net: dhcp discover failed: {:?}", error);
-            network_errno(error)
-        }
-    }
-}
-
-pub fn syscall_network_ping_gateway() -> u32 {
-    match net::ping_gateway() {
-        Ok(()) => 0,
-        Err(error) => {
-            serial_println!("net: ping gateway failed: {:?}", error);
-            network_errno(error)
-        }
-    }
-}
-
-pub fn syscall_network_ping_ipv4(packed_ip: u32) -> u32 {
-    KERNEL.with_task_manager(|tm| {
-        let _current_task = if let Some(t) = tm.get_current() {
-            t
-        } else {
-            return abi::errno(abi::ESRCH);
-        };
-
-        let target_ip = [
-            ((packed_ip >> 24) & 0xff) as u8,
-            ((packed_ip >> 16) & 0xff) as u8,
-            ((packed_ip >> 8) & 0xff) as u8,
-            (packed_ip & 0xff) as u8,
-        ];
-
-        match net::ping_ipv4(target_ip) {
-            Ok(()) => 0,
-            Err(error) => {
-                serial_println!(
-                    "net: ping {}.{}.{}.{} failed: {:?}",
-                    target_ip[0],
-                    target_ip[1],
-                    target_ip[2],
-                    target_ip[3],
-                    error
-                );
-                network_errno(error)
-            }
-        }
-    })
-}
-
-pub fn syscall_network_dns_query(name_ptr: u32) -> u32 {
-    syscall_network_name_request(name_ptr, net::send_dns_query, "dns query")
-}
-
-pub fn syscall_network_ping_name(name_ptr: u32) -> u32 {
-    syscall_network_name_request(name_ptr, net::ping_name, "ping")
-}
 
 pub fn syscall_socketcall(call: u32, args_ptr: u32) -> u32 {
     let (process, call, args_ptr) = match KERNEL.with_task_manager(|tm| {
@@ -272,88 +152,6 @@ pub fn syscall_socketcall(call: u32, args_ptr: u32) -> u32 {
     }
 }
 
-pub fn syscall_network_recvfrom_wait(args_ptr: u32) -> u32 {
-    let args = match read_recvfrom_wait_args(args_ptr) {
-        Ok(args) => args,
-        Err(errno) => return abi::errno(errno),
-    };
-    let socket_id = match socket_id_from_fd(args.socket_id) {
-        Ok(socket_id) => socket_id,
-        Err(errno) => return abi::errno(errno),
-    };
-
-    let timeout_ticks = KERNEL.with_task_manager(|tm| {
-        let task = tm.get_current()?.read();
-        user::read_u32(&task, args_ptr.checked_add(24)?).map(|value| value as u64)
-    });
-    let Some(timeout_ticks) = timeout_ticks else {
-        return abi::errno(abi::EFAULT);
-    };
-
-    let start_tick = KERNEL.with_task_manager(|tm| tm.get_tick());
-
-    loop {
-        match net::socket_recv_from(socket_id, args.len as usize) {
-            Ok(packet) => return write_recvfrom_result(args, packet),
-            Err(net::NetworkError::WouldBlock) => {
-                if timeout_ticks != 0 {
-                    let now = KERNEL.with_task_manager(|tm| tm.get_tick());
-                    if now.saturating_sub(start_tick) >= timeout_ticks {
-                        return abi::WAIT_TIMEOUT;
-                    }
-                }
-
-                core::hint::spin_loop();
-            }
-            Err(error) => {
-                serial_println!("net: recvfrom_wait({}) failed: {:?}", args.socket_id, error);
-                return network_errno(error);
-            }
-        }
-    }
-}
-
-fn syscall_network_name_request(
-    name_ptr: u32,
-    request: fn(&str) -> Result<(), net::NetworkError>,
-    label: &str,
-) -> u32 {
-    KERNEL.with_task_manager(|tm| {
-        let current_task = if let Some(t) = tm.get_current() {
-            t
-        } else {
-            return abi::errno(abi::ESRCH);
-        };
-
-        let task = current_task.read();
-        if name_ptr == 0 {
-            return abi::errno(abi::EFAULT);
-        }
-
-        let Some(name) = user::read_c_string(&task, name_ptr, 256) else {
-            return abi::errno(abi::EFAULT);
-        };
-
-        match request(name.as_str()) {
-            Ok(()) => 0,
-            Err(error) => {
-                serial_println!("net: {} {} failed: {:?}", label, name, error);
-                network_errno(error)
-            }
-        }
-    })
-}
-
-fn socket_id_from_fd(fd: u32) -> Result<u32, i32> {
-    KERNEL.with_task_manager(|tm| {
-        let Some(current_task) = tm.get_current() else {
-            return Err(abi::ESRCH);
-        };
-        let process = current_task.read().process.clone();
-        socket_id_from_process_fd(&process, fd)
-    })
-}
-
 fn socket_id_from_process_fd(process: &Process, fd: u32) -> Result<u32, i32> {
     match process.get_fd(fd as i32) {
         Some(ProcessDescriptor::Socket(socket)) => Ok(socket.lock().id()),
@@ -406,7 +204,7 @@ fn socket_open_for_process(process: &Process, domain: u32, socket_type: u32, pro
 fn socket_sendto_for_process(
     process: &Process,
     fd: u32,
-    _buf_ptr: u32,
+    buf_ptr: u32,
     len: u32,
     _flags: u32,
     dest_ptr: u32,
@@ -421,11 +219,17 @@ fn socket_sendto_for_process(
         Ok(socket_id) => socket_id,
         Err(errno) => return abi::errno(errno),
     };
+    let payload = match read_socket_payload(process, buf_ptr, len, true) {
+        Ok(payload) => payload,
+        Err(errno) => return abi::errno(errno),
+    };
 
-    match net::socket_send_to(socket_id, len as usize, target_ip, target_port) {
+    match net::socket_send_to(socket_id, &payload, len as usize, target_ip, target_port) {
         Ok(sent) => sent as u32,
         Err(error) => {
-            serial_println!("net: sendto({}) failed: {:?}", fd, error);
+            if error != net::NetworkError::WouldBlock {
+                serial_println!("net: sendto({}) failed: {:?}", fd, error);
+            }
             network_errno(error)
         }
     }
@@ -480,15 +284,16 @@ fn socket_accept_for_process(process: &Process, fd: u32, _addr_ptr: u32, _addrle
 }
 
 fn socket_send_for_process(process: &Process, fd: u32, buf_ptr: u32, len: u32, _flags: u32) -> u32 {
-    if len != 0 && buf_ptr == 0 {
-        return abi::errno(abi::EFAULT);
-    }
     let socket_id = match socket_id_from_process_fd(process, fd) {
         Ok(socket_id) => socket_id,
         Err(errno) => return abi::errno(errno),
     };
+    let payload = match read_socket_payload(process, buf_ptr, len, true) {
+        Ok(payload) => payload,
+        Err(errno) => return abi::errno(errno),
+    };
 
-    match net::socket_send(socket_id, len as usize) {
+    match net::socket_send(socket_id, &payload, len as usize) {
         Ok(sent) => sent as u32,
         Err(error) => network_errno(error),
     }
@@ -554,9 +359,7 @@ fn socket_recvfrom_for_process(
     write_recvfrom_result_for_process(
         process,
         RecvFromArgs {
-            socket_id: fd,
             buf_ptr,
-            len,
             src_ptr,
             addrlen_ptr,
         },
@@ -681,78 +484,6 @@ fn write_sockaddr_in(
     user::write_value(&process.page_directory, addrlen_ptr, &sockaddr_len).map_err(|_| abi::EFAULT)
 }
 
-fn read_recvfrom_wait_args(args_ptr: u32) -> Result<RecvFromArgs, i32> {
-    KERNEL.with_task_manager(|tm| {
-        let Some(current_task) = tm.get_current() else {
-            return Err(abi::ESRCH);
-        };
-
-        let socket_id = user::read_u32(
-            &current_task.read(),
-            args_ptr.checked_add(0).ok_or(abi::EFAULT)?,
-        )
-        .ok_or(abi::EFAULT)?;
-        let buf_ptr = user::read_u32(
-            &current_task.read(),
-            args_ptr.checked_add(4).ok_or(abi::EFAULT)?,
-        )
-        .ok_or(abi::EFAULT)?;
-        let len = user::read_u32(
-            &current_task.read(),
-            args_ptr.checked_add(8).ok_or(abi::EFAULT)?,
-        )
-        .ok_or(abi::EFAULT)?;
-        let _flags = user::read_u32(
-            &current_task.read(),
-            args_ptr.checked_add(12).ok_or(abi::EFAULT)?,
-        )
-        .ok_or(abi::EFAULT)?;
-        let src_ptr = user::read_u32(
-            &current_task.read(),
-            args_ptr.checked_add(16).ok_or(abi::EFAULT)?,
-        )
-        .ok_or(abi::EFAULT)?;
-        let addrlen_ptr = user::read_u32(
-            &current_task.read(),
-            args_ptr.checked_add(20).ok_or(abi::EFAULT)?,
-        )
-        .ok_or(abi::EFAULT)?;
-        let _timeout_ticks = user::read_u32(
-            &current_task.read(),
-            args_ptr.checked_add(24).ok_or(abi::EFAULT)?,
-        )
-        .ok_or(abi::EFAULT)?;
-
-        if buf_ptr == 0 {
-            return Err(abi::EFAULT);
-        }
-        if len == 0 {
-            return Err(abi::EINVAL);
-        }
-
-        Ok(RecvFromArgs {
-            socket_id,
-            buf_ptr,
-            len,
-            src_ptr,
-            addrlen_ptr,
-        })
-    })
-}
-
-fn write_recvfrom_result(args: RecvFromArgs, packet: net::SocketPacket) -> u32 {
-    KERNEL.with_task_manager(|tm| {
-        let current_task = if let Some(t) = tm.get_current() {
-            t
-        } else {
-            return abi::errno(abi::ESRCH);
-        };
-
-        let process = current_task.read().process.clone();
-        write_recvfrom_result_for_process(&process, args, packet)
-    })
-}
-
 fn write_recvfrom_result_for_process(
     process: &Process,
     args: RecvFromArgs,
@@ -826,6 +557,23 @@ fn network_errno(error: net::NetworkError) -> u32 {
         net::NetworkError::BadSocket => abi::EBADF,
         net::NetworkError::WouldBlock => abi::EAGAIN,
         net::NetworkError::NotConnected => abi::ENOTCONN,
+        net::NetworkError::AddressInUse => abi::EADDRINUSE,
     };
     abi::errno(code)
+}
+
+fn read_socket_payload(
+    process: &Process,
+    ptr: u32,
+    len: u32,
+    _allow_empty: bool,
+) -> Result<Vec<u8>, i32> {
+    if len > 1472 {
+        return Err(abi::EMSGSIZE);
+    }
+    user::validate_range(process, ptr, len, false).map_err(|_| abi::EFAULT)?;
+    let mut bytes = vec![0; len as usize];
+    user::copy_from_user(&process.page_directory, ptr, bytes.as_mut_ptr(), len)
+        .map_err(|_| abi::EFAULT)?;
+    Ok(bytes)
 }

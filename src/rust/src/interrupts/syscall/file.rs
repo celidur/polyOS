@@ -49,7 +49,6 @@ enum PipeSyscallResult {
 
 pub fn syscall_open(path_ptr: u32, flags: u32, mode: u32) -> u32 {
     let Some((process, path, flags, mode)) = with_current_task(|task| {
-
         if path_ptr == 0 {
             return None;
         }
@@ -851,13 +850,14 @@ fn seek_for_append(descriptor: &ProcessDescriptor) -> Result<(), FsError> {
     }
 }
 
-fn fs_errno(error: FsError) -> u32 {
+pub(super) fn fs_errno(error: FsError) -> u32 {
     let code = match error {
         FsError::NotFound => abi::ENOENT,
         FsError::AlreadyExists => abi::EEXIST,
         FsError::NotADirectory => abi::ENOTDIR,
         FsError::InvalidPath | FsError::InvalidArgument => abi::EINVAL,
         FsError::IoError => abi::EIO,
+        FsError::BadAddress => abi::EFAULT,
         FsError::Unsupported => abi::ENOTSUP,
         FsError::PermissionDenied => abi::EACCES,
         FsError::NotEmpty => abi::ENOTEMPTY,

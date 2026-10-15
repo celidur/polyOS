@@ -961,6 +961,7 @@ static void test_register_abi(void)
     expect("unknown syscall ENOSYS", result == -ENOSYS, result);
 }
 
+extern void test_udp(void (*expect)(const char *, int, int));
 extern void test_threads(void (*expect)(const char *, int, int));
 int main(int argc, char **argv)
 {
@@ -986,6 +987,7 @@ int main(int argc, char **argv)
 
     if (wants_network(argc, argv)) {
         test_network();
+        test_udp(expect);
     } else {
         printf("[skip] network (run /bin/selftest.elf net)\n");
     }

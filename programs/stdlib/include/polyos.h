@@ -140,6 +140,7 @@ void exit(int code) __attribute__((noreturn));
 void print_memory();
 int clear_screen();
 int reboot(int cmd);
+int gethostbyname_ipv4(const char *name, u32 *out_addr);
 int network_info(struct network_info *info);
 int network_dhcp_discover();
 int network_ping_gateway();

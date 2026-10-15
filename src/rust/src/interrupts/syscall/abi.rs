@@ -37,3 +37,5 @@ pub const fn error() -> u32 {
 pub const fn errno(code: i32) -> u32 {
     (-code) as u32
 }
+
+pub const EADDRINUSE: i32 = 98;

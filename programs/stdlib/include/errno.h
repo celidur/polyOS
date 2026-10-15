@@ -28,6 +28,7 @@ int *__errno_location(void);
 #define ENOTEMPTY 39
 #define EMSGSIZE 90
 #define ENOTSUP 95
+#define EADDRINUSE 98
 #define ENETDOWN 100
 #define ENOTCONN 107
 

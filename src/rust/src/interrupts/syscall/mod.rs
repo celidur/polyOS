@@ -10,7 +10,7 @@ mod register;
 mod signal;
 mod sync;
 mod types;
-mod user;
+use crate::memory::user;
 
 pub use dispatcher::{syscall_handle, syscall_init};
 pub use types::SyscallId;
