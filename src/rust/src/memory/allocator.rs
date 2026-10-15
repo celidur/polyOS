@@ -88,3 +88,5 @@ fn memory_usage() -> String {
 
 #[global_allocator]
 static ALLOCATOR: TrackingAllocator = TrackingAllocator::new();
+
+pub fn allocated_bytes() -> usize { ALLOCATOR.total_allocated() }

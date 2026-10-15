@@ -47,6 +47,8 @@ struct ZombieProcess {
 }
 
 impl ProcessManager {
+    pub fn process_count(&self) -> usize { self.table.len() }
+
     pub fn new() -> Self {
         ProcessManager {
             table: BTreeMap::new(),

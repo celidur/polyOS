@@ -128,6 +128,10 @@ impl Process {
 
         serial_println!("Process {} args: {:?}", pid, args.args);
 
+        let headers = match &process.filetype {
+            ProcessFileType::Elf(elf) => elf.header().program_headers().to_vec(),
+            _ => Vec::new(),
+        };
         let stack = process.stack.as_mut_slice();
         let mut stack_pointer = stack.len();
 
@@ -135,6 +139,37 @@ impl Process {
         let envp = push_stack_strings(stack, &mut stack_pointer, &args.env)?;
         stack_pointer &= !0xF;
 
+        let header_bytes = headers.len() * core::mem::size_of::<super::loader::elf::Elf32Phdr>();
+        if stack_pointer < header_bytes {
+            return Err(KernelError::Allocation);
+        }
+        stack_pointer -= header_bytes;
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                headers.as_ptr() as *const u8,
+                stack.as_mut_ptr().add(stack_pointer),
+                header_bytes,
+            );
+        }
+        let phdr = (USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END + stack_pointer) as u32;
+        let aux = [
+            (3, phdr),
+            (4, 32),
+            (5, headers.len() as u32),
+            (6, 4096),
+            (9, process.entrypoint),
+            (11, process.uid),
+            (12, process.euid),
+            (13, process.gid),
+            (14, process.egid),
+            (17, crate::constant::TIMER_HZ as u32),
+            (31, argv.first().copied().unwrap_or(0) as u32),
+            (0, 0),
+        ];
+        for &(key, value) in aux.iter().rev() {
+            push_stack_u32(stack, &mut stack_pointer, value)?;
+            push_stack_u32(stack, &mut stack_pointer, key)?;
+        }
         let envp_ptr = push_stack_pointer_array(stack, &mut stack_pointer, &envp)?;
         let argv_ptr = push_stack_pointer_array(stack, &mut stack_pointer, &argv)?;
 

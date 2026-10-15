@@ -964,6 +964,7 @@ static void test_register_abi(void)
 extern void test_udp(void (*expect)(const char *, int, int));
 extern void test_filesystem(void (*expect)(const char *, int, int));
 extern void test_ipc(void (*expect)(const char *, int, int));
+extern void test_inspection(void (*expect)(const char *, int, int));
 extern void test_threads(void (*expect)(const char *, int, int));
 int main(int argc, char **argv)
 {
@@ -986,6 +987,7 @@ int main(int argc, char **argv)
     test_signals();
     test_environment();
     test_threads(expect);
+    test_inspection(expect);
     test_ipc(expect);
     test_filesystem(expect);
 

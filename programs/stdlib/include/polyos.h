@@ -214,4 +214,33 @@ int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 int getpeername(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
 
+
+struct sysinfo {s32 uptime;u32 loads[3],totalram,freeram,sharedram,bufferram,totalswap,freeswap;u16 procs,pad;u32 totalhigh,freehigh,mem_unit;char reserved[8];};
+int sysinfo(struct sysinfo *info);
+#define _SC_CLK_TCK 2
+#define _SC_OPEN_MAX 4
+#define _SC_PAGESIZE 30
+#define _SC_PAGE_SIZE _SC_PAGESIZE
+#define _SC_NPROCESSORS_CONF 83
+#define _SC_NPROCESSORS_ONLN 84
+#define _SC_PHYS_PAGES 85
+#define _SC_AVPHYS_PAGES 86
+long sysconf(int name);
+#define AT_NULL 0
+#define AT_PHDR 3
+#define AT_PHENT 4
+#define AT_PHNUM 5
+#define AT_PAGESZ 6
+#define AT_ENTRY 9
+#define AT_UID 11
+#define AT_EUID 12
+#define AT_GID 13
+#define AT_EGID 14
+#define AT_CLKTCK 17
+#define AT_EXECFN 31
+unsigned long getauxval(unsigned long type);
+typedef struct {u32 p_type,p_offset,p_vaddr,p_paddr,p_filesz,p_memsz,p_flags,p_align;} Elf32_Phdr;
+struct dl_phdr_info {uintptr_t dlpi_addr;const char *dlpi_name;const Elf32_Phdr *dlpi_phdr;u16 dlpi_phnum;};
+int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *,size_t,void *),void *data);
+
 #endif

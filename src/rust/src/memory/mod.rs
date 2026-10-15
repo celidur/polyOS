@@ -7,3 +7,5 @@ pub use page::Page;
 pub use page_directory::{PageDirectory, enable_paging, flags::*};
 
 pub(crate) mod user;
+
+pub use allocator::allocated_bytes;

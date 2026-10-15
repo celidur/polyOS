@@ -88,3 +88,5 @@ pub fn kernel_main() -> ! {
 
     task_next();
 }
+
+mod inspection;

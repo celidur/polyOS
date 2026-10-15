@@ -61,6 +61,7 @@ pub enum SyscallId {
     GetDents64 = 220,
     OpenAt = 295,
     FstatAt = 300,
+    SysInfo = 116,
     // PolyOS-private debug/control calls. Keep custom IDs at 500+.
     PrintMemory = 503,
     SemaphoreCreate = 560,
@@ -138,6 +139,7 @@ impl SyscallId {
             220 => Some(Self::GetDents64),
             295 => Some(Self::OpenAt),
             300 => Some(Self::FstatAt),
+            116 => Some(Self::SysInfo),
             _ => None,
         }
     }

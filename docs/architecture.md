@@ -94,3 +94,13 @@ available for existing programs. Inode/device IDs and timestamps are not yet bac
 by filesystem metadata and are reported as zero. Directory entries are snapshots
 at open time. The read-only procfs exposes `/proc/self/exe` through the VFS link
 interface, with stat/open following the link and lstat/readlink preserving it.
+
+## System inspection
+
+`inspection.rs` supplies snapshots to sysinfo and read-only procfs files (uptime,
+meminfo, stat and self/status). Memory totals describe the managed kernel/page
+allocation pool, not a firmware RAM inventory. Swap and load averages are not
+implemented and report zero. The scheduler currently reports one CPU. The loader
+copies ELF headers and auxiliary-vector entries into user memory; libc implements
+getauxval, sysconf and dl_iterate_phdr from these values. Proc files retain a stable
+snapshot for the lifetime of an open descriptor.

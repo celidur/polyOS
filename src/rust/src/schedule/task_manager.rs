@@ -30,6 +30,8 @@ pub struct TaskManager {
 }
 
 impl TaskManager {
+    pub fn task_count(&self) -> usize { self.tasks.len() }
+
     pub fn new() -> Self {
         TaskManager {
             tasks: BTreeMap::new(),

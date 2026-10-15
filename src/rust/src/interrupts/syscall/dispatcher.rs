@@ -1,3 +1,4 @@
+use super::inspection;
 use super::filesystem;
 use super::ipc;
 use super::thread;
@@ -16,6 +17,8 @@ use super::sync::*;
 use super::types::SyscallId;
 
 pub fn syscall_init() {
+    syscall_register(SyscallId::SysInfo, SyscallHandler::Args1(inspection::syscall_sysinfo));
+
     syscall_register(
         SyscallId::Access,
         SyscallHandler::Args2(filesystem::syscall_access),
