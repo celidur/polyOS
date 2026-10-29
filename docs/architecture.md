@@ -163,3 +163,32 @@ The ABI supports signals 1–31 with a 32-bit mask, SA_ONSTACK, SA_NODEFER and
 SA_RESETHAND. SA_RESTART and realtime signal queues are not implemented; unsupported
 action flags return ENOTSUP. Alternate stacks and pending state reset on exec,
 while the calling thread's mask is preserved.
+
+## Process management
+
+`schedule/control.rs` owns synchronized credentials, saved IDs, supplementary
+groups, session/group identity and the process root. Identity changes are checked
+before publication. Fork inherits control state; exec preserves credentials and
+refreshes the loader's auxiliary IDs. PR_SET_NAME names the calling task; the
+no-new-privileges flag is inherited and cannot be cleared. Set-ID executable bits
+are not implemented. The existing mode-bit policy still applies to UID 0 file
+access; UID 0 authorizes credential and ownership changes.
+
+The process manager applies group/session and signal permission policy. Child exit,
+stop and continue events remain available until a matching wait consumes them.
+Waitpid supports exact, any-child and group selectors, WNOHANG, WUNTRACED and
+WCONTINUED. Blocking waiters restart and recheck events; no user status pointer is
+stored in a kernel wait queue. Waitid marshals these events with the child's actual UID and requires WEXITED.
+
+Path resolution carries the process root through absolute symlink targets. Chroot
+requires privilege and resets cwd to the new root. Directory descriptors outside
+that root cannot anchor relative path lookup; existing non-directory descriptors
+remain usable. Libc process.c owns PATH search; spawn.c owns file actions, signal
+attributes and a close-on-exec error pipe that reports child setup/exec failures.
+Spawn actions are bounded to 32. Current-thread pthread naming is supported;
+naming another thread through pthread_setname_np returns ENOTSUP.
+
+The initial userspace process has PID 1. The scheduler's ID allocator reserves
+PID 0 for selector semantics. Adopted orphans are auto-reaped separately from
+children created by init, which remain waitable. Init receives explicitly installed
+signal handlers and ignores default fatal/stop dispositions.

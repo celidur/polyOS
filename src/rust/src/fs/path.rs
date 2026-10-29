@@ -34,5 +34,36 @@ pub fn resolve_at(process: &Process, fd: i32, path: &str) -> Result<String, FsEr
         Some(_) => return Err(FsError::NotADirectory),
         None => return Err(FsError::BadDescriptor),
     };
-    resolve(&base, path).ok_or(FsError::NotFound)
+    process.resolve_from(&base, path).ok_or(FsError::NotFound)
+}
+
+pub fn resolve_root(root: &str, base: &str, path: &str) -> Option<String> {
+    if path.is_empty() {
+        return None;
+    }
+    let base = if path.starts_with('/') {
+        ""
+    } else if root == "/" {
+        base.trim_start_matches('/')
+    } else if base == root {
+        ""
+    } else {
+        base.strip_prefix(&alloc::format!("{}/", root))?
+    };
+    let mut parts: Vec<&str> = base.split('/').filter(|s| !s.is_empty()).collect();
+    for part in path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            _ => parts.push(part),
+        }
+    }
+    let suffix = parts.join("/");
+    Some(if suffix.is_empty() {
+        root.to_string()
+    } else {
+        alloc::format!("{}/{}", root.trim_end_matches('/'), suffix)
+    })
 }

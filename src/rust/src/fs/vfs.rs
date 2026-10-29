@@ -281,6 +281,21 @@ impl Vfs {
         let (fs, subpath) = self.existing_path(path)?;
         fs.read_link(&subpath)
     }
+    pub fn follow_in(&self, root: &str, path: &str) -> Result<String, FsError> {
+        let mut path = path.to_string();
+        for _ in 0..8 {
+            match self.read_link(&path) {
+                Ok(target) => {
+                    let base = path.rsplit_once('/').map(|(p, _)| p).unwrap_or("/");
+                    path = super::path::resolve_root(root, base, &target)
+                        .ok_or(FsError::InvalidPath)?;
+                }
+                Err(FsError::InvalidArgument | FsError::NotFound) => return Ok(path),
+                Err(e) => return Err(e),
+            }
+        }
+        Err(FsError::InvalidPath)
+    }
     pub fn follow_links(&self, path: &str) -> Result<String, FsError> {
         let mut path = path.to_string();
         for _ in 0..8 {

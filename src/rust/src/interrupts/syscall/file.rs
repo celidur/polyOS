@@ -434,12 +434,27 @@ pub fn syscall_mkdir(path_ptr: u32, mode: u32) -> u32 {
 }
 
 pub fn syscall_chmod(path_ptr: u32, mode: u32) -> u32 {
-    let Some((path, mode)) = with_current_task(|task| {
-        Some((current_resolved_path_for_task(task, path_ptr)?, mode as u16))
+    let Some((process, path, mode)) = with_current_task(|task| {
+        Some((
+            task.process.clone(),
+            current_resolved_path_for_task(task, path_ptr)?,
+            mode as u16,
+        ))
     }) else {
         return abi::errno(abi::EFAULT);
     };
+    let path = match process.follow_path(&path) {
+        Ok(p) => p,
+        Err(e) => return fs_errno(e),
+    };
 
+    let meta = match KERNEL.vfs.read().stat(&path) {
+        Ok(m) => m,
+        Err(e) => return fs_errno(e),
+    };
+    if process.euid() != 0 && process.euid() != meta.uid {
+        return abi::errno(abi::EPERM);
+    }
     match KERNEL.vfs.read().chmod(path.as_str(), mode & 0o777) {
         Ok(()) => 0,
         Err(error) => fs_errno(error),
@@ -447,12 +462,24 @@ pub fn syscall_chmod(path_ptr: u32, mode: u32) -> u32 {
 }
 
 pub fn syscall_chown(path_ptr: u32, uid: u32, gid: u32) -> u32 {
-    let Some((path, mut uid, mut gid)) =
-        with_current_task(|task| Some((current_resolved_path_for_task(task, path_ptr)?, uid, gid)))
-    else {
+    let Some((process, path, mut uid, mut gid)) = with_current_task(|task| {
+        Some((
+            task.process.clone(),
+            current_resolved_path_for_task(task, path_ptr)?,
+            uid,
+            gid,
+        ))
+    }) else {
         return abi::errno(abi::EFAULT);
     };
+    let path = match process.follow_path(&path) {
+        Ok(p) => p,
+        Err(e) => return fs_errno(e),
+    };
 
+    if process.euid() != 0 {
+        return abi::errno(abi::EPERM);
+    }
     let vfs = KERNEL.vfs.read();
     if uid == u32::MAX || gid == u32::MAX {
         let metadata = match vfs.stat(path.as_str()) {
@@ -487,6 +514,10 @@ pub fn syscall_chdir(path_ptr: u32) -> u32 {
     }) else {
         return abi::errno(abi::EFAULT);
     };
+    let path = match process.follow_path(&path) {
+        Ok(p) => p,
+        Err(e) => return fs_errno(e),
+    };
 
     if path == "/" {
         process.set_cwd(path);
@@ -515,7 +546,18 @@ pub fn syscall_getcwd(buf_ptr: u32, size: u32) -> u32 {
         return abi::errno(abi::EFAULT);
     }
 
-    let cwd = process.cwd.lock().clone();
+    let host = process.cwd.lock().clone();
+    let root = process.control.lock().root.clone();
+    let cwd = if root == "/" {
+        host
+    } else {
+        alloc::format!(
+            "/{}",
+            host.strip_prefix(&root)
+                .unwrap_or("")
+                .trim_start_matches('/')
+        )
+    };
     let bytes = cwd.as_bytes();
     if bytes.len() + 1 > size {
         return abi::errno(abi::EINVAL);
@@ -556,6 +598,10 @@ pub fn syscall_stat(path_ptr: u32, stat_ptr: u32) -> u32 {
         ))
     }) else {
         return abi::errno(abi::EFAULT);
+    };
+    let path = match process.follow_path(&path) {
+        Ok(p) => p,
+        Err(e) => return fs_errno(e),
     };
 
     if stat_ptr == 0 {
@@ -647,6 +693,10 @@ fn apply_created_mode(process: &Process, path: &str, mode: u16, directory: bool)
         mode & 0o777
     });
     let _ = KERNEL.vfs.read().chmod(path, mode);
+    let _ = KERNEL
+        .vfs
+        .read()
+        .chown(path, process.euid(), process.egid());
 }
 
 fn current_resolved_path(path_ptr: u32) -> Option<String> {

@@ -13,7 +13,7 @@ use crate::{
         USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
     },
     error::KernelError,
-    fs::FileMetadata,
+    fs::{FileMetadata, FsError},
     kernel::KERNEL,
     memory::{self, Page, PageDirectory},
     schedule::loader::elf::{ElfFile, PF_W},
@@ -76,10 +76,8 @@ pub struct SignalFrame {
 
 pub struct Process {
     pub pid: ProcessId,
-    pub uid: u32,
-    pub gid: u32,
-    pub euid: u32,
-    pub egid: u32,
+    pub control: Mutex<super::control::Control>,
+    pub auxv_address: u32,
     pub fd_table: Mutex<Vec<Option<ProcessFd>>>,
     pub children: Mutex<Vec<ProcessId>>,
     parent: Mutex<Option<ProcessId>>,
@@ -119,6 +117,8 @@ impl Process {
         };
 
         process.pid = pid;
+        process.control.get_mut().pgid = pid;
+        process.control.get_mut().sid = pid;
         process.set_parent(parent);
 
         process.map_memory()?;
@@ -139,6 +139,7 @@ impl Process {
 
         let argv = push_stack_strings(stack, &mut stack_pointer, &args.args)?;
         let envp = push_stack_strings(stack, &mut stack_pointer, &args.env)?;
+        let executable=push_stack_strings(stack,&mut stack_pointer,&[filename.to_string()])?;
         stack_pointer &= !0xF;
 
         let header_bytes = headers.len() * core::mem::size_of::<super::loader::elf::Elf32Phdr>();
@@ -160,18 +161,19 @@ impl Process {
             (5, headers.len() as u32),
             (6, 4096),
             (9, process.entrypoint),
-            (11, process.uid),
-            (12, process.euid),
-            (13, process.gid),
-            (14, process.egid),
+            (11, process.uid()),
+            (12, process.euid()),
+            (13, process.gid()),
+            (14, process.egid()),
             (17, crate::constant::TIMER_HZ as u32),
-            (31, argv.first().copied().unwrap_or(0) as u32),
+            (31, executable.first().copied().unwrap_or(0) as u32),
             (0, 0),
         ];
         for &(key, value) in aux.iter().rev() {
             push_stack_u32(stack, &mut stack_pointer, value)?;
             push_stack_u32(stack, &mut stack_pointer, key)?;
         }
+        process.auxv_address = (USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END + stack_pointer) as u32;
         let envp_ptr = push_stack_pointer_array(stack, &mut stack_pointer, &envp)?;
         let argv_ptr = push_stack_pointer_array(stack, &mut stack_pointer, &argv)?;
 
@@ -192,10 +194,8 @@ impl Process {
         let page_directory = PageDirectory::new_4gb(memory::PRESENT)?;
         Some(Self {
             pid: 0,
-            uid: 0,
-            gid: 0,
-            euid: 0,
-            egid: 0,
+            control: Mutex::new(Default::default()),
+            auxv_address: 0,
             fd_table: Mutex::new(Self::default_fd_table()),
             children: Mutex::new(vec![]),
             parent: Mutex::new(None),
@@ -236,10 +236,8 @@ impl Process {
             PageDirectory::new_4gb(memory::PRESENT).ok_or(KernelError::Allocation)?;
         Ok(Self {
             pid: 0,
-            uid: 0,
-            gid: 0,
-            euid: 0,
-            egid: 0,
+            control: Mutex::new(Default::default()),
+            auxv_address: 0,
             fd_table: Mutex::new(Self::default_fd_table()),
             children: Mutex::new(vec![]),
             parent: Mutex::new(None),
@@ -308,10 +306,8 @@ impl Process {
 
         Ok(Self {
             pid,
-            uid: parent.uid,
-            gid: parent.gid,
-            euid: parent.euid,
-            egid: parent.egid,
+            control: Mutex::new(parent.control.lock().clone()),
+            auxv_address: parent.auxv_address,
             fd_table: Mutex::new(fd_table),
             children: Mutex::new(vec![]),
             parent: Mutex::new(Some(parent.pid)),
@@ -631,9 +627,53 @@ impl Process {
     }
 
     pub fn resolve_path(&self, path: &str) -> Option<String> {
-        crate::fs::path::resolve(&self.cwd.lock(), path)
+        self.resolve_from(&self.cwd.lock(), path)
     }
 
+    pub fn uid(&self) -> u32 {
+        self.control.lock().credentials.uid
+    }
+    pub fn euid(&self) -> u32 {
+        self.control.lock().credentials.euid
+    }
+    pub fn gid(&self) -> u32 {
+        self.control.lock().credentials.gid
+    }
+    pub fn egid(&self) -> u32 {
+        self.control.lock().credentials.egid
+    }
+    pub fn resolve_from(&self, base: &str, path: &str) -> Option<String> {
+        crate::fs::path::resolve_root(&self.control.lock().root, base, path)
+    }
+    pub fn follow_path(&self, path: &str) -> Result<String, FsError> {
+        let root=self.control.lock().root.clone();
+        KERNEL.vfs.read().follow_in(&root,path)
+    }
+    pub fn refresh_aux_ids(&self) {
+        let c = self.control.lock();
+        let offset =
+            (self.auxv_address as usize).saturating_sub(USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END);
+        if offset >= self.stack.len() {
+            return;
+        }
+        let stack = self.stack.as_mut_slice();
+        let mut i = offset;
+        while i + 8 <= stack.len() {
+            let key = u32::from_ne_bytes(stack[i..i + 4].try_into().unwrap());
+            let value = match key {
+                0 => break,
+                11 => Some(c.credentials.uid),
+                12 => Some(c.credentials.euid),
+                13 => Some(c.credentials.gid),
+                14 => Some(c.credentials.egid),
+                _ => None,
+            };
+            if let Some(value) = value {
+                stack[i + 4..i + 8].copy_from_slice(&value.to_ne_bytes());
+            }
+            i += 8;
+        }
+    }
     pub fn set_cwd(&self, path: String) {
         *self.cwd.lock() = path;
     }
@@ -650,15 +690,10 @@ impl Process {
     }
 
     pub fn has_permission(&self, metadata: &FileMetadata, permission: u16) -> bool {
-        let shift = if self.euid == metadata.uid {
-            6
-        } else if self.egid == metadata.gid {
-            3
-        } else {
-            0
-        };
-
-        ((metadata.mode >> shift) & permission) == permission
+        self.control
+            .lock()
+            .credentials
+            .permission(metadata, permission, false)
     }
 
     pub fn parent_pid(&self) -> Option<ProcessId> {

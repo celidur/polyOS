@@ -1,3 +1,4 @@
+use super::management;
 use super::signal;
 use super::sysv;
 use super::virtual_memory;
@@ -20,6 +21,19 @@ use super::sync::*;
 use super::types::SyscallId;
 
 pub fn syscall_init() {
+    syscall_register(SyscallId::WaitId, SyscallHandler::Args5(management::syscall_waitid));
+    syscall_register(SyscallId::SetUid, SyscallHandler::Args1(management::syscall_setuid));
+    syscall_register(SyscallId::SetGid, SyscallHandler::Args1(management::syscall_setgid));
+    syscall_register(SyscallId::SetGroups, SyscallHandler::Args2(management::syscall_setgroups));
+    syscall_register(SyscallId::GetGroups, SyscallHandler::Args2(management::syscall_getgroups));
+    syscall_register(SyscallId::Chroot, SyscallHandler::Args1(management::syscall_chroot));
+    syscall_register(SyscallId::SetPgid, SyscallHandler::Args2(management::syscall_setpgid));
+    syscall_register(SyscallId::GetPgid, SyscallHandler::Args1(management::syscall_getpgid));
+    syscall_register(SyscallId::GetPgrp, SyscallHandler::Args0(management::syscall_getpgrp));
+    syscall_register(SyscallId::SetSid, SyscallHandler::Args0(management::syscall_setsid));
+    syscall_register(SyscallId::GetSid, SyscallHandler::Args1(management::syscall_getsid));
+    syscall_register(SyscallId::Prctl, SyscallHandler::Args5(management::syscall_prctl));
+
     syscall_register(SyscallId::SigProcMask, SyscallHandler::Args3(signal::syscall_sigprocmask));
     syscall_register(SyscallId::SigPending, SyscallHandler::Args1(signal::syscall_sigpending));
     syscall_register(SyscallId::SigAltStack, SyscallHandler::Args2(signal::syscall_sigaltstack));

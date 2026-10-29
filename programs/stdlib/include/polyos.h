@@ -302,4 +302,67 @@ int sigismember(const sigset_t *set,int signal);
 int pause(void);
 int raise(int signal);
 
+
+int setuid(uid_t uid);
+int setgid(gid_t gid);
+int setgroups(size_t count,const gid_t *groups);
+int getgroups(int count,gid_t *groups);
+int chroot(const char *path);
+int setpgid(pid_t pid,pid_t group);
+pid_t getpgid(pid_t pid);
+pid_t getpgrp(void);
+pid_t getsid(pid_t pid);
+pid_t setsid(void);
+int killpg(pid_t group,int signal);
+#define WUNTRACED 2
+#define WCONTINUED 8
+#define WIFSTOPPED(status) (((status)&255)==0x7f)
+#define WSTOPSIG(status) (((status)>>8)&255)
+#define WIFCONTINUED(status) ((status)==0xffff)
+#define PR_SET_NAME 15
+#define PR_GET_NAME 16
+#define PR_SET_NO_NEW_PRIVS 38
+#define PR_GET_NO_NEW_PRIVS 39
+int prctl(int option,...);
+int execv(const char *path,char *const argv[]);
+int execvp(const char *file,char *const argv[]);
+#define WEXITED 4
+#define P_ALL 0
+#define P_PID 1
+#define P_PGID 2
+#define CLD_EXITED 1
+#define CLD_KILLED 2
+#define CLD_STOPPED 5
+#define CLD_CONTINUED 6
+typedef int idtype_t;
+typedef struct {int si_signo,si_errno,si_code;pid_t si_pid;uid_t si_uid;int si_status;u32 padding[26];} siginfo_t;
+int waitid(idtype_t type,pid_t id,siginfo_t *info,int options);
+
+
+#define POSIX_SPAWN_RESETIDS 1
+#define POSIX_SPAWN_SETPGROUP 2
+#define POSIX_SPAWN_SETSIGDEF 4
+#define POSIX_SPAWN_SETSIGMASK 8
+#define POSIX_SPAWN_SETSID 128
+typedef struct {void *actions;unsigned count;} posix_spawn_file_actions_t;
+typedef struct {short flags;pid_t group;sigset_t mask,defaults;} posix_spawnattr_t;
+int posix_spawn_file_actions_init(posix_spawn_file_actions_t *);
+int posix_spawn_file_actions_destroy(posix_spawn_file_actions_t *);
+int posix_spawn_file_actions_addopen(posix_spawn_file_actions_t *,int,const char *,int,int);
+int posix_spawn_file_actions_addclose(posix_spawn_file_actions_t *,int);
+int posix_spawn_file_actions_adddup2(posix_spawn_file_actions_t *,int,int);
+int posix_spawn_file_actions_addchdir_np(posix_spawn_file_actions_t *,const char *);
+int posix_spawnattr_init(posix_spawnattr_t *);
+int posix_spawnattr_destroy(posix_spawnattr_t *);
+int posix_spawnattr_setflags(posix_spawnattr_t *,short);
+int posix_spawnattr_getflags(const posix_spawnattr_t *,short *);
+int posix_spawnattr_setpgroup(posix_spawnattr_t *,pid_t);
+int posix_spawnattr_getpgroup(const posix_spawnattr_t *,pid_t *);
+int posix_spawnattr_setsigmask(posix_spawnattr_t *,const sigset_t *);
+int posix_spawnattr_getsigmask(const posix_spawnattr_t *,sigset_t *);
+int posix_spawnattr_setsigdefault(posix_spawnattr_t *,const sigset_t *);
+int posix_spawnattr_getsigdefault(const posix_spawnattr_t *,sigset_t *);
+int posix_spawn(pid_t *,const char *,const posix_spawn_file_actions_t *,const posix_spawnattr_t *,char *const[],char *const[]);
+int posix_spawnp(pid_t *,const char *,const posix_spawn_file_actions_t *,const posix_spawnattr_t *,char *const[],char *const[]);
+
 #endif

@@ -16,9 +16,11 @@ pub fn open(process: &Process, path: &str, flags: u32, mode: u16) -> Result<i32,
     {
         return Err(FsError::InvalidArgument);
     }
+    let resolved = process.follow_path(path)?;
+    let path = resolved.as_str();
     let vfs = KERNEL.vfs.read();
     let mut created = false;
-    let metadata = match vfs.stat(path) {
+    let metadata = match vfs.lstat(path) {
         Ok(meta) => {
             if flags & (CREAT | EXCL) == CREAT | EXCL {
                 return Err(FsError::AlreadyExists);
@@ -31,6 +33,10 @@ pub fn open(process: &Process, path: &str, flags: u32, mode: u16) -> Result<i32,
             }
             vfs.create(path, false)?;
             created = true;
+            match vfs.chown(path, process.euid(), process.egid()) {
+                Ok(()) | Err(FsError::Unsupported) => {}
+                Err(e) => return Err(e),
+            }
             match vfs.chmod(path, process.apply_umask(mode)) {
                 Ok(()) | Err(FsError::Unsupported) => {}
                 Err(e) => return Err(e),

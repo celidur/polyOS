@@ -14,7 +14,7 @@ pub fn syscall_ipc(call: u32, first: u32, second: u32, third: u32, ptr: u32, _fi
     let result: Result<Option<u32>, i32> = match call {
         2 => SEMAPHORES
             .lock()
-            .get(first as i32, second, third, p.euid)
+            .get(first as i32, second, third, p.euid())
             .map(Some),
         1 => {
             if second == 0 || second > 64 {
@@ -32,13 +32,13 @@ pub fn syscall_ipc(call: u32, first: u32, second: u32, third: u32, ptr: u32, _fi
                 return abi::errno(abi::EFAULT);
             }
             KERNEL
-                .with_task_manager(|tm| SEMAPHORES.lock().operate(first, p.euid, &ops, tm))
+                .with_task_manager(|tm| SEMAPHORES.lock().operate(first, p.euid(), &ops, tm))
                 .map(|done| done.then_some(0))
         }
         3 => (|| {
             if third == 0 {
                 return KERNEL
-                    .with_task_manager(|tm| SEMAPHORES.lock().remove(first, p.euid, tm))
+                    .with_task_manager(|tm| SEMAPHORES.lock().remove(first, p.euid(), tm))
                     .map(|()| Some(0));
             }
             let mut argument = 0u32;
@@ -55,7 +55,7 @@ pub fn syscall_ipc(call: u32, first: u32, second: u32, third: u32, ptr: u32, _fi
             }
             let mut values = SEMAPHORES
                 .lock()
-                .values(first, p.euid, matches!(third, 16 | 17))?;
+                .values(first, p.euid(), matches!(third, 16 | 17))?;
             if third == 12 {
                 return values
                     .get(second as usize)
@@ -98,7 +98,7 @@ pub fn syscall_ipc(call: u32, first: u32, second: u32, third: u32, ptr: u32, _fi
                 return Err(95);
             }
             KERNEL
-                .with_task_manager(|tm| SEMAPHORES.lock().replace(first, p.euid, &values, tm))
+                .with_task_manager(|tm| SEMAPHORES.lock().replace(first, p.euid(), &values, tm))
                 .map(|()| Some(0))
         })(),
         _ => Err(38),

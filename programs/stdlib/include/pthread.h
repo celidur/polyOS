@@ -68,4 +68,5 @@ int pthread_condattr_init(pthread_condattr_t *);
 int pthread_condattr_destroy(pthread_condattr_t *);
 int pthread_once(pthread_once_t *,void (*)(void));
 
+int pthread_setname_np(pthread_t thread,const char *name);
 #endif

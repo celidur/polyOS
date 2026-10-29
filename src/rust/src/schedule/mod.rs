@@ -7,7 +7,8 @@ pub mod task_manager;
 
 pub mod thread;
 use core::sync::atomic::{AtomicUsize, Ordering};
-static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
+pub const INIT_PID: u32 = 1;
+static NEXT_ID: AtomicUsize = AtomicUsize::new(INIT_PID as usize);
 pub(super) fn allocate_id() -> usize {
     NEXT_ID.fetch_add(1, Ordering::Relaxed)
 }
@@ -17,3 +18,5 @@ pub mod ipc;
 pub mod legacy_semaphore;
 
 pub mod signal;
+
+pub mod control;

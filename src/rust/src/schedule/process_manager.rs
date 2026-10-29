@@ -13,11 +13,8 @@ use crate::{
     },
 };
 
-use super::{
-    process::{
-        Process, ProcessArguments, ProcessId, SIG_DFL, SIG_IGN, SIGCHLD, SIGCONT, SIGKILL, SIGSTOP,
-    },
-    task::TaskState,
+use super::process::{
+    Process, ProcessArguments, ProcessId, SIG_DFL, SIG_IGN, SIGCHLD, SIGCONT, SIGKILL, SIGSTOP,
 };
 
 pub enum SignalEffect {
@@ -29,23 +26,116 @@ pub enum SignalEffect {
 pub struct ProcessManager {
     table: BTreeMap<ProcessId, Arc<Process>>,
     zombies: BTreeMap<ProcessId, ZombieProcess>,
-    exit_waiters: BTreeMap<ProcessId, VecDeque<ExitWaiter>>,
-}
-
-#[derive(Clone, Copy)]
-struct ExitWaiter {
-    task_id: TaskId,
-    status_ptr: u32,
-    return_value: u32,
+    child_events: BTreeMap<ProcessId, VecDeque<(i32, u32)>>,
 }
 
 #[derive(Clone, Copy)]
 struct ZombieProcess {
     parent_pid: Option<ProcessId>,
     status: i32,
+    pgid: u32,
+    uid: u32,
 }
 
 impl ProcessManager {
+    pub fn setpgid(&mut self, caller: u32, pid: u32, group: u32) -> Result<(), i32> {
+        let caller = self.table.get(&caller).ok_or(3)?.clone();
+        let target = self.table.get(&pid).ok_or(3)?.clone();
+        if pid != caller.pid && target.parent_pid() != Some(caller.pid) {
+            return Err(3);
+        }
+        if pid != caller.pid && target.control.lock().execed {
+            return Err(13);
+        }
+        let sid = caller.control.lock().sid;
+        if target.control.lock().sid != sid || target.control.lock().sid == pid {
+            return Err(1);
+        }
+        if group != pid
+            && !self.table.values().any(|p| {
+                let c = p.control.lock();
+                c.pgid == group && c.sid == sid
+            })
+        {
+            return Err(1);
+        }
+        target.control.lock().pgid = group;
+        Ok(())
+    }
+    pub fn setsid(&mut self, pid: u32) -> Result<u32, i32> {
+        if self.table.values().any(|p| p.control.lock().pgid == pid) {
+            return Err(1);
+        }
+        let p = self.table.get(&pid).ok_or(3)?;
+        let mut c = p.control.lock();
+        c.sid = pid;
+        c.pgid = pid;
+        Ok(pid)
+    }
+    pub fn signal_group(&mut self, group: u32, signal: u32) {
+        let ids: Vec<_> = self
+            .table
+            .iter()
+            .filter_map(|(&id, p)| (p.control.lock().pgid == group).then_some(id))
+            .collect();
+        for id in ids {
+            let _ = self.signal(id, signal);
+        }
+    }
+    pub fn group_session(&self, group: u32) -> Option<u32> {
+        self.table.values().find_map(|p| {
+            let c = p.control.lock();
+            (c.pgid == group).then_some(c.sid)
+        })
+    }
+    pub fn send_signal(&mut self, caller: u32, selector: i32, signal: u32) -> Result<bool, i32> {
+        let sender = self.table.get(&caller).ok_or(3)?.clone();
+        let credentials = sender.control.lock().credentials.clone();
+        let pgid = sender.control.lock().pgid;
+        let sid = sender.control.lock().sid;
+        let ids: Vec<_> = self
+            .table
+            .iter()
+            .filter_map(|(&pid, p)| {
+                let group = p.control.lock().pgid;
+                let matches = match selector {
+                    n if n > 0 => pid == n as u32,
+                    0 => group == pgid,
+                    -1 => pid != super::INIT_PID && pid != caller,
+                    n => n.checked_neg().is_some_and(|n| group == n as u32),
+                };
+                matches.then_some(pid)
+            })
+            .collect();
+        if ids.is_empty() {
+            return Err(3);
+        }
+        let mut allowed = false;
+        let mut affected = false;
+        for id in ids {
+            let Some(p) = self.table.get(&id) else {
+                continue;
+            };
+            let target = p.control.lock();
+            let permitted = (credentials.euid == 0
+                || credentials.uid == target.credentials.uid
+                || credentials.uid == target.credentials.saved_uid
+                || credentials.euid == target.credentials.uid
+                || credentials.euid == target.credentials.saved_uid
+                || (signal == 18 && sid == target.sid));
+            drop(target);
+            if !permitted {
+                continue;
+            }
+            allowed = true;
+            let effect = self.signal(id, signal).map_err(|_| 3)?;
+            if id == caller && matches!(effect, SignalEffect::Delivered | SignalEffect::Terminated)
+            {
+                affected = true;
+            }
+        }
+        if allowed { Ok(affected) } else { Err(1) }
+    }
     pub fn process_count(&self) -> usize {
         self.table.len()
     }
@@ -54,7 +144,7 @@ impl ProcessManager {
         ProcessManager {
             table: BTreeMap::new(),
             zombies: BTreeMap::new(),
-            exit_waiters: BTreeMap::new(),
+            child_events: BTreeMap::new(),
         }
     }
     pub fn spawn(
@@ -64,7 +154,14 @@ impl ProcessManager {
         arg: Option<ProcessArguments>,
     ) -> Result<ProcessId, KernelError> {
         let pid = super::allocate_id() as ProcessId;
-        let process = Arc::new(Process::new(pid, parent, filename, arg)?);
+        let process = Process::new(pid, parent, filename, arg)?;
+        if let Some(parent) = parent.and_then(|id| self.table.get(&id)) {
+            *process.control.lock() = parent.control.lock().clone();
+            process.set_cwd(parent.cwd.lock().clone());
+            process.set_umask(*parent.umask.lock());
+            process.refresh_aux_ids();
+        }
+        let process = Arc::new(process);
         self.table.insert(pid, process.clone());
         if let Some(parent_pid) = parent
             && let Some(parent_process) = self.table.get(&parent_pid)
@@ -88,6 +185,8 @@ impl ProcessManager {
         let pid = super::allocate_id() as ProcessId;
 
         let process = Arc::new(Process::fork_from(pid, &parent)?);
+        process.control.lock().execed = false;
+        process.control.lock().auto_reap = false;
         self.table.insert(pid, process.clone());
         parent.children.lock().push(pid);
 
@@ -118,11 +217,10 @@ impl ProcessManager {
         let umask = *old_process.umask.lock();
         let signal_actions = old_process.signal_actions_for_exec();
 
-        let mut process = Process::new(pid, parent, filename, Some(args))?;
-        process.uid = old_process.uid;
-        process.gid = old_process.gid;
-        process.euid = old_process.euid;
-        process.egid = old_process.egid;
+        let process = Process::new(pid, parent, filename, Some(args))?;
+        *process.control.lock() = old_process.control.lock().clone();
+        process.control.lock().execed = true;
+        process.refresh_aux_ids();
         let fd_table = old_process.take_exec_fd_table();
         *process.fd_table.lock() = fd_table;
         process.set_cwd(cwd);
@@ -142,51 +240,59 @@ impl ProcessManager {
         KERNEL.with_task_manager(|tm| tm.exec_current(process))
     }
 
-    pub fn wait_for_exit(
+    pub fn wait_event(
         &mut self,
-        parent_pid: ProcessId,
-        pid: ProcessId,
-        waiter: Option<(TaskId, u32, u32)>,
-    ) -> Result<Option<i32>, KernelError> {
-        let Some(parent_process) = self.table.get(&parent_pid) else {
-            return Err(KernelError::NoTasks);
-        };
-
-        if !parent_process.children.lock().contains(&pid) {
-            return Err(KernelError::NoTasks);
-        }
-
-        if let Some(zombie) = self.zombies.get(&pid).copied() {
-            if zombie.parent_pid != Some(parent_pid) {
-                return Err(KernelError::NoTasks);
+        parent: u32,
+        selector: i32,
+        options: u32,
+    ) -> Result<Option<(u32, i32, u32)>, i32> {
+        let p = self.table.get(&parent).ok_or(10)?;
+        let group = p.control.lock().pgid;
+        let children = p.children.lock().clone();
+        let mut eligible = false;
+        for pid in children {
+            let pgid = self
+                .table
+                .get(&pid)
+                .map(|p| p.control.lock().pgid)
+                .or_else(|| self.zombies.get(&pid).map(|z| z.pgid));
+            let matches = match selector {
+                n if n > 0 => pid == n as u32,
+                -1 => true,
+                0 => pgid == Some(group),
+                n => n.checked_neg().is_some_and(|g| pgid == Some(g as u32)),
+            };
+            if !matches {
+                continue;
             }
-
-            self.reap_child(parent_pid, pid);
-            return Ok(Some(zombie.status));
+            eligible = true;
+            if let Some(z) = self.zombies.get(&pid).copied() {
+                self.reap_child(parent, pid);
+                return Ok(Some((pid, z.status, z.uid)));
+            }
+            if let Some(events) = self.child_events.get_mut(&pid) {
+                if let Some(index) = events.iter().position(|(s, _)| {
+                    (*s == 0xffff && options & 8 != 0) || (*s & 255 == 0x7f && options & 2 != 0)
+                }) {
+                    let (status, uid) = events.remove(index).unwrap();
+                    return Ok(Some((pid, status, uid)));
+                }
+            }
         }
-
-        let Some(child) = self.table.get(&pid).cloned() else {
-            return Err(KernelError::NoTasks);
-        };
-
-        if let Some(status) = child.zombie_status() {
-            self.reap_child(parent_pid, pid);
-            return Ok(Some(status));
-        }
-
-        if let Some((task_id, status_ptr, return_value)) = waiter {
-            self.exit_waiters
-                .entry(pid)
-                .or_default()
-                .push_back(ExitWaiter {
-                    task_id,
-                    status_ptr,
-                    return_value,
-                });
-        }
-        Ok(None)
+        if !eligible { Err(10) } else { Ok(None) }
     }
-
+    fn child_event(&mut self, process: &Process, status: i32) {
+        let events = self.child_events.entry(process.pid).or_default();
+        if events.len() >= 8 {
+            events.pop_front();
+        }
+        events.push_back((status, process.uid()));
+        if let Some(parent) = process.parent_pid() {
+            KERNEL
+                .with_task_manager(|tm| tm.wake_preserving(super::task::WaitReason::Child(parent)));
+            let _ = self.signal(parent, SIGCHLD);
+        }
+    }
     pub fn exit(&mut self, pid: ProcessId, code: i32) {
         self.exit_with_wait_status(pid, encode_exit_status(code));
     }
@@ -199,15 +305,21 @@ impl ProcessManager {
         let action = process
             .get_signal_action(signal)
             .ok_or(KernelError::NoTasks)?;
+        // PID 1 receives explicitly installed handlers, while default fatal/stop actions are ignored.
+        if pid == super::INIT_PID && action.handler == SIG_DFL {
+            return Ok(SignalEffect::Ignored);
+        }
         if signal == SIGKILL {
             self.exit_with_wait_status(pid, encode_signal_status(signal));
             return Ok(SignalEffect::Terminated);
         }
         if signal == SIGCONT {
+            self.child_event(&process, 0xffff);
             KERNEL.with_task_manager(|tm| tm.stop_process(pid, false));
             *process.pending_signals.lock() &= !((1 << 18) | (1 << 19) | (1 << 20) | (1 << 21));
         }
         if signal == SIGSTOP || (matches!(signal, 20 | 21 | 22) && action.handler == SIG_DFL) {
+            self.child_event(&process, ((signal as i32) << 8) | 0x7f);
             KERNEL.with_task_manager(|tm| tm.stop_process(pid, true));
             *process.pending_signals.lock() &= !(1 << 17);
             return Ok(SignalEffect::Delivered);
@@ -243,52 +355,12 @@ impl ProcessManager {
         process.cleanup();
         process.mark_zombie(wait_status);
 
-        // pid 0 is the init-like reaper, so orphaned children do not linger as zombies.
-        let mut should_reap = matches!(process.parent_pid(), None | Some(0));
-        if let Some(mut waiters) = self.exit_waiters.remove(&pid) {
-            let mut consumed = false;
-            KERNEL.with_task_manager(|tm| {
-                while let Some(waiter) = waiters.pop_front() {
-                    let waiting = tm.get(waiter.task_id).is_some_and(|t| {
-                        t.read().state
-                            == TaskState::Blocked {
-                                reason: super::task::WaitReason::Process(pid as usize),
-                            }
-                    });
-                    if !waiting {
-                        continue;
-                    }
-                    if consumed {
-                        let _ = tm.wake_task_with_return_value(waiter.task_id, (-10i32) as u32);
-                        continue;
-                    }
-                    consumed = true;
-                    if waiter.status_ptr != 0
-                        && let Some(task) = tm.get(waiter.task_id)
-                    {
-                        let task = task.read();
-                        if crate::memory::user::validate_range(
-                            &task.process,
-                            waiter.status_ptr,
-                            4,
-                            true,
-                        )
-                        .is_ok()
-                        {
-                            let _ = crate::memory::user::write_value(
-                                &task.process.page_directory,
-                                waiter.status_ptr,
-                                &wait_status,
-                            );
-                        }
-                    }
-
-                    let _ = tm.wake_task_with_return_value(waiter.task_id, waiter.return_value);
-                }
-            });
-            should_reap |= consumed;
+        // Adopted orphans are auto-reaped; init can still wait for children it created.
+        let should_reap = process.parent_pid().is_none() || process.control.lock().auto_reap;
+        if let Some(parent) = process.parent_pid() {
+            KERNEL
+                .with_task_manager(|tm| tm.wake_preserving(super::task::WaitReason::Child(parent)));
         }
-
         if let Some(parent_pid) = process.parent_pid() {
             let _ = self.signal(parent_pid, SIGCHLD);
         }
@@ -300,11 +372,17 @@ impl ProcessManager {
                 self.table.remove(&pid);
             }
         } else {
+            let (pgid, uid) = {
+                let c = process.control.lock();
+                (c.pgid, c.credentials.uid)
+            };
             self.zombies.insert(
                 pid,
                 ZombieProcess {
                     parent_pid: process.parent_pid(),
                     status: wait_status,
+                    pgid,
+                    uid,
                 },
             );
             self.table.remove(&pid);
@@ -315,7 +393,7 @@ impl ProcessManager {
         if let Some(parent_process) = self.table.get(&parent_pid) {
             parent_process.children.lock().retain(|&x| x != pid);
         }
-        self.exit_waiters.remove(&pid);
+        self.child_events.remove(&pid);
         self.zombies.remove(&pid);
         self.table.remove(&pid);
     }
@@ -330,13 +408,13 @@ impl ProcessManager {
             core::mem::take(&mut *children)
         };
 
-        let new_parent = if pid != 0 && self.table.contains_key(&0) {
-            Some(0)
+        let new_parent = if pid != super::INIT_PID && self.table.contains_key(&super::INIT_PID) {
+            Some(super::INIT_PID)
         } else {
             None
         };
 
-        let auto_reap = new_parent.is_none() || new_parent == Some(0);
+        let auto_reap = new_parent.is_none() || new_parent == Some(super::INIT_PID);
         let mut reaped_zombies = Vec::new();
 
         for child_pid in children {
@@ -361,6 +439,7 @@ impl ProcessManager {
             };
 
             child.set_parent(new_parent);
+            child.control.lock().auto_reap = auto_reap;
             if let Some(new_parent) = new_parent {
                 if auto_reap && child.zombie_status().is_some() {
                     self.table.remove(&child_pid);

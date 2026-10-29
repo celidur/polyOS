@@ -112,14 +112,20 @@ fn contents(path: &str) -> Result<String, FsError> {
             let threads = KERNEL.with_task_manager(|tm| tm.process_task_count(p.pid));
             Ok(format!(
                 "Name:\t{}\nPid:\t{}\nPPid:\t{}\nThreads:\t{}\nUid:\t{}\t{}\nGid:\t{}\t{}\n",
-                p.executable_path,
+                KERNEL
+                    .with_task_manager(|tm| tm.get_current().map(|t| {
+                        alloc::string::String::from_utf8_lossy(&t.read().name)
+                            .trim_end_matches('\0')
+                            .to_string()
+                    }))
+                    .unwrap_or_default(),
                 p.pid,
                 p.parent_pid().unwrap_or(0),
                 threads,
-                p.uid,
-                p.euid,
-                p.gid,
-                p.egid
+                p.uid(),
+                p.euid(),
+                p.gid(),
+                p.egid()
             ))
         }
         "" | "self" => Err(FsError::IsADirectory),

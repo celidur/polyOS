@@ -37,4 +37,7 @@ int *__errno_location(void);
 #define EIDRM 43
 #define ETIMEDOUT 110
 
+#define E2BIG 7
+#define ENAMETOOLONG 36
+
 #endif

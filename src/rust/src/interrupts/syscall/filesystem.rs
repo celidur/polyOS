@@ -38,18 +38,19 @@ pub fn syscall_access(ptr: u32, mode: u32) -> u32 {
         Ok(p) => p,
         Err(e) => return file::fs_errno(e),
     };
+    let path = match p.follow_path(&path) {
+        Ok(path) => path,
+        Err(e) => return file::fs_errno(e),
+    };
     let meta = match KERNEL.vfs.read().stat(&path) {
         Ok(m) => m,
         Err(e) => return file::fs_errno(e),
     };
-    let shift = if p.uid == meta.uid {
-        6
-    } else if p.gid == meta.gid {
-        3
-    } else {
-        0
-    };
-    if (meta.mode as u32 >> shift) & mode == mode {
+    if p.control
+        .lock()
+        .credentials
+        .permission(&meta, mode as u16, true)
+    {
         0
     } else {
         abi::errno(abi::EACCES)
@@ -88,7 +89,7 @@ pub fn syscall_fchmod(fd: u32, mode: u32) -> u32 {
         Ok(m) => m,
         Err(e) => return file::fs_errno(e),
     };
-    if p.euid != 0 && p.euid != meta.uid {
+    if p.euid() != 0 && p.euid() != meta.uid {
         return abi::errno(abi::EPERM);
     }
     let result = match d {
@@ -184,7 +185,7 @@ fn metadata_at(p: &Process, fd: i32, ptr: u32, flags: u32) -> Result<FileMetadat
     if flags & 0x100 != 0 {
         KERNEL.vfs.read().lstat(&path)
     } else {
-        KERNEL.vfs.read().stat(&path)
+        KERNEL.vfs.read().stat(&p.follow_path(&path)?)
     }
 }
 pub fn syscall_fstatat(fd: u32, path: u32, ptr: u32, flags: u32) -> u32 {

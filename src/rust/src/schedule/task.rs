@@ -18,6 +18,7 @@ pub type TaskId = usize;
 pub enum WaitReason {
     Io,
     Signal,
+    Child(u32),
     Futex { pid: u32, address: u32 },
     Process(usize),
     PipeRead(usize),
@@ -74,6 +75,7 @@ pub struct Task {
     pub state: TaskState,
     pub clear_child_tid: u32,
     pub signals: super::signal::ThreadSignals,
+    pub name:[u8;16],
     pub stopped: bool,
     pub restarting: bool,
     pub sleep_remaining: Option<(u32, u64)>,
@@ -85,6 +87,7 @@ impl Task {
         Self {
             id,
             registers: Self::entry_registers(&process),
+            name:task_name(&process),
             process,
             priority,
             time_slice: 0,
@@ -107,6 +110,7 @@ impl Task {
         Self {
             id,
             registers,
+            name:task_name(&process),
             process,
             priority,
             time_slice: 0,
@@ -368,3 +372,5 @@ pub unsafe extern "C" fn task_return(regs: &Registers) -> ! {
         "iretd", // 32-bit: assembles to IRETD
     );
 }
+
+fn task_name(process:&Process)->[u8;16]{let mut name=[0;16];let text=process.executable_path.rsplit('/').next().unwrap_or("").as_bytes();let n=text.len().min(15);name[..n].copy_from_slice(&text[..n]);name}

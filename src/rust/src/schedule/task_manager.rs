@@ -55,7 +55,7 @@ impl TaskManager {
         };
         {
             let mut t = self.tasks.get(&id).unwrap().write();
-            t.signals.pending |= 1<<(signal-1);
+            t.signals.pending |= 1 << (signal - 1);
             if !t.state.is_runnable() {
                 if t.restarting {
                     t.registers.ip += 2;
@@ -113,6 +113,10 @@ impl TaskManager {
         let priority = priority.min(MAX_PRIORITY - 1);
         let id = process.pid as usize;
         let mut task = Task::from_registers(id, process, priority, registers);
+        task.name = self
+            .get_current()
+            .map(|t| t.read().name)
+            .unwrap_or(task.name);
         task.signals.blocked = self
             .get_current()
             .map(|t| t.read().signals.blocked)
@@ -131,6 +135,10 @@ impl TaskManager {
     ) -> Result<TaskId, KernelError> {
         let id = super::allocate_id();
         let mut task = Task::from_registers(id, process, priority, registers);
+        task.name = self
+            .get_current()
+            .map(|t| t.read().name)
+            .unwrap_or(task.name);
         task.clear_child_tid = clear_child_tid;
         task.signals.blocked = self
             .get_current()

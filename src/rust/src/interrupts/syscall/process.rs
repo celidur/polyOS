@@ -12,26 +12,39 @@ use crate::{
 
 use super::{abi, user};
 
-const WNOHANG: u32 = 1;
 const MAX_EXEC_STRINGS: u32 = 512;
 const MAX_EXEC_STRING_LEN: usize = 1024;
 
-pub fn syscall_waitpid(child_pid: u32, status_ptr: u32, options: u32) -> u32 {
-    if status_ptr != 0 {
-        let valid = KERNEL.with_task_manager(|tm| {
-            tm.get_current().is_some_and(|t| {
-                user::validate_range(&t.read().process, status_ptr, 4, true).is_ok()
-            })
-        });
-        if !valid {
-            return abi::errno(abi::EFAULT);
-        }
-    }
-    if child_pid == 0 || options & !WNOHANG != 0 {
+pub fn syscall_waitpid(selector: u32, status: u32, options: u32) -> u32 {
+    if options & !(1 | 2 | 8) != 0 {
         return abi::errno(abi::EINVAL);
     }
-
-    wait_for_process_unix(child_pid, status_ptr, options & WNOHANG != 0)
+    let Some(p) = KERNEL.with_task_manager(|tm| Some(tm.get_current()?.read().process.clone()))
+    else {
+        return abi::errno(abi::ESRCH);
+    };
+    if status != 0 && user::validate_range(&p, status, 4, true).is_err() {
+        return abi::errno(abi::EFAULT);
+    }
+    let result = KERNEL.with_process_manager(|pm| pm.wait_event(p.pid, selector as i32, options));
+    match result {
+        Ok(Some((pid, value, _uid))) => {
+            if status != 0 && user::write_value(&p.page_directory, status, &value).is_err() {
+                abi::errno(abi::EFAULT)
+            } else {
+                pid
+            }
+        }
+        Ok(None) if options & 1 != 0 => 0,
+        Ok(None) => {
+            KERNEL.with_task_manager(|tm| {
+                let _ = tm.block_current_and_restart_syscall(WaitReason::Child(p.pid));
+            });
+            drop(p);
+            task_next()
+        }
+        Err(e) => abi::errno(e),
+    }
 }
 
 pub fn syscall_execve(path_ptr: u32, argv_ptr: u32, envp_ptr: u32) -> u32 {
@@ -63,6 +76,10 @@ pub fn syscall_execve(path_ptr: u32, argv_ptr: u32, envp_ptr: u32) -> u32 {
         return abi::errno(abi::EFAULT);
     };
 
+    let path = match process.follow_path(&path) {
+        Ok(p) => p,
+        Err(e) => return super::file::fs_errno(e),
+    };
     match KERNEL.vfs.read().stat(path.as_str()) {
         Ok(metadata) if metadata.is_dir => return abi::errno(abi::EACCES),
         Ok(metadata) if !process.has_permission(&metadata, ACCESS_EXECUTE) => {
@@ -117,7 +134,7 @@ pub fn syscall_getpid() -> u32 {
 }
 
 pub fn syscall_getuid() -> u32 {
-    current_process_id_field(|process| process.uid)
+    current_process_id_field(|process| process.uid())
 }
 
 pub fn syscall_getppid() -> u32 {
@@ -129,15 +146,15 @@ pub fn syscall_getppid() -> u32 {
 }
 
 pub fn syscall_getgid() -> u32 {
-    current_process_id_field(|process| process.gid)
+    current_process_id_field(|process| process.gid())
 }
 
 pub fn syscall_geteuid() -> u32 {
-    current_process_id_field(|process| process.euid)
+    current_process_id_field(|process| process.euid())
 }
 
 pub fn syscall_getegid() -> u32 {
-    current_process_id_field(|process| process.egid)
+    current_process_id_field(|process| process.egid())
 }
 
 fn current_process_id_field(read: impl FnOnce(&crate::schedule::process::Process) -> u32) -> u32 {
@@ -145,68 +162,6 @@ fn current_process_id_field(read: impl FnOnce(&crate::schedule::process::Process
         tm.get_current()
             .map(|task| read(&task.read().process))
             .unwrap_or_else(|| abi::errno(abi::ESRCH))
-    })
-}
-
-fn wait_for_process_unix(child_pid: u32, status_ptr: u32, no_hang: bool) -> u32 {
-    wait_for_process(child_pid, status_ptr, no_hang)
-}
-
-fn wait_for_process(child_pid: u32, status_ptr: u32, no_hang: bool) -> u32 {
-    let wait_context = KERNEL.with_task_manager(|tm| {
-        let current_task = tm.get_current()?;
-        let task = current_task.read();
-        Some((task.id, task.process.pid))
-    });
-
-    let Some((task_id, parent_pid)) = wait_context else {
-        return abi::errno(abi::ECHILD);
-    };
-
-    let wait = KERNEL.with_process_manager(|pm| {
-        let Some(parent) = pm.get(parent_pid) else {
-            return Err(crate::error::KernelError::NoTasks);
-        };
-
-        let is_child = parent.children.lock().contains(&child_pid);
-        if !is_child {
-            return Err(crate::error::KernelError::NoTasks);
-        }
-
-        let waiter = (!no_hang).then_some((task_id, status_ptr, child_pid));
-        pm.wait_for_exit(parent_pid, child_pid, waiter)
-    });
-
-    match wait {
-        Ok(Some(status)) => {
-            if status_ptr != 0 && write_status_to_current(status_ptr, status).is_err() {
-                return abi::errno(abi::EFAULT);
-            }
-
-            child_pid
-        }
-        Ok(None) if no_hang => 0,
-        Ok(None) => {
-            let blocked = KERNEL.with_task_manager(|tm| {
-                tm.block_current(WaitReason::Process(child_pid as usize))
-                    .is_ok()
-            });
-
-            if !blocked {
-                return abi::errno(abi::ECHILD);
-            }
-
-            task_next();
-        }
-        Err(_) => abi::errno(abi::ECHILD),
-    }
-}
-
-fn write_status_to_current(status_ptr: u32, status: i32) -> Result<(), ()> {
-    KERNEL.with_task_manager(|tm| {
-        let current_task = tm.get_current().ok_or(())?;
-        let task = current_task.read();
-        user::write_value(&task.process.page_directory, status_ptr, &status)
     })
 }
 

@@ -2,7 +2,6 @@ use crate::{
     kernel::KERNEL,
     schedule::{
         process::{SIGKILL, SIGNAL_FRAME_MAGIC, SIGSTOP, SignalAction, SignalFrame, valid_signal},
-        process_manager::SignalEffect,
         task::{task_current_set_return_value, task_next},
     },
 };
@@ -40,41 +39,11 @@ impl From<UserSignalAction> for SignalAction {
     }
 }
 
-pub fn syscall_kill(pid: u32, signal: u32) -> u32 {
-    let args = KERNEL.with_task_manager(|tm| {
-        let current_task = tm.get_current()?;
-        let task = current_task.read();
-        Some((task.process.pid, pid as i32, signal as i32))
-    });
-
-    let Some((current_pid, pid, signal)) = args else {
-        return abi::errno(abi::ESRCH);
-    };
-
-    if pid <= 0 {
-        return abi::errno(abi::ENOTSUP);
-    }
-    if signal < 0 || (signal != 0 && !valid_signal(signal as u32)) {
-        return abi::errno(abi::EINVAL);
-    }
-
-    let target_pid = pid as u32;
-    if target_pid == current_pid {
-        task_current_set_return_value(0);
-    }
-
-    let result = KERNEL.with_process_manager(|pm| pm.signal(target_pid, signal as u32));
-    match result {
-        Ok(effect) => {
-            if target_pid == current_pid
-                && matches!(effect, SignalEffect::Delivered | SignalEffect::Terminated)
-            {
-                task_next();
-            }
-            0
-        }
-        Err(_) => abi::errno(abi::ESRCH),
-    }
+pub fn syscall_kill(selector:u32,signal:u32)->u32{
+ if signal!=0 && !valid_signal(signal){return abi::errno(abi::EINVAL);}
+ let Some(pid)=KERNEL.with_task_manager(|tm|Some(tm.get_current()?.read().process.pid))else{return abi::errno(abi::ESRCH)};
+ task_current_set_return_value(0);
+ match KERNEL.with_process_manager(|pm|pm.send_signal(pid,selector as i32,signal)){Ok(true)=>task_next(),Ok(false)=>0,Err(e)=>abi::errno(e)}
 }
 
 pub fn syscall_sigaction(signum: u32, act_ptr: u32, oldact_ptr: u32) -> u32 {

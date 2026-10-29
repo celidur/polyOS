@@ -708,7 +708,7 @@ static int test_waitpid_zombie_reparent(void)
         sleep_ms(1);
     }
     close(fds[0]);
-    expect("orphan reparent to init", reparented_to == 0, reparented_to);
+    expect("orphan reparent to init", reparented_to == 1, reparented_to);
 
     return failed == local_failed;
 }
@@ -969,10 +969,12 @@ extern void test_virtual_memory(void (*expect)(const char *, int, int));
 extern void test_allocation(void (*expect)(const char *, int, int));
 extern void test_synchronization(void (*expect)(const char *, int, int));
 extern void test_signal_runtime(void (*expect)(const char *, int, int));
+extern void test_management(void (*expect)(const char *, int, int));
 extern void test_threads(void (*expect)(const char *, int, int));
 int main(int argc, char **argv)
 {
     if (argc > 1 && strncmp(argv[1], "--thread-exec-child", sizeof("--thread-exec-child")) == 0) return getpid() == gettid() ? 43 : 99;
+    if (argc>1 && strncmp(argv[1],"--credentials-child",sizeof("--credentials-child"))==0) return getuid()==1000 && geteuid()==1000 && getauxval(AT_UID)==1000 && getauxval(AT_EUID)==1000 && strncmp((char *)getauxval(AT_EXECFN),"/bin/selftest.elf",18)==0 ? 48:98;
     printf("selftest: start\n");
 
     expect("kernel selftest", kernel_selftest() == 0, -1);
@@ -991,6 +993,7 @@ int main(int argc, char **argv)
     test_signals();
     test_environment();
     test_threads(expect);
+    test_management(expect);
     test_signal_runtime(expect);
     test_synchronization(expect);
     test_allocation(expect);

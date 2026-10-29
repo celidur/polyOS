@@ -23,3 +23,5 @@ mod inspection;
 mod virtual_memory;
 
 mod sysv;
+
+mod management;
