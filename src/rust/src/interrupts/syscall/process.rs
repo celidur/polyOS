@@ -17,6 +17,16 @@ const MAX_EXEC_STRINGS: u32 = 512;
 const MAX_EXEC_STRING_LEN: usize = 1024;
 
 pub fn syscall_waitpid(child_pid: u32, status_ptr: u32, options: u32) -> u32 {
+    if status_ptr != 0 {
+        let valid = KERNEL.with_task_manager(|tm| {
+            tm.get_current().is_some_and(|t| {
+                user::validate_range(&t.read().process, status_ptr, 4, true).is_ok()
+            })
+        });
+        if !valid {
+            return abi::errno(abi::EFAULT);
+        }
+    }
     if child_pid == 0 || options & !WNOHANG != 0 {
         return abi::errno(abi::EINVAL);
     }

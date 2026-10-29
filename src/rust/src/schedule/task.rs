@@ -17,6 +17,7 @@ pub type TaskId = usize;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WaitReason {
     Io,
+    Signal,
     Futex { pid: u32, address: u32 },
     Process(usize),
     PipeRead(usize),
@@ -30,7 +31,7 @@ pub enum TaskState {
     Runnable,
     Sleeping { wake_tick: u64 },
     Blocked { reason: WaitReason },
-    BlockedUntil { reason:WaitReason, wake_tick:u64 },
+    BlockedUntil { reason: WaitReason, wake_tick: u64 },
 }
 
 impl TaskState {
@@ -39,7 +40,10 @@ impl TaskState {
     }
 
     pub fn is_waiting(self) -> bool {
-        matches!(self, Self::Sleeping { .. } | Self::Blocked { .. } | Self::BlockedUntil { .. })
+        matches!(
+            self,
+            Self::Sleeping { .. } | Self::Blocked { .. } | Self::BlockedUntil { .. }
+        )
     }
 }
 
@@ -69,6 +73,10 @@ pub struct Task {
     pub time_slice: u32,
     pub state: TaskState,
     pub clear_child_tid: u32,
+    pub signals: super::signal::ThreadSignals,
+    pub stopped: bool,
+    pub restarting: bool,
+    pub sleep_remaining: Option<(u32, u64)>,
     pub poll_deadline: Option<u64>,
 }
 
@@ -82,6 +90,10 @@ impl Task {
             time_slice: 0,
             state: TaskState::Runnable,
             clear_child_tid: 0,
+            signals: Default::default(),
+            stopped: false,
+            restarting: false,
+            sleep_remaining: None,
             poll_deadline: None,
         }
     }
@@ -100,6 +112,10 @@ impl Task {
             time_slice: 0,
             state: TaskState::Runnable,
             clear_child_tid: 0,
+            signals: Default::default(),
+            stopped: false,
+            restarting: false,
+            sleep_remaining: None,
             poll_deadline: None,
         }
     }
@@ -122,11 +138,11 @@ impl Task {
     }
 
     pub fn is_runnable(&self) -> bool {
-        self.state.is_runnable()
+        self.state.is_runnable() && !self.stopped
     }
 
     pub fn is_waiting(&self) -> bool {
-        self.state.is_waiting()
+        self.state.is_waiting() || self.stopped
     }
 
     pub fn set_state(&mut self, state: &InterruptFrame) {
@@ -178,7 +194,16 @@ pub fn task_next() -> ! {
         });
 
         match next_task {
-            TaskSwitch::Run(registers) => unsafe { task_return(&registers) },
+            TaskSwitch::Run(_registers) => {
+                KERNEL.kernel_page();
+                super::signal::prepare_current();
+                let registers =
+                    KERNEL.with_task_manager(|tm| tm.get_current().map(|t| t.read().registers));
+                if let Some(registers) = registers {
+                    task_page();
+                    unsafe { task_return(&registers) }
+                }
+            }
             TaskSwitch::Idle => {
                 // No runnable task yet: wait for an interrupt to wake a sleeper.
                 enable_interrupts();

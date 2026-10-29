@@ -1,3 +1,4 @@
+use super::signal;
 use super::sysv;
 use super::virtual_memory;
 use super::inspection;
@@ -19,6 +20,11 @@ use super::sync::*;
 use super::types::SyscallId;
 
 pub fn syscall_init() {
+    syscall_register(SyscallId::SigProcMask, SyscallHandler::Args3(signal::syscall_sigprocmask));
+    syscall_register(SyscallId::SigPending, SyscallHandler::Args1(signal::syscall_sigpending));
+    syscall_register(SyscallId::SigAltStack, SyscallHandler::Args2(signal::syscall_sigaltstack));
+    syscall_register(SyscallId::Pause, SyscallHandler::Args0(signal::syscall_pause));
+
     syscall_register(SyscallId::SysIpc, SyscallHandler::Args6(sysv::syscall_ipc));
 
     syscall_register(SyscallId::Mmap, SyscallHandler::Args1(virtual_memory::syscall_mmap));

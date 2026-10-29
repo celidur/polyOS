@@ -275,4 +275,31 @@ int semget(key_t key,int count,int flags);
 int semop(int id,struct sembuf *ops,size_t count);
 int semctl(int id,int number,int command,...);
 
+
+#define SIG_BLOCK 0
+#define SIG_UNBLOCK 1
+#define SIG_SETMASK 2
+#define SA_ONSTACK 0x08000000
+#define SA_NODEFER 0x40000000
+#define SA_RESETHAND 0x80000000
+#define SS_ONSTACK 1
+#define SS_DISABLE 2
+#define MINSIGSTKSZ 2048
+#define SIGSTKSZ 8192
+#define SIGTSTP 20
+#define SIGTTIN 21
+#define SIGTTOU 22
+typedef struct {void *ss_sp;int ss_flags;size_t ss_size;} stack_t;
+int sigprocmask(int how,const sigset_t *set,sigset_t *old);
+int pthread_sigmask(int how,const sigset_t *set,sigset_t *old);
+int sigpending(sigset_t *set);
+int sigaltstack(const stack_t *stack,stack_t *old);
+int sigemptyset(sigset_t *set);
+int sigfillset(sigset_t *set);
+int sigaddset(sigset_t *set,int signal);
+int sigdelset(sigset_t *set,int signal);
+int sigismember(const sigset_t *set,int signal);
+int pause(void);
+int raise(int signal);
+
 #endif

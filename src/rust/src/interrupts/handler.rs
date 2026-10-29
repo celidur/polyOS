@@ -57,9 +57,17 @@ pub extern "C" fn interrupt_handler_error(
 pub extern "C" fn syscall_handler(frame: &mut InterruptFrame) -> u32 {
     KERNEL.kernel_page();
     task_current_save_state(frame);
+    KERNEL.with_task_manager(|tm| {
+        if let Some(t) = tm.get_current() {
+            t.write().restarting = false;
+        }
+    });
     let res = syscall_handle(frame);
     frame.eax = res;
     task_current_save_state(frame);
+    if crate::schedule::signal::prepare_current() {
+        crate::schedule::task::task_next();
+    }
     task_page();
     res
 }

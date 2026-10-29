@@ -66,6 +66,10 @@ pub enum SyscallId {
     Munmap = 91,
     Mprotect = 125,
     SysIpc = 117,
+    SigProcMask = 126,
+    SigPending = 73,
+    SigAltStack = 186,
+    Pause = 29,
     // PolyOS-private debug/control calls. Keep custom IDs at 500+.
     PrintMemory = 503,
     SemaphoreCreate = 560,
@@ -148,6 +152,10 @@ impl SyscallId {
             91 => Some(Self::Munmap),
             125 => Some(Self::Mprotect),
             117 => Some(Self::SysIpc),
+            126 => Some(Self::SigProcMask),
+            73 => Some(Self::SigPending),
+            186 => Some(Self::SigAltStack),
+            29 => Some(Self::Pause),
             _ => None,
         }
     }

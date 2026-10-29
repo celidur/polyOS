@@ -968,6 +968,7 @@ extern void test_inspection(void (*expect)(const char *, int, int));
 extern void test_virtual_memory(void (*expect)(const char *, int, int));
 extern void test_allocation(void (*expect)(const char *, int, int));
 extern void test_synchronization(void (*expect)(const char *, int, int));
+extern void test_signal_runtime(void (*expect)(const char *, int, int));
 extern void test_threads(void (*expect)(const char *, int, int));
 int main(int argc, char **argv)
 {
@@ -990,6 +991,7 @@ int main(int argc, char **argv)
     test_signals();
     test_environment();
     test_threads(expect);
+    test_signal_runtime(expect);
     test_synchronization(expect);
     test_allocation(expect);
     test_virtual_memory(expect);

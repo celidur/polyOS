@@ -212,6 +212,7 @@ pub fn syscall_poll(ptr: u32, count: u32, timeout: u32) -> u32 {
             true
         } else {
             task.registers.ip -= 2;
+            task.restarting=true;
             task.state = TaskState::Sleeping {
                 wake_tick: now.saturating_add(1),
             };

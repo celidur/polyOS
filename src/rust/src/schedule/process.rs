@@ -92,6 +92,7 @@ pub struct Process {
     pub filetype: ProcessFileType,
     pub executable_path: String,
     pub page_directory: PageDirectory,
+    pub pending_signals: Mutex<u32>,
     pub mappings: Mutex<crate::memory::address_space::AddressSpace>,
     pub stack: Page<u8>,
     pub start_stack: usize,
@@ -203,6 +204,7 @@ impl Process {
             filetype: ProcessFileType::Elf(elf),
             executable_path: filename.to_string(),
             page_directory,
+            pending_signals: Mutex::new(0),
             mappings: Mutex::new(Default::default()),
             stack: Page::new(USER_PROGRAM_STACK_SIZE)?,
             start_stack: USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
@@ -246,6 +248,7 @@ impl Process {
             filetype: ProcessFileType::Binary(memory),
             executable_path: filename.to_string(),
             page_directory,
+            pending_signals: Mutex::new(0),
             mappings: Mutex::new(Default::default()),
             stack: Page::new(USER_PROGRAM_STACK_SIZE).ok_or(KernelError::Allocation)?,
             start_stack: USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
@@ -317,6 +320,7 @@ impl Process {
             filetype: parent.filetype.clone(),
             executable_path: parent.executable_path.clone(),
             page_directory,
+            pending_signals: Mutex::new(0),
             mappings: Mutex::new(parent.mappings.lock().clone()),
             stack: parent.stack.clone(),
             start_stack: parent.start_stack,
@@ -746,10 +750,6 @@ impl Process {
 
 pub fn valid_signal(signal: u32) -> bool {
     signal > 0 && signal as usize <= MAX_SIGNAL
-}
-
-pub fn signal_default_ignored(signal: u32) -> bool {
-    signal == SIGCHLD || signal == SIGCONT
 }
 
 fn align_up(address: u32) -> u32 {

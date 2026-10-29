@@ -85,7 +85,11 @@ pub fn idt_page_fault(frame: &InterruptFrame, code_error: u32) {
         .with_task_manager(|tm| tm.get_current().map(|t| t.read().process.pid));
     serial_println!("Faulting process PID: {:?}", pid);
 
-    process_terminate(1);
+    if !frame.is_user_mode() {panic!("kernel page fault at {:#x}",faulting_address);}
+    let context=crate::kernel::KERNEL.with_task_manager(|tm|tm.get_current().map(|t|{let t=t.read();(t.process.pid,t.signals.blocked,t.process.get_signal_action(11).unwrap_or_default())}));
+    if let Some((pid,mask,action))=context {
+        crate::kernel::KERNEL.with_process_manager(|pm|{if mask&(1<<10)!=0 || action.handler<=1 {pm.terminate_signal(pid,11);}else{let _=pm.signal(pid,11);}});
+    }
     task_next();
 }
 

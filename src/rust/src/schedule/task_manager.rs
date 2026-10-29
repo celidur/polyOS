@@ -30,6 +30,57 @@ pub struct TaskManager {
 }
 
 impl TaskManager {
+    pub fn stop_process(&mut self, pid: u32, stop: bool) {
+        let mut wake = Vec::new();
+        for (&id, t) in &self.tasks {
+            let mut t = t.write();
+            if t.process.pid == pid {
+                t.stopped = stop;
+                if !stop && t.state.is_runnable() {
+                    wake.push(id);
+                }
+            }
+        }
+        for id in wake {
+            let _ = self.wake_task(id);
+        }
+    }
+    pub fn notify_signal(&mut self, pid: u32, signal: u32) -> bool {
+        let target = self.tasks.iter().find_map(|(&id, t)| {
+            let t = t.read();
+            (t.process.pid == pid && t.signals.blocked & (1 << (signal - 1)) == 0).then_some(id)
+        });
+        let Some(id) = target else {
+            return false;
+        };
+        {
+            let mut t = self.tasks.get(&id).unwrap().write();
+            t.signals.pending |= 1<<(signal-1);
+            if !t.state.is_runnable() {
+                if t.restarting {
+                    t.registers.ip += 2;
+                    t.restarting = false;
+                }
+                t.registers.eax = (-4i32) as u32;
+                t.poll_deadline = None;
+                if let Some((ptr, end)) = t.sleep_remaining.take() {
+                    let ticks = end.saturating_sub(self.tick);
+                    let hz = crate::constant::TIMER_HZ as u64;
+                    let rem = [
+                        (ticks / hz) as u32,
+                        ((ticks % hz) * 1_000_000_000 / hz) as u32,
+                    ];
+                    if crate::memory::user::validate_range(&t.process, ptr, 8, true).is_ok() {
+                        let _ =
+                            crate::memory::user::write_value(&t.process.page_directory, ptr, &rem);
+                    }
+                }
+            }
+        }
+        let _ = self.wake_task(id);
+        true
+    }
+
     pub fn task_count(&self) -> usize {
         self.tasks.len()
     }
@@ -61,7 +112,11 @@ impl TaskManager {
     ) -> Result<TaskId, KernelError> {
         let priority = priority.min(MAX_PRIORITY - 1);
         let id = process.pid as usize;
-        let task = Task::from_registers(id, process, priority, registers);
+        let mut task = Task::from_registers(id, process, priority, registers);
+        task.signals.blocked = self
+            .get_current()
+            .map(|t| t.read().signals.blocked)
+            .unwrap_or(0);
         self.tasks.insert(id, RwLock::new(task));
         self.queue_ready(id, priority);
         Ok(id)
@@ -77,6 +132,10 @@ impl TaskManager {
         let id = super::allocate_id();
         let mut task = Task::from_registers(id, process, priority, registers);
         task.clear_child_tid = clear_child_tid;
+        task.signals.blocked = self
+            .get_current()
+            .map(|t| t.read().signals.blocked)
+            .unwrap_or(0);
         self.tasks.insert(id, RwLock::new(task));
         self.queue_ready(id, priority);
         Ok(id)
@@ -163,32 +222,19 @@ impl TaskManager {
                     continue;
                 };
 
-                let process = {
-                    let task = nn_next.read();
-                    if !task.is_runnable() {
-                        continue;
-                    }
-
-                    task.process.clone()
-                };
+                if !nn_next.read().is_runnable() {
+                    continue;
+                }
 
                 self.current = Some(next_id);
-                without_interrupts(|| {
-                    user_registers();
-                    process.page_directory.switch();
-                });
                 return ScheduleOutcome::Switched;
             }
         }
 
         self.current = None;
 
-        if let Some((task_id, process)) = self.find_runnable_task() {
+        if let Some((task_id, _process)) = self.find_runnable_task() {
             self.current = Some(task_id);
-            without_interrupts(|| {
-                user_registers();
-                process.page_directory.switch();
-            });
             return ScheduleOutcome::Switched;
         }
 
@@ -237,12 +283,14 @@ impl TaskManager {
             {
                 task.registers.eax = (-110i32) as u32;
                 task.state = TaskState::Runnable;
+                task.sleep_remaining = None;
                 wake.push((*task_id, task.priority));
             }
             if let TaskState::Sleeping { wake_tick } = task.state
                 && now >= wake_tick
             {
                 task.state = TaskState::Runnable;
+                task.sleep_remaining = None;
                 wake.push((*task_id, task.priority));
             }
         }
@@ -299,6 +347,7 @@ impl TaskManager {
 
         let mut task = nn_task.write();
         task.registers.ip = task.registers.ip.saturating_sub(2);
+        task.restarting = true;
         task.state = TaskState::Blocked { reason };
         Ok(cur)
     }
@@ -350,10 +399,12 @@ impl TaskManager {
         };
 
         let priority = nn_task.read().priority;
+        let mask = nn_task.read().signals.blocked;
         self.remove(cur);
         let id = process.pid as usize;
         self.tasks
             .insert(id, RwLock::new(Task::new(id, process, priority)));
+        self.tasks.get(&id).unwrap().write().signals.blocked = mask;
         self.current = Some(id);
         Ok(())
     }

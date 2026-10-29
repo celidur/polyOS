@@ -143,3 +143,23 @@ the same task state. Libc `pthread_sync.c` implements private mutexes, condition
 and once initialization on these queues. Mutexes support normal, recursive and
 error-checking modes; the default checks ownership. Conditions reacquire the mutex
 on timeout. Process-shared and robust pthread synchronization are not implemented.
+
+## Signals
+
+`schedule/signal.rs` owns pending delivery and trusted active-frame state. Masks,
+alternate stacks and active handlers belong to each task; dispositions belong to
+the process. Process-directed signals select an eligible task or stay pending.
+Delivery occurs at the return-to-user boundary. Signal return requires the active
+frame address, validates user instruction/stack addresses and forces user selectors
+and safe flags. A user frame cannot grant kernel privilege.
+
+Caught signals interrupt blocked syscalls with EINTR; nanosleep reports remaining
+time. STOP/CONT preserve and restore scheduling state for every process thread.
+User page faults signal SIGSEGV; unexpected supervisor faults panic the kernel.
+Libc errno lookup uses stable per-thread slots so signal handlers do not acquire
+the pthread registry lock. Semaphore and child-exit wakeups reject stale waiters.
+
+The ABI supports signals 1–31 with a 32-bit mask, SA_ONSTACK, SA_NODEFER and
+SA_RESETHAND. SA_RESTART and realtime signal queues are not implemented; unsupported
+action flags return ENOTSUP. Alternate stacks and pending state reset on exec,
+while the calling thread's mask is preserved.

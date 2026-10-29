@@ -15,3 +15,5 @@ pub(super) fn allocate_id() -> usize {
 pub mod ipc;
 
 pub mod legacy_semaphore;
+
+pub mod signal;

@@ -8,15 +8,14 @@ use crate::{
     error::KernelError,
     kernel::KERNEL,
     schedule::{
-        task::{Registers, TaskId, copy_string_to_task},
+        task::{Registers, TaskId},
         task_manager::TaskManager,
     },
 };
 
 use super::{
     process::{
-        Process, ProcessArguments, ProcessId, SIG_DFL, SIG_IGN, SIGCHLD, SIGKILL,
-        SIGNAL_FRAME_MAGIC, SIGSTOP, SignalAction, SignalFrame, signal_default_ignored,
+        Process, ProcessArguments, ProcessId, SIG_DFL, SIG_IGN, SIGCHLD, SIGCONT, SIGKILL, SIGSTOP,
     },
     task::TaskState,
 };
@@ -47,7 +46,9 @@ struct ZombieProcess {
 }
 
 impl ProcessManager {
-    pub fn process_count(&self) -> usize { self.table.len() }
+    pub fn process_count(&self) -> usize {
+        self.table.len()
+    }
 
     pub fn new() -> Self {
         ProcessManager {
@@ -191,97 +192,44 @@ impl ProcessManager {
     }
 
     pub fn signal(&mut self, pid: ProcessId, signal: u32) -> Result<SignalEffect, KernelError> {
-        let Some(process) = self.table.get(&pid).cloned() else {
-            return Err(KernelError::NoTasks);
-        };
-
+        let process = self.table.get(&pid).cloned().ok_or(KernelError::NoTasks)?;
         if signal == 0 {
             return Ok(SignalEffect::Ignored);
         }
-        if signal == SIGSTOP {
-            return Ok(SignalEffect::Ignored);
-        }
-
         let action = process
             .get_signal_action(signal)
             .ok_or(KernelError::NoTasks)?;
-
-        if signal != SIGKILL && signal != SIGSTOP {
-            if action.handler == SIG_IGN {
-                return Ok(SignalEffect::Ignored);
-            }
-            if action.handler != SIG_DFL {
-                self.deliver_signal(process, signal, action)?;
-                return Ok(SignalEffect::Delivered);
-            }
-            if signal_default_ignored(signal) {
-                return Ok(SignalEffect::Ignored);
-            }
+        if signal == SIGKILL {
+            self.exit_with_wait_status(pid, encode_signal_status(signal));
+            return Ok(SignalEffect::Terminated);
         }
-
-        self.exit_with_wait_status(pid, encode_signal_status(signal));
-        Ok(SignalEffect::Terminated)
-    }
-
-    fn deliver_signal(
-        &self,
-        process: Arc<Process>,
-        signal: u32,
-        action: SignalAction,
-    ) -> Result<(), KernelError> {
-        if action.restorer == 0 {
-            return Err(KernelError::NoTasks);
+        if signal == SIGCONT {
+            KERNEL.with_task_manager(|tm| tm.stop_process(pid, false));
+            *process.pending_signals.lock() &= !((1 << 18) | (1 << 19) | (1 << 20) | (1 << 21));
         }
-
-        let Some(task_id) = *process.main_task.read() else {
-            return Err(KernelError::NoTasks);
-        };
-
-        KERNEL.with_task_manager(|tm| {
-            let Some(nn_task) = tm.get(task_id) else {
-                return Err(KernelError::NoTasks);
-            };
-
-            {
-                let mut task = nn_task.write();
-                let saved_registers = task.registers;
-                let frame = SignalFrame {
-                    magic: SIGNAL_FRAME_MAGIC,
-                    registers: saved_registers,
-                };
-                let frame_size = core::mem::size_of::<SignalFrame>() as u32;
-                let frame_addr = saved_registers
-                    .esp
-                    .checked_sub(frame_size)
-                    .ok_or(KernelError::Paging)?
-                    & !0x3;
-                let call_sp = frame_addr.checked_sub(12).ok_or(KernelError::Paging)?;
-                let call_frame = [action.restorer, signal, frame_addr];
-
-                copy_string_to_task(
-                    &process.page_directory,
-                    &frame as *const SignalFrame as u32,
-                    frame_addr,
-                    frame_size,
-                )
-                .map_err(|_| KernelError::Paging)?;
-
-                copy_string_to_task(
-                    &process.page_directory,
-                    call_frame.as_ptr() as u32,
-                    call_sp,
-                    core::mem::size_of_val(&call_frame) as u32,
-                )
-                .map_err(|_| KernelError::Paging)?;
-
-                task.registers.ip = action.handler;
-                task.registers.esp = call_sp;
-                task.registers.eax = signal;
-                task.state = TaskState::Runnable;
-            }
-
-            tm.wake_task(task_id)
+        if signal == SIGSTOP || (matches!(signal, 20 | 21 | 22) && action.handler == SIG_DFL) {
+            KERNEL.with_task_manager(|tm| tm.stop_process(pid, true));
+            *process.pending_signals.lock() &= !(1 << 17);
+            return Ok(SignalEffect::Delivered);
+        }
+        if action.handler == SIG_IGN
+            || (action.handler == SIG_DFL && matches!(signal, 17 | 18 | 23 | 28))
+        {
+            return Ok(SignalEffect::Ignored);
+        }
+        *process.pending_signals.lock() |= 1 << (signal - 1);
+        let notified = KERNEL.with_task_manager(|tm| tm.notify_signal(pid, signal));
+        if notified {
+            *process.pending_signals.lock() &= !(1 << (signal - 1));
+        }
+        Ok(if notified {
+            SignalEffect::Delivered
+        } else {
+            SignalEffect::Ignored
         })
+    }
+    pub fn terminate_signal(&mut self, pid: ProcessId, signal: u32) {
+        self.exit_with_wait_status(pid, encode_signal_status(signal));
     }
 
     fn exit_with_wait_status(&mut self, pid: ProcessId, wait_status: i32) {
@@ -298,24 +246,47 @@ impl ProcessManager {
         // pid 0 is the init-like reaper, so orphaned children do not linger as zombies.
         let mut should_reap = matches!(process.parent_pid(), None | Some(0));
         if let Some(mut waiters) = self.exit_waiters.remove(&pid) {
+            let mut consumed = false;
             KERNEL.with_task_manager(|tm| {
                 while let Some(waiter) = waiters.pop_front() {
+                    let waiting = tm.get(waiter.task_id).is_some_and(|t| {
+                        t.read().state
+                            == TaskState::Blocked {
+                                reason: super::task::WaitReason::Process(pid as usize),
+                            }
+                    });
+                    if !waiting {
+                        continue;
+                    }
+                    if consumed {
+                        let _ = tm.wake_task_with_return_value(waiter.task_id, (-10i32) as u32);
+                        continue;
+                    }
+                    consumed = true;
                     if waiter.status_ptr != 0
                         && let Some(task) = tm.get(waiter.task_id)
                     {
                         let task = task.read();
-                        let _ = copy_string_to_task(
-                            &task.process.page_directory,
-                            &wait_status as *const i32 as u32,
+                        if crate::memory::user::validate_range(
+                            &task.process,
                             waiter.status_ptr,
-                            core::mem::size_of::<i32>() as u32,
-                        );
+                            4,
+                            true,
+                        )
+                        .is_ok()
+                        {
+                            let _ = crate::memory::user::write_value(
+                                &task.process.page_directory,
+                                waiter.status_ptr,
+                                &wait_status,
+                            );
+                        }
                     }
 
                     let _ = tm.wake_task_with_return_value(waiter.task_id, waiter.return_value);
                 }
             });
-            should_reap = true;
+            should_reap |= consumed;
         }
 
         if let Some(parent_pid) = process.parent_pid() {

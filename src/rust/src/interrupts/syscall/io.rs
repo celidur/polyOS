@@ -32,7 +32,7 @@ struct TimeZone {
     tz_dsttime: i32,
 }
 
-pub fn syscall_nanosleep(req_ptr: u32, _rem_ptr: u32) -> u32 {
+pub fn syscall_nanosleep(req_ptr: u32, rem_ptr: u32) -> u32 {
     let Some((process, req_ptr)) = KERNEL.with_task_manager(|tm| {
         let current_task = tm.get_current()?;
         let task = current_task.read();
@@ -74,8 +74,18 @@ pub fn syscall_nanosleep(req_ptr: u32, _rem_ptr: u32) -> u32 {
         return 0;
     }
 
+    if rem_ptr != 0 && user::validate_range(&process, rem_ptr, 8, true).is_err() {
+        return abi::errno(abi::EFAULT);
+    }
     let sleep_set = KERNEL.with_task_manager(|tm| {
         let now = tm.get_tick();
+        if let Some(t) = tm.get_current() {
+            t.write().sleep_remaining = if rem_ptr != 0 {
+                Some((rem_ptr, now.saturating_add(sleep_ticks)))
+            } else {
+                None
+            };
+        }
         tm.sleep_current_until(now.saturating_add(sleep_ticks))
             .is_ok()
     });

@@ -43,7 +43,8 @@ impl Semaphore {
 
     pub fn signal(&mut self, task_manager: &mut TaskManager) {
         while let Some(task_id) = self.waiters.pop_front() {
-            if task_manager.wake_task_with_return_value(task_id, 0).is_ok() {
+            let waiting=task_manager.get(task_id).is_some_and(|t|t.read().state==super::task::TaskState::Blocked{reason:WaitReason::Semaphore(self.id)});
+            if waiting && task_manager.wake_task_with_return_value(task_id, 0).is_ok() {
                 return;
             }
         }
@@ -53,7 +54,9 @@ impl Semaphore {
 
     pub fn close(&mut self, task_manager: &mut TaskManager, return_value: u32) {
         while let Some(task_id) = self.waiters.pop_front() {
-            let _ = task_manager.wake_task_with_return_value(task_id, return_value);
+            if task_manager.get(task_id).is_some_and(|t|t.read().state==super::task::TaskState::Blocked{reason:WaitReason::Semaphore(self.id)}) {
+                let _ = task_manager.wake_task_with_return_value(task_id, return_value);
+            }
         }
     }
 }
