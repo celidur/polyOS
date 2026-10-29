@@ -89,6 +89,12 @@ impl SocketHandle {
 }
 
 impl ProcessDescriptor {
+    pub fn read_nonblocking(&self, buf: &mut [u8]) -> Result<usize, FsError> {
+        match self {
+            Self::File(file) => file.lock().ops.read_nonblocking(buf),
+            _ => self.read(buf),
+        }
+    }
     pub fn position(&self) -> Result<usize, FsError> {
         match self {
             Self::File(f) => f.lock().ops.position(),

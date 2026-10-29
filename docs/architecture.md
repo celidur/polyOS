@@ -192,3 +192,26 @@ The initial userspace process has PID 1. The scheduler's ID allocator reserves
 PID 0 for selector semantics. Adopted orphans are auto-reaped separately from
 children created by init, which remain waitable. Init receives explicitly installed
 signal handlers and ignores default fatal/stop dispositions.
+
+## Terminals
+
+`device/terminal.rs` owns the shared console line discipline, termios, input queues,
+window size and controlling session/foreground group. Console aliases share this
+state. The timer pumps keyboard and UART input, so control characters signal the
+foreground group even when it is not reading. Background reads generate SIGTTIN;
+TOSTOP writes and background terminal changes generate SIGTTOU.
+
+Canonical input supports erase, kill, line boundaries and EOF. Raw input preserves
+NUL and supports VMIN, including immediate reads with VMIN=0. Input CR/NL mapping,
+echo, output NL processing, flushes and window-size notifications are implemented.
+Output is synchronous, so TCSADRAIN has no software output queue to drain. Nonzero
+VTIME, hardware baud/parity changes and unsupported termios flags return ENOTSUP.
+The console is one terminal; pseudo-terminals are not implemented. Rust and C
+readline share libc's character-mode setup and restoration.
+
+The QEMU runner injects canonical editing, EOF, raw bytes and control characters;
+it also verifies a stopped background reader resumes after foreground transfer.
+
+Interrupt and syscall entry clear the direction flag before running Rust, while
+iret restores the user's saved flags. The regression suite calls a syscall with
+DF set to verify that user flags cannot reverse kernel memory copies.

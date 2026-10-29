@@ -4,81 +4,39 @@ use crate::{
     device::{
         control::{
             POLYOS_IOCTL_SCREEN_CLEAR, POLYOS_IOCTL_SCREEN_DISABLE_CURSOR,
-            POLYOS_IOCTL_SCREEN_SET_COLOR, TIOCGWINSZ, WinSize,
+            POLYOS_IOCTL_SCREEN_SET_COLOR,
         },
-        keyboard::KEYBOARD_DRIVER,
         screen::{ColorCode, SCREEN_DRIVER},
-        serial::SERIAL_DRIVER,
     },
     fs::{FileHandle, FileMetadata, FileOps, FsError},
     memory::PageDirectory,
-    print::{clear_screen, disable_cursor, terminal_writechar},
-    schedule::task::copy_string_to_task,
+    print::{clear_screen, disable_cursor},
 };
 
 struct ConsoleFile;
 
 impl FileOps for ConsoleFile {
+    fn read_nonblocking(&mut self, out: &mut [u8]) -> Result<usize, FsError> {
+        super::terminal::read_nonblocking(out)
+    }
     fn poll(&self, events: u16) -> u16 {
-        (events & 4)
-            | if KEYBOARD_DRIVER.readable() || SERIAL_DRIVER.readable() {
-                events & 1
-            } else {
-                0
-            }
+        super::terminal::poll(events)
     }
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize, FsError> {
-        read_from(buf, || {
-            KEYBOARD_DRIVER
-                .read_byte()
-                .or_else(|| SERIAL_DRIVER.read())
-                .map(normalize_input)
-        })
+    fn read(&mut self, out: &mut [u8]) -> Result<usize, FsError> {
+        super::terminal::read(out)
     }
-
-    fn write(&mut self, buf: &[u8]) -> Result<usize, FsError> {
-        SERIAL_DRIVER.write(buf);
-        for byte in buf.iter().copied() {
-            terminal_writechar(byte, 15);
-        }
-
-        Ok(buf.len())
+    fn write(&mut self, data: &[u8]) -> Result<usize, FsError> {
+        super::terminal::write(data)
     }
-
     fn seek(&mut self, _pos: usize) -> Result<usize, FsError> {
         Err(FsError::Unsupported)
     }
 
     fn ioctl(&mut self, request: u32, arg: u32, directory: &PageDirectory) -> Result<u32, FsError> {
+        if let Some(result) = super::terminal::ioctl(request, arg, directory)? {
+            return Ok(result);
+        }
         match request {
-            TIOCGWINSZ => {
-                if arg == 0 {
-                    return Err(FsError::InvalidArgument);
-                }
-
-                let Some((rows, cols)) = SCREEN_DRIVER
-                    .with_text(|text| text.map(|text| (text.rows() as u16, text.cols() as u16)))
-                else {
-                    return Err(FsError::Unsupported);
-                };
-
-                let size = WinSize {
-                    ws_row: rows,
-                    ws_col: cols,
-                    ws_xpixel: 0,
-                    ws_ypixel: 0,
-                };
-
-                copy_string_to_task(
-                    directory,
-                    &size as *const WinSize as u32,
-                    arg,
-                    core::mem::size_of::<WinSize>() as u32,
-                )
-                .map_err(|_| FsError::IoError)?;
-
-                Ok(0)
-            }
             POLYOS_IOCTL_SCREEN_CLEAR => {
                 clear_screen();
                 Ok(0)
@@ -107,36 +65,6 @@ fn metadata(mode: u16, is_dir: bool) -> FileMetadata {
         mode,
         size: 0,
         is_dir,
-    }
-}
-
-fn read_from<F>(buf: &mut [u8], mut next_byte: F) -> Result<usize, FsError>
-where
-    F: FnMut() -> Option<u8>,
-{
-    let mut read = 0;
-
-    while read < buf.len() {
-        let Some(byte) = next_byte() else {
-            break;
-        };
-
-        buf[read] = byte;
-        read += 1;
-
-        if byte == 13 {
-            break;
-        }
-    }
-
-    Ok(read)
-}
-
-fn normalize_input(byte: u8) -> u8 {
-    match byte {
-        b'\n' => 13,
-        0x7f => 0x08,
-        byte => byte,
     }
 }
 

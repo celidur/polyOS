@@ -11,40 +11,57 @@ static void sleep_ms(u32 duration_ms)
     nanosleep(&req, NULL);
 }
 
-void polyos_terminal_readline(char* out, int max, bool output_while_typing)
-{
-    int i = 0;
-    while (i < max - 1) {
-        char key = 0;
-        if (read(STDIN_FILENO, &key, 1) != 1){
-            sleep_ms(1);
-            continue;
-        }
+static volatile int readline_interrupted;
+static void interrupt_readline(int signal) { readline_interrupted = 1; }
 
-        // Carriage return means we're done
-        if (key == 13){
-            break;
-        }
-
-        if (output_while_typing && key != 0x08){
-            write(STDOUT_FILENO, &key, 1);
-        }
-
-        // Backspace
-        if (key == 0x08){
-            if (i > 0) {
-                write(STDOUT_FILENO, &key, 1);
-                i -= 1;
-                out[i] = '\0';
-            }
-            continue;
-        }
-
-        out[i] = key;
-        i++;
+void polyos_terminal_readline(char *out, int max, bool output_while_typing) {
+  int i = 0;
+  struct termios saved, raw;
+  int terminal = tcgetattr(STDIN_FILENO, &saved) == 0;
+  sighandler_t old = signal(SIGINT, interrupt_readline);
+  readline_interrupted = 0;
+  if (terminal) {
+    raw = saved;
+    cfmakeraw(&raw);
+    raw.c_lflag = ISIG;
+    tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+  }
+  while (i < max - 1 && !readline_interrupted) {
+    char key = 0;
+    if (read(STDIN_FILENO, &key, 1) != 1) {
+      sleep_ms(1);
+      continue;
     }
-    // Null terminate
-    out[i] = '\0';
+
+    // Carriage return means we're done
+    if (key == 13 || key == 10) {
+      break;
+    }
+
+    if (output_while_typing && key != 0x08 && key != 0x7f) {
+      write(STDOUT_FILENO, &key, 1);
+    }
+
+    // Backspace
+    if (key == 0x08 || key == 0x7f) {
+      if (i > 0) {
+        write(STDOUT_FILENO, &key, 1);
+        i -= 1;
+        out[i] = '\0';
+      }
+      continue;
+    }
+
+    out[i] = key;
+    i++;
+  }
+  // Null terminate
+  if (readline_interrupted)
+    i = 0;
+  out[i] = '\0';
+  if (terminal)
+    tcsetattr(STDIN_FILENO, TCSANOW, &saved);
+  signal(SIGINT, old);
 }
 
 int clear_screen()

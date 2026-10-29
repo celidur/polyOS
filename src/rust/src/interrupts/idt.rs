@@ -84,6 +84,7 @@ macro_rules! def_interrupts {
                     naked_asm!(
                         concat!(
                             "pushad\n",
+                            "cld\n",
                             "push esp\n",
                             "push ", stringify!(N), "\n",
                             [<__dispatch_ $table_ident>]!(N),

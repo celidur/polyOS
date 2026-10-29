@@ -4,6 +4,7 @@ use crate::{
 
 pub fn idt_clock(frame: &InterruptFrame) {
     KERNEL.kernel_page();
+    crate::device::terminal::pump();
     KERNEL.with_task_manager(|tm| tm.tick());
 
     if frame.is_user_mode() {

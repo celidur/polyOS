@@ -26,6 +26,8 @@ pub enum FsError {
     NoSpace,
     InvalidArgument,
     BadAddress,
+    Interrupted,
+    NotSupported,
     BadDescriptor,
     TooManyFiles,
     IsADirectory,
@@ -70,6 +72,7 @@ pub trait FileSystem: Send + Sync {
 }
 
 pub trait FileOps {
+    fn read_nonblocking(&mut self,buf:&mut[u8])->Result<usize,FsError>{self.read(buf)}
     fn position(&self) -> Result<usize, FsError> {
         Err(FsError::Unsupported)
     }

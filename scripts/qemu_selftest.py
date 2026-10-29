@@ -74,6 +74,7 @@ def main():
 
     output = bytearray()
     sent_selftest = False
+    sent_terminal = set()
     passed = False
     failed = False
     deadline = time.monotonic() + args.timeout
@@ -102,6 +103,19 @@ def main():
                 proc.stdin.flush()
                 sent_selftest = True
 
+            terminal_inputs = [
+                ("tty-canonical-ready", b"ab\x7fc\r"),
+                ("tty-eof-ready", b"\x04"),
+                ("tty-raw-ready", b"\x00Z"),
+                ("tty-nonblock-ready", b"N"),
+                ("tty-signal-ready", b"\x03"),
+                ("tty-background-ready", b"B"),
+            ]
+            for marker, payload in terminal_inputs:
+                if marker in text and marker not in sent_terminal:
+                    proc.stdin.write(payload)
+                    proc.stdin.flush()
+                    sent_terminal.add(marker)
             if "KERNEL PANIC" in text:
                 failed = True
                 break

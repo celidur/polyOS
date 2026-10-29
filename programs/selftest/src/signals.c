@@ -119,5 +119,13 @@ void test_signal_runtime(void (*expect)(const char *, int, int)) {
   int status;
   waitpid(child, &status, 0);
   close(fds[0]);
+  char cwd[32];
+  long value;
+  __asm__ volatile("std; int $0x80; cld"
+                   : "=a"(value)
+                   : "0"(183), "b"(cwd), "c"(sizeof(cwd))
+                   : "memory", "cc");
+  expect("kernel entry clears user direction flag", value > 0 && cwd[0] == '/',
+         1);
   signal(SIGUSR1, SIG_DFL);
 }

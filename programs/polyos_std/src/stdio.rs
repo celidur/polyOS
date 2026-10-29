@@ -68,57 +68,17 @@ macro_rules! serial_println {
 }
 
 pub fn terminal_readline(buffer: &mut [u8], output_while_typing: bool) -> usize {
-    let mut i = 0;
-    while i < buffer.len() {
-        let key = read_byte();
-        match key {
-            0x08 => {
-                if i > 0 {
-                    let _ = write_all(STDOUT_FILENO, &[0x08]);
-                    buffer[i] = b'\0';
-                    i -= 1;
-                }
-            }
-            13 => break,
-            k => {
-                if output_while_typing {
-                    let _ = write_all(STDOUT_FILENO, &[key]);
-                }
-                buffer[i] = k;
-                i += 1;
-            }
-        }
+    if buffer.is_empty() {
+        return 0;
     }
-    i
-}
-
-fn read_byte() -> u8 {
-    let mut byte = 0_u8;
-    loop {
-        let read = unsafe {
-            crate::bindings::read(
-                STDIN_FILENO,
-                &mut byte as *mut u8 as *mut c_void,
-                core::mem::size_of::<u8>(),
-            )
-        };
-
-        if read == 1 {
-            return byte;
-        }
-
-        sleep_ms(1);
-    }
-}
-
-fn sleep_ms(duration_ms: u32) {
-    let req = crate::bindings::timespec {
-        tv_sec: (duration_ms / 1000) as crate::bindings::time_t,
-        tv_nsec: ((duration_ms % 1000) * 1_000_000) as i32,
-    };
     unsafe {
-        crate::bindings::nanosleep(&req, core::ptr::null_mut());
+        crate::bindings::polyos_terminal_readline(
+            buffer.as_mut_ptr() as *mut i8,
+            buffer.len() as i32,
+            output_while_typing,
+        );
     }
+    buffer.iter().position(|&b| b == 0).unwrap_or(buffer.len())
 }
 
 fn write_all(fd: i32, mut bytes: &[u8]) -> Result<(), ()> {

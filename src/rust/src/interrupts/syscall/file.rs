@@ -86,8 +86,38 @@ pub fn syscall_read(fd: u32, buf_ptr: u32, len: u32) -> u32 {
     }
 
     let mut data = vec![0; len];
-    let read = match descriptor.read(data.as_mut_slice()) {
+    let operation = if process.get_status_flags(fd).unwrap_or(0) & O_NONBLOCK != 0 {
+        descriptor.read_nonblocking(data.as_mut_slice())
+    } else {
+        descriptor.read(data.as_mut_slice())
+    };
+    let read = match operation {
         Ok(read) => read,
+        Err(FsError::WouldBlock) if process.get_status_flags(fd).unwrap_or(0) & O_NONBLOCK == 0 => {
+            let pending = KERNEL.with_task_manager(|tm| {
+                tm.get_current().is_some_and(|t| {
+                    let t = t.read();
+                    (t.signals.pending | *t.process.pending_signals.lock()) & !t.signals.blocked
+                        != 0
+                })
+            });
+            if pending {
+                return abi::errno(4);
+            }
+            drop(descriptor);
+            drop(data);
+            drop(process);
+            KERNEL.with_task_manager(|tm| {
+                let now = tm.get_tick();
+                if let Some(t) = tm.get_current() {
+                    let mut t = t.write();
+                    t.registers.ip -= 2;
+                    t.restarting = true;
+                    t.state = crate::schedule::task::TaskState::Sleeping { wake_tick: now + 1 };
+                }
+            });
+            task_next()
+        }
         Err(error) => return fs_errno(error),
     };
 
@@ -767,6 +797,8 @@ pub(super) fn fs_errno(error: FsError) -> u32 {
         FsError::InvalidPath | FsError::InvalidArgument => abi::EINVAL,
         FsError::IoError => abi::EIO,
         FsError::BadAddress => abi::EFAULT,
+        FsError::Interrupted => 4,
+        FsError::NotSupported => abi::ENOTSUP,
         FsError::BadDescriptor => abi::EBADF,
         FsError::TooManyFiles => abi::EMFILE,
         FsError::Unsupported => abi::ENOTSUP,

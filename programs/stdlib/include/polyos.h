@@ -365,4 +365,56 @@ int posix_spawnattr_getsigdefault(const posix_spawnattr_t *,sigset_t *);
 int posix_spawn(pid_t *,const char *,const posix_spawn_file_actions_t *,const posix_spawnattr_t *,char *const[],char *const[]);
 int posix_spawnp(pid_t *,const char *,const posix_spawn_file_actions_t *,const posix_spawnattr_t *,char *const[],char *const[]);
 
+
+#define TCGETS 0x5401
+#define TCSETS 0x5402
+#define TCSETSW 0x5403
+#define TCSETSF 0x5404
+#define TIOCGPGRP 0x540f
+#define TIOCSPGRP 0x5410
+#define TIOCSWINSZ 0x5414
+#define TCFLSH 0x540b
+#define TCSANOW 0
+#define TCSADRAIN 1
+#define TCSAFLUSH 2
+#define TCIFLUSH 0
+#define TCOFLUSH 1
+#define TCIOFLUSH 2
+#define ISIG 1
+#define ICANON 2
+#define ECHO 8
+#define ECHOE 16
+#define ECHOK 32
+#define TOSTOP 256
+#define INLCR 64
+#define IGNCR 128
+#define ICRNL 256
+#define OPOST 1
+#define ONLCR 4
+#define CSIZE 0x30
+#define CS8 0x30
+#define CREAD 0x80
+#define CLOCAL 0x800
+#define VINTR 0
+#define VQUIT 1
+#define VERASE 2
+#define VKILL 3
+#define VEOF 4
+#define VTIME 5
+#define VMIN 6
+#define VSUSP 10
+#define VEOL 11
+#define NCCS 19
+#define SIGWINCH 28
+typedef u32 tcflag_t;
+typedef u8 cc_t;
+struct termios {tcflag_t c_iflag,c_oflag,c_cflag,c_lflag;cc_t c_line,c_cc[NCCS];};
+int tcgetattr(int fd,struct termios *settings);
+int tcsetattr(int fd,int action,const struct termios *settings);
+pid_t tcgetpgrp(int fd);
+int tcsetpgrp(int fd,pid_t group);
+int tcflush(int fd,int queue);
+int isatty(int fd);
+void cfmakeraw(struct termios *settings);
+
 #endif

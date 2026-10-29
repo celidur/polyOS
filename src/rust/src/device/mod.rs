@@ -30,3 +30,5 @@ pub use managed::ManagedDevice;
 pub use node::{DeviceNodeRegistration, find as find_device_node, names as device_node_names};
 
 mod network_control;
+
+pub mod terminal;

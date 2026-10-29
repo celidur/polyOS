@@ -970,6 +970,7 @@ extern void test_allocation(void (*expect)(const char *, int, int));
 extern void test_synchronization(void (*expect)(const char *, int, int));
 extern void test_signal_runtime(void (*expect)(const char *, int, int));
 extern void test_management(void (*expect)(const char *, int, int));
+extern void test_terminal(void (*expect)(const char *, int, int));
 extern void test_threads(void (*expect)(const char *, int, int));
 int main(int argc, char **argv)
 {
@@ -993,6 +994,7 @@ int main(int argc, char **argv)
     test_signals();
     test_environment();
     test_threads(expect);
+    test_terminal(expect);
     test_management(expect);
     test_signal_runtime(expect);
     test_synchronization(expect);

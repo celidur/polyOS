@@ -65,7 +65,7 @@ pub extern "C" fn syscall_handler(frame: &mut InterruptFrame) -> u32 {
     let res = syscall_handle(frame);
     frame.eax = res;
     task_current_save_state(frame);
-    if crate::schedule::signal::prepare_current() {
+    if crate::schedule::signal::prepare_current() || KERNEL.with_task_manager(|tm|tm.get_current().is_none_or(|t|t.read().stopped)) {
         crate::schedule::task::task_next();
     }
     task_page();
@@ -79,6 +79,7 @@ pub extern "C" fn syscall_wrapper() {
         naked_asm!(
             "
         pushad
+        cld
         push esp
         call syscall_handler
         add esp, 4

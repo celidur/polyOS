@@ -4,6 +4,7 @@ pub const POLYOS_IOCTL_SCREEN_SET_COLOR: u32 = 0x5002;
 pub const POLYOS_IOCTL_SCREEN_DISABLE_CURSOR: u32 = 0x5003;
 
 #[repr(C)]
+#[derive(Clone,Copy,Default)]
 pub struct WinSize {
     pub ws_row: u16,
     pub ws_col: u16,
