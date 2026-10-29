@@ -1,3 +1,4 @@
+use super::sysv;
 use super::virtual_memory;
 use super::inspection;
 use super::filesystem;
@@ -18,6 +19,8 @@ use super::sync::*;
 use super::types::SyscallId;
 
 pub fn syscall_init() {
+    syscall_register(SyscallId::SysIpc, SyscallHandler::Args6(sysv::syscall_ipc));
+
     syscall_register(SyscallId::Mmap, SyscallHandler::Args1(virtual_memory::syscall_mmap));
     syscall_register(SyscallId::Munmap, SyscallHandler::Args2(virtual_memory::syscall_munmap));
     syscall_register(SyscallId::Mprotect, SyscallHandler::Args3(virtual_memory::syscall_mprotect));

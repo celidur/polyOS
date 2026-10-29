@@ -42,7 +42,7 @@ child's registry to the calling thread. TLS destructors run outside registry loc
 This port targets the existing single-CPU scheduler. It implements shared-address-
 space clone with PARENT_SETTID and CHILD_CLEARTID, plus private futex wait/wake.
 Joining/detaching the initial thread, compiler TLS setup, nonzero stack guards
-and timed futex waits are rejected rather
+are rejected rather
 than silently accepted. Thread-specific keys and destructors are supported.
 
 The thread tests also exposed prerequisites fixed here: partial ELF reads, the
@@ -128,3 +128,18 @@ Failed realloc leaves the original block intact. Tail trimming verifies the actu
 program break before releasing memory. brk/sbrk share a separate lock and query the
 current kernel break; fork snapshots both locks and resets them in the child.
 Kernel page allocation checks multiplication and alignment overflow before allocating.
+
+## Synchronization
+
+`schedule/ipc.rs` owns keyed System V semaphore sets and atomic semop transactions.
+The syscall adapter copies operations and marshals the i386 IPC argument block;
+blocking transactions restart under the same scheduler lock that tests the values.
+Removal wakes waiters with EIDRM. SETALL validates all values before publishing.
+SEM_UNDO and IPC_STAT/IPC_SET are explicitly unsupported. Legacy sem_init calls
+retain their compatibility backend, now also owned by the scheduler.
+
+Timed futex waits have a scheduler deadline and compete with explicit wake through
+the same task state. Libc `pthread_sync.c` implements private mutexes, conditions
+and once initialization on these queues. Mutexes support normal, recursive and
+error-checking modes; the default checks ownership. Conditions reacquire the mutex
+on timeout. Process-shared and robust pthread synchronization are not implemented.

@@ -86,9 +86,6 @@ pub fn syscall_futex(address: u32, op: u32, value: u32, timeout: u32) -> u32 {
     if op & !128 > 1 {
         return abi::errno(abi::ENOSYS);
     }
-    if op & !128 == 0 && timeout != 0 {
-        return abi::errno(abi::ENOTSUP);
-    }
     let result = KERNEL.with_task_manager(|tm| {
         let Some(process) = tm.get_current().map(|t| t.read().process.clone()) else {
             return Err(abi::ESRCH);
@@ -114,7 +111,32 @@ pub fn syscall_futex(address: u32, op: u32, value: u32, timeout: u32) -> u32 {
         if actual != value {
             return Err(abi::EAGAIN);
         }
-        tm.block_current(reason).map_err(|_| abi::ESRCH)?;
+        if timeout != 0 {
+            let mut spec = [0i32; 2];
+            user::copy_from_user(
+                &process.page_directory,
+                timeout,
+                spec.as_mut_ptr() as *mut u8,
+                8,
+            )
+            .map_err(|_| abi::EFAULT)?;
+            if spec[0] < 0 || spec[1] < 0 || spec[1] >= 1_000_000_000 {
+                return Err(abi::EINVAL);
+            }
+            let hz = crate::constant::TIMER_HZ as u64;
+            let ticks = spec[0] as u64 * hz + (spec[1] as u64 * hz + 999_999_999) / 1_000_000_000;
+            if ticks == 0 {
+                return Err(abi::ETIMEDOUT);
+            }
+            let end = tm.get_tick().saturating_add(ticks);
+            tm.get_current().ok_or(abi::ESRCH)?.write().state =
+                crate::schedule::task::TaskState::BlockedUntil {
+                    reason,
+                    wake_tick: end,
+                };
+        } else {
+            tm.block_current(reason).map_err(|_| abi::ESRCH)?;
+        }
         Ok(None)
     });
     match result {

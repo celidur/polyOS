@@ -39,3 +39,7 @@ pub const fn errno(code: i32) -> u32 {
 }
 
 pub const EADDRINUSE: i32 = 98;
+
+pub const EIDRM:i32=43;
+pub const ERANGE:i32=34;
+pub const ETIMEDOUT:i32=110;

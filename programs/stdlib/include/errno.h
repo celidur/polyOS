@@ -32,4 +32,9 @@ int *__errno_location(void);
 #define ENETDOWN 100
 #define ENOTCONN 107
 
+#define EBUSY 16
+#define ERANGE 34
+#define EIDRM 43
+#define ETIMEDOUT 110
+
 #endif

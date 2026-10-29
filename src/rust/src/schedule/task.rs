@@ -30,6 +30,7 @@ pub enum TaskState {
     Runnable,
     Sleeping { wake_tick: u64 },
     Blocked { reason: WaitReason },
+    BlockedUntil { reason:WaitReason, wake_tick:u64 },
 }
 
 impl TaskState {
@@ -38,7 +39,7 @@ impl TaskState {
     }
 
     pub fn is_waiting(self) -> bool {
-        matches!(self, Self::Sleeping { .. } | Self::Blocked { .. })
+        matches!(self, Self::Sleeping { .. } | Self::Blocked { .. } | Self::BlockedUntil { .. })
     }
 }
 

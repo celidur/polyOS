@@ -11,3 +11,7 @@ static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
 pub(super) fn allocate_id() -> usize {
     NEXT_ID.fetch_add(1, Ordering::Relaxed)
 }
+
+pub mod ipc;
+
+pub mod legacy_semaphore;

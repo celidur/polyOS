@@ -30,7 +30,9 @@ pub struct TaskManager {
 }
 
 impl TaskManager {
-    pub fn task_count(&self) -> usize { self.tasks.len() }
+    pub fn task_count(&self) -> usize {
+        self.tasks.len()
+    }
 
     pub fn new() -> Self {
         TaskManager {
@@ -100,12 +102,24 @@ impl TaskManager {
         }
     }
 
+    pub fn wake_preserving(&mut self, reason: WaitReason) {
+        let ids: Vec<_> = self
+            .tasks
+            .iter()
+            .filter_map(|(&id, t)| {
+                matches!(t.read().state,TaskState::Blocked{reason:r} if r==reason).then_some(id)
+            })
+            .collect();
+        for id in ids {
+            let _ = self.wake_task(id);
+        }
+    }
     pub fn wake_reason(&mut self, reason: WaitReason, limit: usize) -> usize {
         let ids: Vec<_> = self
             .tasks
             .iter()
             .filter_map(|(&id, task)| {
-                (task.read().state == TaskState::Blocked { reason }).then_some(id)
+                matches!(task.read().state, TaskState::Blocked {reason:r} | TaskState::BlockedUntil {reason:r,..} if r==reason).then_some(id)
             })
             .take(limit)
             .collect();
@@ -218,6 +232,13 @@ impl TaskManager {
         let mut wake: Vec<(TaskId, usize)> = Vec::new();
         for (task_id, nn_task) in &self.tasks {
             let mut task = nn_task.write();
+            if let TaskState::BlockedUntil { wake_tick, .. } = task.state
+                && now >= wake_tick
+            {
+                task.registers.eax = (-110i32) as u32;
+                task.state = TaskState::Runnable;
+                wake.push((*task_id, task.priority));
+            }
             if let TaskState::Sleeping { wake_tick } = task.state
                 && now >= wake_tick
             {

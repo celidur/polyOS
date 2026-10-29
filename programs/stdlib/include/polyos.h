@@ -257,4 +257,22 @@ void *mmap(void *address,size_t length,int prot,int flags,int fd,off_t offset);
 int munmap(void *address,size_t length);
 int mprotect(void *address,size_t length,int prot);
 
+
+typedef s32 key_t;
+#define IPC_PRIVATE 0
+#define IPC_CREAT 01000
+#define IPC_EXCL 02000
+#define IPC_NOWAIT 04000
+#define SEM_UNDO 010000
+#define IPC_RMID 0
+#define GETVAL 12
+#define GETALL 13
+#define SETVAL 16
+#define SETALL 17
+struct sembuf {u16 sem_num;s16 sem_op;u16 sem_flg;};
+union semun {int val;u16 *array;void *buf;};
+int semget(key_t key,int count,int flags);
+int semop(int id,struct sembuf *ops,size_t count);
+int semctl(int id,int number,int command,...);
+
 #endif
