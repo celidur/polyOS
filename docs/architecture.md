@@ -119,3 +119,12 @@ last page and reject ranges beyond the file's final page. Shared mappings and
 file writeback are unsupported. Non-PAE i386 cannot enforce execute-disable or
 write-only pages; PROT_NONE and write protection are enforced. Mappings are limited
 to 32 MiB per call and kernel allocation failures return ENOMEM.
+
+## Memory allocation
+
+Libc `allocation.c` owns the locked small-allocation free list, 16-byte alignment,
+checked calloc/realloc sizes, aligned allocation and large mmap-backed blocks.
+Failed realloc leaves the original block intact. Tail trimming verifies the actual
+program break before releasing memory. brk/sbrk share a separate lock and query the
+current kernel break; fork snapshots both locks and resets them in the child.
+Kernel page allocation checks multiplication and alignment overflow before allocating.

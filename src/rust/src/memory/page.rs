@@ -22,7 +22,9 @@ impl<T> Page<T> {
             return None;
         }
 
-        let size = align_up(core::mem::size_of::<T>() * len, PAGING_PAGE_SIZE);
+        let bytes = core::mem::size_of::<T>().checked_mul(len)?;
+        let size = bytes.checked_add(PAGING_PAGE_SIZE - 1)? & !(PAGING_PAGE_SIZE - 1);
+        if size == 0 { return None; }
         let layout = Layout::from_size_align(size, PAGING_PAGE_SIZE).ok()?;
 
         // Safety: layout has non-zero size & valid alignment. alloc_zeroed returns null on OOM.
@@ -117,9 +119,4 @@ impl<T> Clone for Page<T> {
             ref_count: Arc::clone(&self.ref_count),
         }
     }
-}
-
-#[inline]
-const fn align_up(x: usize, align: usize) -> usize {
-    (x + align - 1) & !(align - 1)
 }

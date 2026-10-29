@@ -19,7 +19,6 @@ extern int __sys_sem_signal(int semid);
 extern int __sys_sem_close(int semid);
 extern int __sys_ioctl(int fd, unsigned long request, unsigned long arg);
 extern int __sys_pipe(int pipefd[2]);
-extern void *__sys_brk(void *addr);
 
 static int syscall_ret(int result)
 {
@@ -191,35 +190,4 @@ int ioctl(int fd, unsigned long request, unsigned long arg)
 int pipe(int pipefd[2])
 {
     return syscall_ret(__sys_pipe(pipefd));
-}
-
-int brk(void *addr)
-{
-    void *result = __sys_brk(addr);
-    if (result == addr) {
-        return 0;
-    }
-
-    errno = ENOMEM;
-    return -1;
-}
-
-void *sbrk(intptr_t increment)
-{
-    static char *program_break = NULL;
-
-    if (program_break == NULL) {
-        program_break = (char *)__sys_brk(NULL);
-    }
-
-    char *old_break = program_break;
-    char *new_break = old_break + increment;
-    char *result = (char *)__sys_brk(new_break);
-    if (result != new_break) {
-        errno = ENOMEM;
-        return (void *)-1;
-    }
-
-    program_break = result;
-    return old_break;
 }
