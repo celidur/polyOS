@@ -53,6 +53,20 @@ impl TaskManager {
         }
         changed
     }
+    pub fn discard_pending_signals(&mut self, pid: u32, mask: u32) {
+        for task in self.tasks.values() {
+            let mut task = task.write();
+            if task.process.pid == pid {
+                task.signals.pending &= !mask;
+            }
+        }
+    }
+    pub fn can_deliver_signal(&self, pid: u32, signal: u32) -> bool {
+        self.tasks.values().any(|task| {
+            let task = task.read();
+            task.process.pid == pid && task.signals.blocked & (1 << (signal - 1)) == 0
+        })
+    }
     pub fn notify_signal(&mut self, pid: u32, signal: u32) -> bool {
         let target = self.tasks.iter().find_map(|(&id, t)| {
             let t = t.read();

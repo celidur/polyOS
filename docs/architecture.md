@@ -188,7 +188,12 @@ frame address, validates user instruction/stack addresses and forces user select
 and safe flags. A user frame cannot grant kernel privilege.
 
 Caught signals interrupt blocked syscalls with EINTR; nanosleep reports remaining
-time. STOP/CONT preserve and restore scheduling state for every process thread.
+time. SIGSTOP remains unconditional. Catchable default stop actions (SIGTSTP,
+SIGTTIN, SIGTTOU) run only when a thread can accept the signal; blocked stops stay
+pending. Eligible default stops suspend existing waits without interrupting them.
+Stop generation cancels pending CONT, and CONT cancels pending stops
+and resumes every process thread. The scheduler rechecks runnable state after
+signal preparation before returning to userspace.
 User page faults signal SIGSEGV; unexpected supervisor faults panic the kernel.
 Libc errno lookup uses stable per-thread slots so signal handlers do not acquire
 the pthread registry lock. Semaphore and child-exit wakeups reject stale waiters.

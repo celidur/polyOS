@@ -26,7 +26,110 @@ static void *mask_worker(void *arg) {
   pthread_sigmask(SIG_SETMASK, &m, 0);
   return (void *)(uintptr_t)inherited;
 }
+static void test_masked_stops(void (*expect)(const char *, int, int)) {
+  for (int sig = SIGTSTP; sig <= SIGTTOU; ++sig) {
+    int ready[2], gate[2];
+    pipe(ready);
+    pipe(gate);
+    int child = fork();
+    if (child == 0) {
+      close(ready[0]);
+      close(gate[1]);
+      signal(sig, SIG_DFL);
+      sigset_t mask, pending;
+      sigemptyset(&mask);
+      sigaddset(&mask, sig);
+      sigprocmask(SIG_BLOCK, &mask, 0);
+      kill(getpid(), sig);
+      sigpending(&pending);
+      char value = sigismember(&pending, sig) ? 'P' : 'N';
+      write(ready[1], &value, 1);
+      read(gate[0], &value, 1);
+      sigprocmask(SIG_UNBLOCK, &mask, 0);
+      _exit(43);
+    }
+    close(ready[1]);
+    close(gate[0]);
+    struct pollfd event = {ready[0], POLLIN, 0};
+    char value = 0;
+    int status = -1;
+    int reached = poll(&event, 1, 500) == 1 && read(ready[0], &value, 1) == 1;
+    int waited = waitpid(child, &status, WNOHANG | WUNTRACED);
+    expect("blocked job-control stop stays pending",
+           reached && value == 'P' && waited == 0, 1);
+    write(gate[1], "U", 1);
+    if (waited == 0)
+      waited = waitpid(child, &status, WUNTRACED);
+    expect("unblocking job-control signal stops child",
+           waited == child && WIFSTOPPED(status) && WSTOPSIG(status) == sig, 1);
+    if (waited == child && WIFSTOPPED(status)) {
+      kill(child, SIGCONT);
+      waitpid(child, &status, 0);
+    }
+    expect("continued job-control child exits normally",
+           WIFEXITED(status) && WEXITSTATUS(status) == 43, 1);
+    close(ready[0]);
+    close(gate[1]);
+  }
+  int ready[2], gate[2];
+  pipe(ready);
+  pipe(gate);
+  int remote = fork(), remote_status;
+  if (remote == 0) {
+    close(ready[0]);
+    close(gate[1]);
+    char byte = 'R';
+    write(ready[1], &byte, 1);
+    if (read(gate[0], &byte, 1) != 1 || byte != 'G')
+      _exit(99);
+    write(ready[1], "D", 1);
+    _exit(45);
+  }
+  close(ready[1]);
+  close(gate[0]);
+  char byte;
+  read(ready[0], &byte, 1);
+  kill(remote, SIGTSTP);
+  waitpid(remote, &remote_status, WUNTRACED);
+  struct pollfd event = {ready[0], POLLIN, 0};
+  expect("remote default stop prevents userspace return",
+         WIFSTOPPED(remote_status) && poll(&event, 1, 0) == 0, 1);
+  if (WIFSTOPPED(remote_status)) {
+    kill(remote, SIGCONT);
+    write(gate[1], "G", 1);
+    read(ready[0], &byte, 1);
+    waitpid(remote, &remote_status, 0);
+  }
+  expect("remote stopped child resumes its execution",
+         WIFEXITED(remote_status) && WEXITSTATUS(remote_status) == 45 &&
+             byte == 'D',
+         1);
+  close(ready[0]);
+  close(gate[1]);
+  int child = fork(), status;
+  if (child == 0) {
+    sigset_t mask, pending;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGTSTP);
+    sigprocmask(SIG_BLOCK, &mask, 0);
+    kill(getpid(), SIGTSTP);
+    kill(getpid(), SIGCONT);
+    sigpending(&pending);
+    if (sigismember(&pending, SIGTSTP))
+      _exit(99);
+    sigprocmask(SIG_UNBLOCK, &mask, 0);
+    _exit(44);
+  }
+  waitpid(child, &status, WUNTRACED);
+  expect("CONT cancels a blocked pending stop",
+         WIFEXITED(status) && WEXITSTATUS(status) == 44, 1);
+  if (WIFSTOPPED(status)) {
+    kill(child, SIGCONT);
+    waitpid(child, &status, 0);
+  }
+}
 void test_signal_runtime(void (*expect)(const char *, int, int)) {
+  test_masked_stops(expect);
   struct sigaction action = {handler, 0, 0, 0};
   expect("signal action", sigaction(SIGUSR1, &action, 0) == 0, 1);
   sigset_t set, old, pending;

@@ -1,6 +1,6 @@
 //! Pending signal delivery and trusted return context, owned by tasks and processes.
 use super::{
-    process::{SIG_DFL, SIG_IGN, SIGNAL_FRAME_MAGIC, SignalFrame},
+    process::{SignalFrame, SIGNAL_FRAME_MAGIC, SIG_DFL, SIG_IGN},
     task::{Registers, Task},
 };
 use crate::{kernel::KERNEL, memory::user};
@@ -137,6 +137,10 @@ pub fn frame(task: &mut Task, signal: u32) -> Result<bool, ()> {
 }
 /// Called with the kernel address space active, just before returning to userspace.
 pub fn prepare_current() -> bool {
+    enum Delivery {
+        Stop(u32, u32),
+        Terminate(u32, u32),
+    }
     let outcome = KERNEL.with_task_manager(|tm| {
         let Some(t) = tm.get_current() else {
             return (false, None);
@@ -155,11 +159,18 @@ pub fn prepare_current() -> bool {
             *pending &= !(1 << (signal - 1));
         }
         drop(pending);
+        if matches!(signal, 20..=22)
+            && process
+                .get_signal_action(signal)
+                .is_some_and(|a| a.handler == SIG_DFL)
+        {
+            return (true, Some(Delivery::Stop(process.pid, signal)));
+        }
         match frame(&mut t, signal) {
             Ok(changed) => (changed, None),
             Err(()) => (
                 true,
-                Some((
+                Some(Delivery::Terminate(
                     process.pid,
                     if process
                         .get_signal_action(signal)
@@ -173,8 +184,11 @@ pub fn prepare_current() -> bool {
             ),
         }
     });
-    if let Some((pid, signal)) = outcome.1 {
-        KERNEL.with_process_manager(|pm| pm.terminate_signal(pid, signal));
+    if let Some(delivery) = outcome.1 {
+        KERNEL.with_process_manager(|pm| match delivery {
+            Delivery::Stop(pid, signal) => pm.stop_signal(pid, signal),
+            Delivery::Terminate(pid, signal) => pm.terminate_signal(pid, signal),
+        });
     }
     outcome.0
 }

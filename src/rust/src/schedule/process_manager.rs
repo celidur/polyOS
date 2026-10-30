@@ -299,6 +299,14 @@ impl ProcessManager {
         self.exit_with_wait_status(pid, encode_exit_status(code));
     }
 
+    /// Apply a stop only after a signal becomes eligible for delivery.
+    pub(crate) fn stop_signal(&mut self, pid: ProcessId, signal: u32) {
+        let Some(process) = self.table.get(&pid).cloned() else { return; };
+        if KERNEL.with_task_manager(|tm| tm.stop_process(pid, true)) {
+            self.child_event(&process, ((signal as i32) << 8) | 0x7f);
+        }
+    }
+
     pub fn signal(&mut self, pid: ProcessId, signal: u32) -> Result<SignalEffect, KernelError> {
         let process = self.table.get(&pid).cloned().ok_or(KernelError::NoTasks)?;
         if signal == 0 {
@@ -321,12 +329,23 @@ impl ProcessManager {
             }
             *process.pending_signals.lock() &= !((1 << 18) | (1 << 19) | (1 << 20) | (1 << 21));
         }
-        if signal == SIGSTOP || (matches!(signal, 20 | 21 | 22) && action.handler == SIG_DFL) {
-            if KERNEL.with_task_manager(|tm| tm.stop_process(pid, true)) {
-                self.child_event(&process, ((signal as i32) << 8) | 0x7f);
-            }
+        // Stop generation cancels pending CONT even when the stop is blocked.
+        if matches!(signal, 19..=22) {
             *process.pending_signals.lock() &= !(1 << 17);
+            KERNEL.with_task_manager(|tm| tm.discard_pending_signals(pid, 1 << 17));
+        }
+        if signal == SIGSTOP {
+            self.stop_signal(pid, signal);
             return Ok(SignalEffect::Delivered);
+        }
+        if matches!(signal, 20..=22) && action.handler == SIG_DFL {
+            if KERNEL.with_task_manager(|tm| tm.can_deliver_signal(pid, signal)) {
+                // Default stops suspend waits; they must not turn blocked I/O into EINTR.
+                self.stop_signal(pid, signal);
+                return Ok(SignalEffect::Delivered);
+            }
+            *process.pending_signals.lock() |= 1 << (signal - 1);
+            return Ok(SignalEffect::Ignored);
         }
         if action.handler == SIG_IGN
             || (action.handler == SIG_DFL && matches!(signal, 17 | 18 | 23 | 28))

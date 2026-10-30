@@ -208,9 +208,10 @@ pub fn task_next() -> ! {
                 KERNEL.kernel_page();
                 super::signal::prepare_current();
                 let context = KERNEL.with_task_manager(|tm| {
-                    tm.get_current().map(|t| {
+                    tm.get_current().and_then(|t| {
                         let t = t.read();
-                        (t.registers, t.fpu)
+                        // Signal preparation can stop the selected process.
+                        t.is_runnable().then_some((t.registers, t.fpu))
                     })
                 });
                 if let Some((registers, fpu)) = context {
