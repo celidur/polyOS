@@ -58,6 +58,11 @@ pub trait FileSystemDriver: Send + Sync + Debug {
 }
 
 pub trait FileSystem: Send + Sync {
+    /// Mutable directory backends retain the opened object, independently of
+    /// its pathname. Immutable backends may keep snapshot metadata instead.
+    fn open_directory(&self, _path: &str) -> Result<Option<FileHandle>, FsError> {
+        Ok(None)
+    }
     fn read_link(&self, _path: &str) -> Result<String, FsError> {
         Err(FsError::InvalidArgument)
     }
@@ -283,6 +288,10 @@ impl Vfs {
     pub fn read_link(&self, path: &str) -> Result<String, FsError> {
         let (fs, subpath) = self.existing_path(path)?;
         fs.read_link(&subpath)
+    }
+    pub fn open_directory_object(&self, path: &str) -> Result<Option<FileHandle>, FsError> {
+        let (fs, subpath) = self.existing_path(path)?;
+        fs.open_directory(&subpath)
     }
     pub fn follow_in(&self, root: &str, path: &str) -> Result<String, FsError> {
         let mut path = path.to_string();

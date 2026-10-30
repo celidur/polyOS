@@ -62,6 +62,7 @@ pub fn open(process: &Process, path: &str, flags: u32, mode: u16) -> Result<i32,
             return Err(FsError::IsADirectory);
         }
         ProcessDescriptor::Directory(Arc::new(Mutex::new(DirectoryHandle {
+            object: vfs.open_directory_object(path)?,
             path: path.into(),
             entries: vfs.read_dir(path)?,
             offset: 0,

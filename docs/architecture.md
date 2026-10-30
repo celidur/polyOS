@@ -106,6 +106,10 @@ by filesystem metadata and are reported as zero. Directory entries are snapshots
 at open time. The read-only procfs exposes `/proc/self/exe` through the VFS link
 interface, with stat/open following the link and lstat/readlink preserving it.
 
+Mutable directory backends retain an opened directory object for metadata and
+chmod. Authorization uses its live owner, and unlink/recreation cannot redirect
+an existing descriptor to a different object. Immutable backends reject chmod.
+
 ## System inspection
 
 `inspection.rs` supplies snapshots to sysinfo and read-only procfs files (uptime,

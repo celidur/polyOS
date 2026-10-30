@@ -98,11 +98,10 @@ pub fn syscall_fchmod(fd: u32, mode: u32) -> u32 {
         ProcessDescriptor::File(f) => f.lock().ops.chmod(mode as u16 & 0o777),
         ProcessDescriptor::Directory(d) => {
             let mut d = d.lock();
-            let r = KERNEL.vfs.read().chmod(&d.path, mode as u16 & 0o777);
-            if r.is_ok() {
-                d.metadata.mode = mode as u16 & 0o777;
+            match &mut d.object {
+                Some(object) => object.ops.chmod(mode as u16 & 0o777),
+                None => Err(FsError::Unsupported),
             }
-            r
         }
         _ => Err(FsError::Unsupported),
     };

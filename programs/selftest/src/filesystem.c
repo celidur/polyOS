@@ -38,6 +38,30 @@ static void truncation(const char *path,
   unlink(path);
 }
 void test_filesystem(void (*expect)(const char *, int, int)) {
+  mkdir("/tmp/dir-owner", 0755);
+  chown("/tmp/dir-owner", 1000, 0);
+  int owner_fd = open("/tmp/dir-owner", O_RDONLY | O_DIRECTORY, 0);
+  chown("/tmp/dir-owner", 2000, 0);
+  chmod("/tmp/dir-owner", 0700);
+  struct file_stat owner_stat;
+  expect("directory fstat observes current ownership",
+         owner_fd >= 0 && fstat(owner_fd, &owner_stat) == 0 && owner_stat.uid == 2000, 1);
+  int owner_child = fork(), owner_status = -1;
+  if (!owner_child) {
+    setuid(1000);
+    errno = 0;
+    _exit(fchmod(owner_fd, 0777) == -1 && errno == EPERM ? 0 : 91);
+  }
+  expect("directory fchmod rejects former owner",
+         owner_child > 0 && waitpid(owner_child, &owner_status, 0) == owner_child && owner_status == 0, 1);
+  rmdir("/tmp/dir-owner");
+  mkdir("/tmp/dir-owner", 0700);
+  expect("directory fchmod retains unlinked object identity",
+         fchmod(owner_fd, 0755) == 0 && stat("/tmp/dir-owner", &owner_stat) == 0 &&
+         (owner_stat.mode & 0777) == 0700 && fstat(owner_fd, &owner_stat) == 0 &&
+         owner_stat.uid == 2000 && (owner_stat.mode & 0777) == 0755, 1);
+  close(owner_fd);
+  rmdir("/tmp/dir-owner");
   truncation("/tmp/truncate-test", expect);
   truncation("/truncate-test", expect);
   mkdir("/tmp/at-test", 0700);

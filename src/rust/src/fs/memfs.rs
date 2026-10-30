@@ -55,6 +55,16 @@ impl MemFsVolume {
 }
 
 impl FileSystem for MemFsVolume {
+    fn open_directory(&self, path: &str) -> Result<Option<FileHandle>, FsError> {
+        let map = self.inner.read();
+        let node = map.get(path).ok_or(FsError::NotFound)?;
+        if !node.lock().is_dir {
+            return Err(FsError::NotADirectory);
+        }
+        Ok(Some(FileHandle::new(Box::new(MemFsDirectory {
+            inner: node.clone(),
+        }))))
+    }
     fn open(&self, path: &str) -> Result<FileHandle, FsError> {
         let map = self.inner.read();
         let node = map.get(path).ok_or(FsError::NotFound)?;
@@ -164,6 +174,28 @@ impl FileSystem for MemFsVolume {
         node.meta.uid = uid;
         node.meta.gid = gid;
         Ok(())
+    }
+}
+
+struct MemFsDirectory {
+    inner: Arc<Mutex<MemNode>>,
+}
+impl FileOps for MemFsDirectory {
+    fn stat(&self) -> Result<FileMetadata, FsError> {
+        Ok(self.inner.lock().meta.clone())
+    }
+    fn chmod(&mut self, mode: u16) -> Result<(), FsError> {
+        self.inner.lock().meta.mode = mode & 0o777;
+        Ok(())
+    }
+    fn read(&mut self, _out: &mut [u8]) -> Result<usize, FsError> {
+        Err(FsError::IsADirectory)
+    }
+    fn write(&mut self, _data: &[u8]) -> Result<usize, FsError> {
+        Err(FsError::IsADirectory)
+    }
+    fn seek(&mut self, _pos: usize) -> Result<usize, FsError> {
+        Err(FsError::Unsupported)
     }
 }
 

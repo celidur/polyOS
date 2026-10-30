@@ -56,8 +56,8 @@ impl ProcessFd {
     }
 }
 
-#[derive(Clone)]
 pub struct DirectoryHandle {
+    pub object: Option<FileHandle>,
     pub path: String,
     pub entries: Vec<String>,
     pub offset: usize,
@@ -202,7 +202,13 @@ impl ProcessDescriptor {
     pub fn stat(&self) -> Result<FileMetadata, FsError> {
         match self {
             Self::File(file) => file.lock().ops.stat(),
-            Self::Directory(directory) => Ok(directory.lock().metadata.clone()),
+            Self::Directory(directory) => {
+                let directory = directory.lock();
+                match &directory.object {
+                    Some(object) => object.ops.stat(),
+                    None => Ok(directory.metadata.clone()),
+                }
+            }
             _ => Err(FsError::Unsupported),
         }
     }
