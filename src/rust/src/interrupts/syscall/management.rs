@@ -76,8 +76,9 @@ pub fn syscall_chroot(ptr: u32) -> u32 {
     let Some(name) = user::read_process_string(&p, ptr, MAX_PATH) else {
         return abi::errno(abi::EFAULT);
     };
-    let Some(path) = p.resolve_path(&name) else {
-        return abi::errno(abi::ENOENT);
+    let path = match p.resolve_path(&name) {
+        Ok(path) => path,
+        Err(e) => return super::file::fs_errno(e),
     };
     match KERNEL.vfs.read().stat(&path) {
         Ok(m) if !m.is_dir => return abi::errno(abi::ENOTDIR),

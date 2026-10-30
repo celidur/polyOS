@@ -654,8 +654,9 @@ impl Process {
         self.page_directory.clear_cow_pages();
     }
 
-    pub fn resolve_path(&self, path: &str) -> Option<String> {
-        self.resolve_from(&self.cwd.lock(), path)
+    pub fn resolve_path(&self, path: &str) -> Result<String, FsError> {
+        let base = self.cwd.lock().clone();
+        self.resolve_from(&base, path)
     }
 
     pub fn uid(&self) -> u32 {
@@ -670,8 +671,8 @@ impl Process {
     pub fn egid(&self) -> u32 {
         self.control.lock().credentials.egid
     }
-    pub fn resolve_from(&self, base: &str, path: &str) -> Option<String> {
-        crate::fs::path::resolve_root(&self.control.lock().root, base, path)
+    pub fn resolve_from(&self, base: &str, path: &str) -> Result<String, FsError> {
+        crate::fs::path::resolve_for(self, base, path)
     }
     pub fn follow_path(&self, path: &str) -> Result<String, FsError> {
         crate::fs::access::search(self, path)?;

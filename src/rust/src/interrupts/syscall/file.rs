@@ -453,15 +453,11 @@ pub fn syscall_rmdir(path_ptr: u32) -> u32 {
 }
 
 pub fn syscall_mkdir(path_ptr: u32, mode: u32) -> u32 {
-    let Some((process, path, mode)) = with_current_task(|task| {
-        Some((
-            task.process.clone(),
-            current_resolved_path_for_task(task, path_ptr)?,
-            mode as u16,
-        ))
-    }) else {
-        return abi::errno(abi::EFAULT);
+    let (process, path) = match current_path(path_ptr) {
+        Ok(context) => context,
+        Err(e) => return fs_errno(e),
     };
+    let mode = mode as u16;
 
     if let Err(e) = crate::fs::access::parent_write(&process, &path) {
         return fs_errno(e);
@@ -476,14 +472,9 @@ pub fn syscall_mkdir(path_ptr: u32, mode: u32) -> u32 {
 }
 
 pub fn syscall_chmod(path_ptr: u32, mode: u32) -> u32 {
-    let Some((process, path, mode)) = with_current_task(|task| {
-        Some((
-            task.process.clone(),
-            current_resolved_path_for_task(task, path_ptr)?,
-            mode as u16,
-        ))
-    }) else {
-        return abi::errno(abi::EFAULT);
+    let (process, path) = match current_path(path_ptr) {
+        Ok(context) => context,
+        Err(e) => return fs_errno(e),
     };
     let path = match process.follow_path(&path) {
         Ok(p) => p,
@@ -497,23 +488,18 @@ pub fn syscall_chmod(path_ptr: u32, mode: u32) -> u32 {
     if process.euid() != 0 && process.euid() != meta.uid {
         return abi::errno(abi::EPERM);
     }
-    match KERNEL.vfs.read().chmod(path.as_str(), mode & 0o777) {
+    match KERNEL.vfs.read().chmod(path.as_str(), mode as u16 & 0o777) {
         Ok(()) => 0,
         Err(error) => fs_errno(error),
     }
 }
 
 pub fn syscall_chown(path_ptr: u32, uid: u32, gid: u32) -> u32 {
-    let Some((process, path, mut uid, mut gid)) = with_current_task(|task| {
-        Some((
-            task.process.clone(),
-            current_resolved_path_for_task(task, path_ptr)?,
-            uid,
-            gid,
-        ))
-    }) else {
-        return abi::errno(abi::EFAULT);
+    let (process, path) = match current_path(path_ptr) {
+        Ok(context) => context,
+        Err(e) => return fs_errno(e),
     };
+    let (mut uid, mut gid) = (uid, gid);
     let path = match process.follow_path(&path) {
         Ok(p) => p,
         Err(e) => return fs_errno(e),
@@ -548,13 +534,9 @@ pub fn syscall_umask(mask: u32) -> u32 {
 }
 
 pub fn syscall_chdir(path_ptr: u32) -> u32 {
-    let Some((process, path)) = with_current_task(|task| {
-        Some((
-            task.process.clone(),
-            current_resolved_path_for_task(task, path_ptr)?,
-        ))
-    }) else {
-        return abi::errno(abi::EFAULT);
+    let (process, path) = match current_path(path_ptr) {
+        Ok(context) => context,
+        Err(e) => return fs_errno(e),
     };
     let path = match process.follow_path(&path) {
         Ok(p) => p,
@@ -632,14 +614,9 @@ pub fn syscall_getcwd(buf_ptr: u32, size: u32) -> u32 {
 }
 
 pub fn syscall_stat(path_ptr: u32, stat_ptr: u32) -> u32 {
-    let Some((process, path, stat_ptr)) = with_current_task(|task| {
-        Some((
-            task.process.clone(),
-            current_resolved_path_for_task(task, path_ptr)?,
-            stat_ptr,
-        ))
-    }) else {
-        return abi::errno(abi::EFAULT);
+    let (process, path) = match current_path(path_ptr) {
+        Ok(context) => context,
+        Err(e) => return fs_errno(e),
     };
     let path = match process.follow_path(&path) {
         Ok(p) => p,
@@ -709,12 +686,9 @@ pub fn syscall_getdents(fd: u32, dirent_ptr: u32, len: u32) -> u32 {
 }
 
 fn remove_path(path_ptr: u32, directory: bool) -> u32 {
-    let Some(path) = current_resolved_path(path_ptr) else {
-        return abi::errno(abi::EFAULT);
-    };
-
-    let Some(process) = with_current_task(|t| Some(t.process.clone())) else {
-        return abi::errno(abi::ESRCH);
+    let (process, path) = match current_path(path_ptr) {
+        Ok(context) => context,
+        Err(e) => return fs_errno(e),
     };
     if let Err(e) = crate::fs::access::parent_write(&process, &path) {
         return fs_errno(e);
@@ -747,17 +721,13 @@ fn apply_created_mode(process: &Process, path: &str, mode: u16, directory: bool)
         .chown(path, process.euid(), process.egid());
 }
 
-fn current_resolved_path(path_ptr: u32) -> Option<String> {
-    with_current_task(|task| current_resolved_path_for_task(task, path_ptr))
-}
-
-fn current_resolved_path_for_task(task: &Task, path_ptr: u32) -> Option<String> {
-    if path_ptr == 0 {
-        return None;
-    }
-
-    let path = user::read_c_string(task, path_ptr, MAX_PATH)?;
-    task.process.resolve_path(path.as_str())
+fn current_path(path_ptr: u32) -> Result<(Arc<Process>, String), FsError> {
+    let process =
+        with_current_task(|task| Some(task.process.clone())).ok_or(FsError::BadAddress)?;
+    let name =
+        user::read_process_string(&process, path_ptr, MAX_PATH).ok_or(FsError::BadAddress)?;
+    let path = process.resolve_path(&name)?;
+    Ok((process, path))
 }
 
 fn with_current_task<T>(f: impl FnOnce(&Task) -> Option<T>) -> Option<T> {

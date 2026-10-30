@@ -57,7 +57,6 @@ pub fn syscall_execve(path_ptr: u32, argv_ptr: u32, envp_ptr: u32) -> u32 {
         }
 
         let raw_path = user::read_c_string(&task, path_ptr, MAX_PATH)?;
-        let path = task.process.resolve_path(raw_path.as_str())?;
         let args = read_argv_from_task(&task, raw_path.as_str(), argv_ptr)?;
         let env = if envp_ptr == 0 {
             task.process.env.lock().clone()
@@ -67,13 +66,18 @@ pub fn syscall_execve(path_ptr: u32, argv_ptr: u32, envp_ptr: u32) -> u32 {
         Some((
             task.process.clone(),
             task.process.pid,
-            path,
+            raw_path,
             ProcessArguments { args, env },
         ))
     });
 
     let Some((process, pid, path, args)) = exec else {
         return abi::errno(abi::EFAULT);
+    };
+
+    let path = match process.resolve_path(&path) {
+        Ok(path) => path,
+        Err(e) => return super::file::fs_errno(e),
     };
 
     let path = match process.follow_path(&path) {

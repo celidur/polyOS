@@ -977,6 +977,7 @@ extern void test_faults(void (*expect)(const char *, int, int));
 extern void test_fd_lifetime(void (*expect)(const char *, int, int));
 extern void test_signal_fork(void (*expect)(const char *, int, int));
 extern void test_poll_lifetime(void (*expect)(const char *, int, int));
+extern void test_path_traversal(void (*expect)(const char *, int, int));
 extern int review_fpu_control(void);
 extern void test_threads(void (*expect)(const char *, int, int));
 int main(int argc, char **argv)
@@ -1024,6 +1025,7 @@ int main(int argc, char **argv)
     test_fd_lifetime(expect);
     test_signal_fork(expect);
     test_poll_lifetime(expect);
+    test_path_traversal(expect);
     test_terminal(expect);
     test_management(expect);
     test_signal_runtime(expect);

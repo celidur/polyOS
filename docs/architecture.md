@@ -94,6 +94,12 @@ unsupported flags are rejected.
 policy between open and openat, including permissions, exclusive creation,
 close-on-exec and directory-only opens. A zero creation mode means no permissions;
 libc fopen and shell creation paths supply their intended default mode explicitly.
+
+Traversal validates each directory and its search permission before consuming
+`.` or `..`; missing/non-directory components cannot disappear through lexical
+normalization. Syscall adapters release task-manager locks before filesystem
+resolution, including exec and procfs traversal.
+
 `FileOps` owns descriptor chmod, truncation and position. Memfs preserves open
 objects after unlink. FAT maintains a logical offset, zero-fills gaps/extensions,
 and preserves the offset across truncate; FAT chmod remains unsupported.
