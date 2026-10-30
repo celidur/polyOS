@@ -44,31 +44,24 @@ impl OrbisHelper {
     fn complete_path(&self, word: &str, dirs_only: bool) -> Vec<String> {
         let home = env::var("HOME").unwrap_or_default();
 
-        let expanded: String = if word == "~" {
-            home.clone()
-        } else if word.starts_with("~/") {
-            format!("{}{}", home, &word[1..])
-        } else {
-            word.to_string()
-        };
-
-        let (search_dir, name_prefix, path_prefix) = if expanded.contains('/') {
-            let p = Path::new(&expanded);
-            let dir = p.parent().unwrap_or(Path::new(".")).to_path_buf();
-            let prefix = p.file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("")
-                .to_string();
-            let dir_str = if dir.as_os_str().is_empty() {
-                PathBuf::from(".")
+        // Split the typed prefix lexically: Path::parent/file_name discard a
+        // trailing slash, and adding a separator to the root produces "//".
+        if word == "~" {
+            return if !home.is_empty() && Path::new(&home).is_dir() {
+                vec!["~/".to_string()]
             } else {
-                dir.clone()
+                vec![]
             };
-            let base = format!("{}/", dir.display());
-            let base = if base == "./" { String::new() } else { base };
-            (dir_str, prefix, base)
+        }
+        let split = word.rfind('/').map(|index| index + 1).unwrap_or(0);
+        let (path_prefix, name_prefix) = word.split_at(split);
+        let search_dir = if let Some(relative) = path_prefix.strip_prefix("~/") {
+            if home.is_empty() { return vec![]; }
+            PathBuf::from(&home).join(relative)
+        } else if path_prefix.is_empty() {
+            PathBuf::from(".")
         } else {
-            (PathBuf::from("."), expanded.clone(), String::new())
+            PathBuf::from(path_prefix)
         };
 
         let entries = match fs::read_dir(&search_dir) {
@@ -91,21 +84,7 @@ impl OrbisHelper {
             }
 
             let suffix = if is_dir { "/" } else { "" };
-            let full = format!("{}{}{}", path_prefix, name, suffix);
-
-            let display = if word.starts_with("~/") || word == "~" {
-                let absolute = search_dir.join(&name);
-                let abs_str = absolute.to_string_lossy();
-                if abs_str.starts_with(&home) {
-                    format!("~{}{}", &abs_str[home.len()..], suffix)
-                } else {
-                    full
-                }
-            } else {
-                full
-            };
-
-            completions.push(display);
+            completions.push(format!("{}{}{}", path_prefix, name, suffix));
         }
 
         completions.sort();
