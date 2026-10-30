@@ -73,7 +73,9 @@ pub extern "C" fn syscall_handler(
             t.write().restarting = false;
         }
     });
+    crate::metrics::enter(frame.syscall_number());
     let res = syscall_handle(frame);
+    crate::metrics::leave();
     frame.eax = res;
     task_current_save_state(frame);
     if crate::schedule::signal::prepare_current()

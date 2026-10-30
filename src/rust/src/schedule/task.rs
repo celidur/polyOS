@@ -67,6 +67,7 @@ pub struct Registers {
 pub struct Task {
     pub id: TaskId,
     pub registers: Registers,
+    pub user_ticks: u64,
     pub fpu: crate::arch::FpuState,
     pub process: Arc<Process>,
     pub priority: usize,
@@ -87,6 +88,7 @@ impl Task {
         Self {
             id,
             registers: Self::entry_registers(&process),
+            user_ticks: 0,
             fpu: Default::default(),
             name: task_name(&process),
             process,
@@ -111,6 +113,7 @@ impl Task {
         Self {
             id,
             registers,
+            user_ticks: 0,
             fpu: Default::default(),
             name: task_name(&process),
             process,
@@ -182,6 +185,7 @@ enum TaskSwitch {
 }
 
 pub fn task_next() -> ! {
+    crate::metrics::leave();
     loop {
         let next_task = KERNEL.with_task_manager(|tm| {
             use super::task_manager::ScheduleOutcome;

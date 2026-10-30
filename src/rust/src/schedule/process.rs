@@ -75,6 +75,8 @@ pub struct SignalFrame {
 }
 
 pub struct Process {
+    pub command_line: Vec<String>,
+    pub start_tick: u64,
     pub pid: ProcessId,
     pub control: Mutex<super::control::Control>,
     pub auxv_address: u32,
@@ -126,6 +128,8 @@ impl Process {
             args: vec![filename.to_string()],
             env: default_environment(),
         });
+        process.command_line = args.args.clone();
+        process.start_tick = KERNEL.with_task_manager(|tm| tm.get_tick());
 
         serial_println!("Process {} args: {:?}", pid, args.args);
 
@@ -199,6 +203,7 @@ impl Process {
         let page_directory =
             PageDirectory::new_4gb(memory::PRESENT).ok_or(KernelError::Allocation)?;
         Ok(Some(Self {
+            command_line: Vec::new(), start_tick: 0,
             pid: 0,
             control: Mutex::new(Default::default()),
             auxv_address: 0,
@@ -250,6 +255,7 @@ impl Process {
         let page_directory =
             PageDirectory::new_4gb(memory::PRESENT).ok_or(KernelError::Allocation)?;
         Ok(Self {
+            command_line: Vec::new(), start_tick: 0,
             pid: 0,
             control: Mutex::new(Default::default()),
             auxv_address: 0,
@@ -312,6 +318,7 @@ impl Process {
         let signal_actions = *parent.signal_actions.lock();
 
         Ok(Self {
+            command_line: parent.command_line.clone(), start_tick: KERNEL.with_task_manager(|tm| tm.get_tick()),
             pid,
             control: Mutex::new(parent.control.lock().clone()),
             auxv_address: parent.auxv_address,
@@ -657,6 +664,26 @@ impl Process {
     pub fn resolve_path(&self, path: &str) -> Result<String, FsError> {
         let base = self.cwd.lock().clone();
         self.resolve_from(&base, path)
+    }
+    pub fn inspection_maps(&self) -> Vec<(u32, u32, u32, u32, String)> {
+        let mut maps = Vec::new();
+        match &self.filetype {
+            ProcessFileType::Elf(elf) => for segment in elf.segments() {
+                let flags = segment.flags();
+                let prot = (if flags & 4 != 0 { 1 } else { 0 }) | (flags & 2) | (if flags & 1 != 0 { 4 } else { 0 });
+                maps.push((segment.virtual_address(), segment.virtual_address() + segment.memory().len() as u32,
+                    prot, segment.file_offset(), self.executable_path.clone()));
+            },
+            ProcessFileType::Binary(memory) => maps.push((PROGRAM_VIRTUAL_ADDRESS as u32,
+                PROGRAM_VIRTUAL_ADDRESS as u32 + memory.len() as u32, 7, 0, self.executable_path.clone())),
+        }
+        maps.push((USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END as u32,
+            (USER_PROGRAM_VIRTUAL_STACK_ADDRESS_END + USER_PROGRAM_STACK_SIZE) as u32, 3, 0, "[stack]".to_string()));
+        let end = (*self.brk.lock() + 4095) & !4095;
+        if end > USER_HEAP_START as u32 { maps.push((USER_HEAP_START as u32, end, 3, 0, "[heap]".to_string())); }
+        maps.extend(self.mappings.lock().regions().into_iter().map(|(a,b,p,o,n)| (a,b,p,o,n.to_string())));
+        maps.sort_by_key(|m| m.0);
+        maps
     }
 
     pub fn uid(&self) -> u32 {

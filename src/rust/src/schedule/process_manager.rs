@@ -139,6 +139,7 @@ impl ProcessManager {
     pub fn process_count(&self) -> usize {
         self.table.len()
     }
+    pub fn live_processes(&self) -> Vec<Arc<Process>> { self.table.values().cloned().collect() }
 
     pub fn new() -> Self {
         ProcessManager {
@@ -217,7 +218,8 @@ impl ProcessManager {
         let umask = *old_process.umask.lock();
         let signal_actions = old_process.signal_actions_for_exec();
 
-        let process = Process::new(pid, parent, filename, Some(args))?;
+        let mut process = Process::new(pid, parent, filename, Some(args))?;
+        process.start_tick = old_process.start_tick;
         *process.control.lock() = old_process.control.lock().clone();
         process.control.lock().execed = true;
         process.refresh_aux_ids();

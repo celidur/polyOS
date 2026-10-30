@@ -92,3 +92,4 @@ pub fn kernel_main() -> ! {
 }
 
 mod inspection;
+mod metrics;

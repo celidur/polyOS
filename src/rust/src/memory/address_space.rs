@@ -9,6 +9,8 @@ const PAGE: u32 = 4096;
 struct Mapping {
     _page: Page<u8>,
     prot: u32,
+    offset: u32,
+    file: bool,
 }
 #[derive(Clone, Default)]
 pub struct AddressSpace {
@@ -53,6 +55,20 @@ fn flags(prot: u32, cow: bool) -> u32 {
     }
 }
 impl AddressSpace {
+    pub fn regions(&self) -> Vec<(u32, u32, u32, u32, &'static str)> {
+        let mut regions: Vec<(u32, u32, u32, u32, &'static str)> = Vec::new();
+        for (&address, mapping) in &self.pages {
+            let label = if mapping.file { "[file-snapshot]" } else { "[anon]" };
+            if let Some(last) = regions.last_mut() {
+                if last.1 == address && last.2 == mapping.prot && last.4 == label
+                    && (!mapping.file || last.3 + (last.1 - last.0) == mapping.offset) {
+                    last.1 += PAGE; continue;
+                }
+            }
+            regions.push((address, address + PAGE, mapping.prot, mapping.offset, label));
+        }
+        regions
+    }
     fn free(&self, addr: u32, len: u32) -> bool {
         range(addr, len).is_ok_and(|end| self.pages.range(addr..end).next().is_none())
     }
@@ -98,6 +114,7 @@ impl AddressSpace {
         for _ in 0..len / PAGE {
             pending.push(Page::new(PAGE as usize).ok_or(VmError::NoMemory)?);
         }
+        let file_backed = file.is_some();
         if let Some(descriptor) = file {
             let ProcessDescriptor::File(handle) = descriptor else {
                 return Err(VmError::BadFd);
@@ -136,7 +153,8 @@ impl AddressSpace {
                 .page_directory
                 .map(address, page.as_ptr() as u32, flags(prot, false))
                 .map_err(|_| VmError::Fault)?;
-            self.pages.insert(address, Mapping { _page: page, prot });
+            self.pages.insert(address, Mapping { _page: page, prot, file: file_backed,
+                offset: if file_backed { offset + index as u32 * PAGE } else { 0 } });
         }
         Ok(addr)
     }

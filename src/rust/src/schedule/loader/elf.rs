@@ -146,6 +146,7 @@ impl ElfHeader {
 
 #[derive(Debug, Clone)]
 pub struct ElfSegment {
+    file_offset: u32,
     virtual_address: u32,
     flags: u32,
     page_offset: usize,
@@ -155,6 +156,7 @@ pub struct ElfSegment {
 }
 
 impl ElfSegment {
+    pub fn file_offset(&self) -> u32 { self.file_offset }
     pub fn virtual_address(&self) -> u32 {
         self.virtual_address
     }
@@ -322,6 +324,7 @@ impl ElfFile {
         destination.copy_from_slice(source);
 
         self.segments.push(ElfSegment {
+            file_offset: phdr.p_offset & !4095,
             virtual_address,
             flags: phdr.p_flags,
             page_offset,

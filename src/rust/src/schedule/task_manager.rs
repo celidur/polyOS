@@ -169,6 +169,17 @@ impl TaskManager {
             .filter(|task| task.read().process.pid == pid)
             .count()
     }
+    pub fn inspection(&self, pid: u32) -> (usize, u64, char, [u8; 16]) {
+        let mut count = 0; let mut ticks = 0; let mut state = 'S'; let mut name = [0; 16];
+        for task in self.tasks.values() {
+            let task = task.read();
+            if task.process.pid != pid { continue; }
+            if count == 0 { name = task.name; }
+            count += 1; ticks += task.user_ticks;
+            if task.stopped { state = 'T'; } else if task.is_runnable() { state = 'R'; }
+        }
+        (count, ticks, state, name)
+    }
 
     pub fn remove_process_tasks(&mut self, pid: u32, keep: Option<TaskId>) {
         let ids: Vec<_> = self
@@ -226,6 +237,7 @@ impl TaskManager {
     }
 
     pub fn schedule(&mut self) -> ScheduleOutcome {
+        crate::metrics::scheduled();
         if let Some(cur) = self.current
             && let Some(nn_cur) = self.tasks.get(&cur)
         {
@@ -294,6 +306,7 @@ impl TaskManager {
     }
 
     pub fn tick(&mut self) {
+        if let Some(task) = self.get_current() { task.write().user_ticks += 1; }
         self.tick = self.tick.wrapping_add(1);
 
         let now = self.tick;
