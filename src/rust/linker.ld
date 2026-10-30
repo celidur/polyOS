@@ -44,7 +44,10 @@ SECTIONS
 
     .bss : ALIGN(4096)
     {
+        __bss_start = .;
         *(COMMON)
-        *(.bss)
+        *(.bss .bss.*)
+        __bss_end = .;
     }
+    ASSERT(__bss_end < 0x001f0000, "kernel data overlaps boot stack")
 }

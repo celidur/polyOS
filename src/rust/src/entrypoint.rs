@@ -1,4 +1,8 @@
 use core::arch::naked_asm;
+unsafe extern "C" {
+    static __bss_start: u8;
+    static __bss_end: u8;
+}
 
 use crate::{
     constant::{
@@ -24,6 +28,15 @@ pub unsafe extern "C" fn _start() -> ! {
         "mov ss, ax",
         "mov ebp, 0x00200000",
         "mov esp, ebp",
+
+        // The bootloader reads disk sectors beyond the flat kernel image.
+        // Those bytes may contain FAT data: zero BSS before using any globals.
+        "cld",
+        "lea edi, [{bss_start}]",
+        "lea ecx, [{bss_end}]",
+        "sub ecx, edi",
+        "xor eax, eax",
+        "rep stosb",
 
         "mov al, 0x11", // == 0b00010001
         "out {pic_master_cmd}, al", // Tell master PIC
@@ -64,5 +77,7 @@ pub unsafe extern "C" fn _start() -> ! {
         init_heap = sym init_heap,
         kernel_main = sym kernel_main,
         halt_forever = sym halt_forever,
+        bss_start = sym __bss_start,
+        bss_end = sym __bss_end,
     );
 }
