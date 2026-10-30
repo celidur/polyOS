@@ -42,19 +42,27 @@ impl Default for AltStack {
         }
     }
 }
+#[derive(Clone)]
 struct Active {
     fpu: crate::arch::FpuState,
     address: u32,
     mask: u32,
     on_alt: bool,
 }
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ThreadSignals {
     pub blocked: u32,
     pub pending: u32,
     pub alt: AltStack,
     pub on_alt: bool,
     active: Vec<Active>,
+}
+impl ThreadSignals {
+    /// Fork duplicates the calling thread's live return frames and alternate
+    /// stack; pending signals are not inherited. Clone threads start fresh.
+    pub fn fork_context(&self) -> Self {
+        Self { pending: 0, ..self.clone() }
+    }
 }
 pub fn frame(task: &mut Task, signal: u32) -> Result<bool, ()> {
     let process = task.process.clone();

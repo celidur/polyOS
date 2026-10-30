@@ -128,10 +128,10 @@ impl TaskManager {
             .get_current()
             .map(|t| t.read().name)
             .unwrap_or(task.name);
-        task.signals.blocked = self
+        task.signals = self
             .get_current()
-            .map(|t| t.read().signals.blocked)
-            .unwrap_or(0);
+            .map(|t| t.read().signals.fork_context())
+            .unwrap_or_default();
         self.tasks.insert(id, RwLock::new(task));
         self.queue_ready(id, priority);
         Ok(id)
