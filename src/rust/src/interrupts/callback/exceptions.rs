@@ -94,6 +94,9 @@ pub fn idt_page_fault(frame: &InterruptFrame, code_error: u32) {
 }
 
 pub fn idt_general_protection_fault(_frame: &InterruptFrame, code_error: u32) {
+    if _frame.is_user_mode() {
+        crate::schedule::signal::fault_current(11);
+    }
     serial_println!("{:?}", _frame);
     serial_println!("General protection fault");
     let e = code_error & 0x1;

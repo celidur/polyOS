@@ -6,6 +6,26 @@ use super::{
 use crate::{kernel::KERNEL, memory::user};
 use alloc::vec::Vec;
 pub const UNBLOCKABLE: u32 = (1 << 8) | (1 << 18);
+
+/// Hardware faults belong to the faulting task, rather than an arbitrary
+/// eligible thread. An ignored/blocked synchronous fault must terminate.
+pub fn fault_current(signal: u32) -> ! {
+    let terminate = KERNEL.with_task_manager(|tm| {
+        let task = tm.get_current()?;
+        let mut task = task.write();
+        let action = task.process.get_signal_action(signal)?;
+        if task.signals.blocked & (1 << (signal - 1)) != 0 || action.handler <= SIG_IGN {
+            Some(task.process.pid)
+        } else {
+            task.signals.pending |= 1 << (signal - 1);
+            None
+        }
+    });
+    if let Some(pid) = terminate {
+        KERNEL.with_process_manager(|pm| pm.terminate_signal(pid, signal));
+    }
+    super::task::task_next()
+}
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct AltStack {
