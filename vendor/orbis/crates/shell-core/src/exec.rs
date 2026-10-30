@@ -32,7 +32,7 @@ fn expand_aliases(env: &ShellEnv, pl: &mut Pipeline) {
 #[cfg(unix)]
 mod imp {
     use super::*;
-    use crate::builtins::{try_run_builtin, BuiltinResult};
+    use crate::builtins::{is_builtin, try_run_builtin, BuiltinResult};
     use anyhow::{bail, Context};
     use nix::{
         fcntl::{open, OFlag},
@@ -69,11 +69,25 @@ mod imp {
 
             // builtins only for a single foreground command — pipes and bg go through fork
             if pl.cmds.len() == 1 && !pl.background {
-                let argv = &pl.cmds[0].argv;
-                if let Some(r) = try_run_builtin(&mut self.env, &mut self.jobs, argv)? {
-                    return Ok(match r {
-                        BuiltinResult::Continue => 0,
-                        BuiltinResult::Exit(code) => code,
+                let command = &pl.cmds[0];
+                let argv = &command.argv;
+                if argv.first().is_some_and(|name| is_builtin(name)) {
+                    // Builtins run in the parent so cd/export retain their effects.
+                    // Restore its descriptors on success and every error path.
+                    let _redirects = BuiltinRedirects::capture(command)?;
+                    let result = (|| -> anyhow::Result<BuiltinResult> {
+                        apply_redirects(command)?;
+                        try_run_builtin(&mut self.env, &mut self.jobs, argv)?
+                            .context("recognized builtin was not dispatched")
+                    })();
+                    return Ok(match result {
+                        Ok(BuiltinResult::Continue) => 0,
+                        Ok(BuiltinResult::Exit(code)) => code,
+                        Err(error) => {
+                            // Report while stderr still has its redirected destination.
+                            eprintln!("orbis: {error}");
+                            1
+                        }
                     });
                 }
             }
@@ -240,6 +254,55 @@ mod imp {
         }
     }
 
+    struct BuiltinRedirects {
+        saved: Vec<(i32, Option<(OwnedFd, i32)>)>,
+    }
+    impl BuiltinRedirects {
+        fn capture(cmd: &Command) -> anyhow::Result<Self> {
+            use nix::fcntl::{fcntl, FcntlArg};
+            use std::{io::Write, os::fd::FromRawFd};
+            std::io::stdout().flush()?;
+            std::io::stderr().flush()?;
+            let mut restore = Self { saved: Vec::new() };
+            for redirect in &cmd.redirects {
+                let target = match redirect.fd {
+                    Fd::Stdin => libc::STDIN_FILENO,
+                    Fd::Stdout => libc::STDOUT_FILENO,
+                    Fd::Stderr => libc::STDERR_FILENO,
+                };
+                if restore.saved.iter().any(|(fd, _)| *fd == target) { continue; }
+                let saved = match fcntl(target, FcntlArg::F_GETFD) {
+                    Ok(flags) => {
+                        let copy = fcntl(target, FcntlArg::F_DUPFD_CLOEXEC(3))?;
+                        // fcntl returned a new descriptor owned by this guard.
+                        Some((unsafe { OwnedFd::from_raw_fd(copy) }, flags))
+                    }
+                    Err(nix::errno::Errno::EBADF) => None,
+                    Err(error) => return Err(error.into()),
+                };
+                restore.saved.push((target, saved));
+            }
+            Ok(restore)
+        }
+    }
+    impl Drop for BuiltinRedirects {
+        fn drop(&mut self) {
+            use nix::fcntl::{fcntl, FcntlArg, FdFlag};
+            use std::io::Write;
+            // Buffered builtin output belongs to the redirected destination.
+            let _ = std::io::stdout().flush();
+            let _ = std::io::stderr().flush();
+            for (target, saved) in &self.saved {
+                if let Some((copy, flags)) = saved {
+                    let _ = dup2(copy.as_raw_fd(), *target);
+                    let _ = fcntl(*target, FcntlArg::F_SETFD(FdFlag::from_bits_truncate(*flags)));
+                } else {
+                    let _ = nix::unistd::close(*target);
+                }
+            }
+        }
+    }
+
     fn apply_redirects(cmd: &Command) -> anyhow::Result<()> {
         use anyhow::bail;
         use std::os::fd::AsRawFd;
@@ -302,7 +365,7 @@ impl Shell {
     }
 
     pub fn run_pipeline(&mut self, mut pl: Pipeline, cmdline: String) -> anyhow::Result<i32> {
-        use crate::builtins::{try_run_builtin, BuiltinResult};
+        use crate::builtins::{is_builtin, try_run_builtin, BuiltinResult};
         use anyhow::{bail, Context};
         use std::{
             fs::OpenOptions,

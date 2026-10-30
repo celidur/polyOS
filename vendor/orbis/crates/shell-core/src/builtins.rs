@@ -14,7 +14,7 @@ fn builtin_names() -> &'static [&'static str] {
     ]
 }
 
-fn is_builtin(name: &str) -> bool {
+pub(crate) fn is_builtin(name: &str) -> bool {
     builtin_names().iter().any(|&b| b == name)
 }
 
