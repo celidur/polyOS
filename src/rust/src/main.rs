@@ -80,7 +80,7 @@ pub fn kernel_main() -> ! {
 
     list_pci_devices();
 
-    let start_path = "/bin/shell-v2.elf";
+    let start_path = "/bin/orbis.elf";
 
     serial_println!("Kernel main: spawning {}", start_path);
 

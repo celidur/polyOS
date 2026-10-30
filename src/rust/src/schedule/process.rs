@@ -131,7 +131,7 @@ impl Process {
         process.command_line = args.args.clone();
         process.start_tick = KERNEL.with_task_manager(|tm| tm.get_tick());
 
-        serial_println!("Process {} args: {:?}", pid, args.args);
+        // serial_println!("Process {} args: {:?}", pid, args.args);
 
         let headers = match &process.filetype {
             ProcessFileType::Elf(elf) => elf.header().program_headers().to_vec(),
