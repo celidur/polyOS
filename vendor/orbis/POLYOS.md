@@ -15,7 +15,7 @@ PolyOS integration changes:
 * A close-on-exec pipe barrier holds pipeline children until process groups and
   foreground terminal ownership are established. Children restore job-control
   signal defaults; the shell ignores SIGTTIN/SIGTTOU during terminal handoff.
-* Failed exec exits the child with status 127. On PolyOS, known utility names
+* Child setup failures exit with status 126, and failed exec exits with status 127. On PolyOS, known utility names
   fall back to `/bin/orbisbox.elf` without filesystem symlink aliases. Explicit
   `orbisbox <utility>` uses the same installed binary.
 

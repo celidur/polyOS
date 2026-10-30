@@ -99,17 +99,23 @@ mod imp {
 
                 match unsafe { fork()? } {
                     ForkResult::Child => {
+                        // Every fallible setup step must stay inside this boundary.
+                        // Returning to the caller here would start a second shell.
+                        let setup = (|| -> anyhow::Result<()> {
                         // put the child in its own process group right away
                         let mypid = nix::unistd::getpid();
                         let target_pgid = pgid.unwrap_or(mypid);
-                        let _ = setpgid(mypid, target_pgid);
+                        setpgid(mypid, target_pgid)?;
                         for sig in [Signal::SIGINT, Signal::SIGQUIT, Signal::SIGTSTP, Signal::SIGTTIN, Signal::SIGTTOU] {
-                            unsafe { let _ = signal(sig, SigHandler::SigDfl); }
+                            unsafe { signal(sig, SigHandler::SigDfl)?; }
                         }
                         drop(launch_write);
                         let mut release = [0u8; 1];
-                        if nix::unistd::read(launch_read.as_raw_fd(), &mut release).is_err() {
-                            unsafe { libc::_exit(126); }
+                        loop {
+                            match nix::unistd::read(launch_read.as_raw_fd(), &mut release) {
+                                Err(nix::errno::Errno::EINTR) => continue,
+                                result => { result?; break; }
+                            }
                         }
                         drop(launch_read);
 
@@ -155,6 +161,11 @@ mod imp {
                         }
                         eprintln!("orbis: {}: {}", cmd.argv[0], error);
                         unsafe { libc::_exit(127); }
+                        })();
+                        if let Err(error) = setup {
+                            eprintln!("orbis: child setup: {error}");
+                        }
+                        unsafe { libc::_exit(126); }
                     }
                     ForkResult::Parent { child } => {
                         // parent also sets pgid to avoid a race with the child

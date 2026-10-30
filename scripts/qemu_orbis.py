@@ -105,6 +105,15 @@ def main():
             data = line("ps -e")
             assert b"/bin/shell-v2.elf" in data and b"/bin/orbis.elf" in data, repr(data[-1000:])
             print("[ok] Orbisbox ps reads numeric procfs views", flush=True)
+            def shell_pids(data):
+                return re.findall(rb"(?m)^\s*(\d+)\s+\?\s+/bin/orbis\.elf\r?$", data)
+            original = shell_pids(data)
+            assert len(original) == 1, repr(data[-1000:])
+            line("cat < /missing-orbis-input", b"child setup:")
+            assert shell_pids(line("ps -e")) == original, "failed setup created a second shell"
+            assert b"Stopped" not in line("jobs"), "failed setup left a stopped child shell"
+            line("echo SETUP_RECOVERED", b"\nSETUP_RECOVERED\r\n")
+            print("[ok] Failed child redirection exits without starting another shell", flush=True)
             start = len(output)
             send(b"/bin/selftest.elf --shell-job-child\n")
             wait(lambda s: b"shell-job-ready" in s, start)
