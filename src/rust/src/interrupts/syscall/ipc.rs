@@ -163,7 +163,17 @@ struct PollFd {
     events: u16,
     revents: u16,
 }
+struct PollDeadline;
+impl Drop for PollDeadline {
+    fn drop(&mut self) {
+        KERNEL.with_task_manager(|tm| {
+            if let Some(task) = tm.get_current() { task.write().poll_deadline = None; }
+        });
+    }
+}
 pub fn syscall_poll(ptr: u32, count: u32, timeout: u32) -> u32 {
+    // Every return, including an error on a restarted call, ends this deadline.
+    let deadline = PollDeadline;
     if count > 128 {
         return abi::errno(abi::EINVAL);
     }
@@ -234,6 +244,8 @@ pub fn syscall_poll(ptr: u32, count: u32, timeout: u32) -> u32 {
     } else {
         drop(fds);
         drop(process);
+        // This syscall is suspended, rather than completed. Retain its deadline.
+        core::mem::forget(deadline);
         task_next();
     }
 }
