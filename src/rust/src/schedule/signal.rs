@@ -23,6 +23,7 @@ impl Default for AltStack {
     }
 }
 struct Active {
+    fpu: crate::arch::FpuState,
     address: u32,
     mask: u32,
     on_alt: bool,
@@ -30,7 +31,7 @@ struct Active {
 #[derive(Default)]
 pub struct ThreadSignals {
     pub blocked: u32,
-    pub pending:u32,
+    pub pending: u32,
     pub alt: AltStack,
     pub on_alt: bool,
     active: Vec<Active>,
@@ -77,6 +78,7 @@ pub fn frame(task: &mut Task, signal: u32) -> Result<bool, ()> {
         &[action.restorer, signal, address],
     )?;
     task.signals.active.push(Active {
+        fpu: task.fpu,
         address,
         mask: task.signals.blocked,
         on_alt: was_alt,
@@ -108,7 +110,11 @@ pub fn prepare_current() -> bool {
             return (false, None);
         }
         let signal = eligible.trailing_zeros() + 1;
-        if t.signals.pending & (1<<(signal-1))!=0 {t.signals.pending &= !(1<<(signal-1));}else{*pending &= !(1 << (signal - 1));}
+        if t.signals.pending & (1 << (signal - 1)) != 0 {
+            t.signals.pending &= !(1 << (signal - 1));
+        } else {
+            *pending &= !(1 << (signal - 1));
+        }
         drop(pending);
         match frame(&mut t, signal) {
             Ok(changed) => (changed, None),
@@ -146,6 +152,7 @@ pub fn restore(task: &mut Task, address: u32, mut registers: Registers) -> Resul
     registers.ss = 0x23;
     registers.flags = (registers.flags & 0x00040cd5) | 0x202;
     let active = task.signals.active.pop().unwrap();
+    task.fpu = active.fpu;
     task.signals.blocked = active.mask & !UNBLOCKABLE;
     task.signals.on_alt = active.on_alt;
     task.registers = registers;

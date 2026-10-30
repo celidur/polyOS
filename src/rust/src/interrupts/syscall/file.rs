@@ -17,6 +17,7 @@ const O_APPEND: u32 = 0x400;
 const SEEK_SET: u32 = 0;
 const SEEK_END: u32 = 2;
 const F_DUPFD: u32 = 0;
+const F_DUPFD_CLOEXEC: u32 = 1030;
 const F_GETFD: u32 = 1;
 const F_SETFD: u32 = 2;
 const F_GETFL: u32 = 3;
@@ -408,7 +409,15 @@ pub fn syscall_fcntl(fd: u32, cmd: u32, arg: u32) -> u32 {
     };
 
     match cmd {
-        F_DUPFD => match process.duplicate_fd_from(fd, arg as i32) {
+        F_DUPFD | F_DUPFD_CLOEXEC => match process.duplicate_fd_from_flags(
+            fd,
+            arg as i32,
+            if cmd == F_DUPFD_CLOEXEC {
+                FD_CLOEXEC
+            } else {
+                0
+            },
+        ) {
             Ok(new_fd) => new_fd as u32,
             Err(_) => abi::errno(abi::EBADF),
         },
@@ -454,6 +463,9 @@ pub fn syscall_mkdir(path_ptr: u32, mode: u32) -> u32 {
         return abi::errno(abi::EFAULT);
     };
 
+    if let Err(e) = crate::fs::access::parent_write(&process, &path) {
+        return fs_errno(e);
+    }
     match KERNEL.vfs.read().create(path.as_str(), true) {
         Ok(()) => {
             apply_created_mode(&process, path.as_str(), mode, true);
@@ -701,6 +713,12 @@ fn remove_path(path_ptr: u32, directory: bool) -> u32 {
         return abi::errno(abi::EFAULT);
     };
 
+    let Some(process) = with_current_task(|t| Some(t.process.clone())) else {
+        return abi::errno(abi::ESRCH);
+    };
+    if let Err(e) = crate::fs::access::parent_write(&process, &path) {
+        return fs_errno(e);
+    }
     let vfs = KERNEL.vfs.read();
     match vfs.stat(path.as_str()) {
         Ok(metadata) if directory && !metadata.is_dir => return abi::errno(abi::ENOTDIR),

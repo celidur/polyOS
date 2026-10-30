@@ -30,12 +30,19 @@ pub struct TaskManager {
 }
 
 impl TaskManager {
-    pub fn stop_process(&mut self, pid: u32, stop: bool) {
+    pub fn stop_process(&mut self, pid: u32, stop: bool) -> bool {
+        let mut changed = false;
         let mut wake = Vec::new();
         for (&id, t) in &self.tasks {
             let mut t = t.write();
             if t.process.pid == pid {
+                changed |= t.stopped != stop;
                 t.stopped = stop;
+                t.signals.pending &= if stop {
+                    !(1 << 17)
+                } else {
+                    !((1 << 18) | (1 << 19) | (1 << 20) | (1 << 21))
+                };
                 if !stop && t.state.is_runnable() {
                     wake.push(id);
                 }
@@ -44,6 +51,7 @@ impl TaskManager {
         for id in wake {
             let _ = self.wake_task(id);
         }
+        changed
     }
     pub fn notify_signal(&mut self, pid: u32, signal: u32) -> bool {
         let target = self.tasks.iter().find_map(|(&id, t)| {
@@ -113,6 +121,9 @@ impl TaskManager {
         let priority = priority.min(MAX_PRIORITY - 1);
         let id = process.pid as usize;
         let mut task = Task::from_registers(id, process, priority, registers);
+        if let Some(current) = self.get_current() {
+            task.fpu = current.read().fpu;
+        }
         task.name = self
             .get_current()
             .map(|t| t.read().name)
@@ -135,6 +146,9 @@ impl TaskManager {
     ) -> Result<TaskId, KernelError> {
         let id = super::allocate_id();
         let mut task = Task::from_registers(id, process, priority, registers);
+        if let Some(current) = self.get_current() {
+            task.fpu = current.read().fpu;
+        }
         task.name = self
             .get_current()
             .map(|t| t.read().name)

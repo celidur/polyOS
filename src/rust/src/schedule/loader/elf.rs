@@ -1,7 +1,11 @@
 #![allow(dead_code)]
 use alloc::vec::Vec;
 
-use crate::{constant::PROGRAM_VIRTUAL_ADDRESS, kernel::KERNEL, memory::Page};
+use crate::{
+    constant::{PROGRAM_VIRTUAL_ADDRESS, USER_IMAGE_END},
+    kernel::KERNEL,
+    memory::Page,
+};
 
 pub const PF_X: u32 = 0x1;
 pub const PF_W: u32 = 0x2;
@@ -48,12 +52,14 @@ pub const SHN_UNDEF: u8 = 0x0;
 
 #[derive(Debug)]
 pub enum ElfError {
+    NotElf,
     Io,
     InvalidFormat,
     Unknown,
 }
 
 const ELF_SIGNATURE: [u8; 4] = [0x7F, b'E', b'L', b'F'];
+const MAX_ELF_FILE_SIZE: usize = 16 * 1024 * 1024;
 
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
@@ -105,8 +111,12 @@ pub struct ElfHeader {
 impl ElfHeader {
     fn is_valid(&self) -> bool {
         self.e_ident[0..4] == ELF_SIGNATURE
-            && matches!(self.e_ident[4], 0 | 1)
-            && matches!(self.e_ident[5], 0 | 1)
+            && self.e_ident[4] == 1
+            && self.e_ident[5] == 1
+            && self.e_ident[6] == 1
+            && self.e_machine == 3
+            && self.e_version == 1
+            && self.e_ehsize as usize == core::mem::size_of::<ElfHeader>()
             && self.e_type == 2
             && self.e_entry >= PROGRAM_VIRTUAL_ADDRESS as u32
             && self.e_phoff != 0
@@ -184,6 +194,27 @@ impl ElfFile {
         let mut file = KERNEL.vfs.read().open(filename).map_err(|_| ElfError::Io)?;
         let stat = file.ops.stat().map_err(|_| ElfError::Io)?;
 
+        // Inspect the signature before allocating from an untrusted file size.
+        let mut signature = [0u8; 4];
+        let mut used = 0;
+        while used < signature.len() {
+            let n = file
+                .ops
+                .read(&mut signature[used..])
+                .map_err(|_| ElfError::Io)?;
+            if n == 0 {
+                break;
+            }
+            used += n;
+        }
+        if signature != ELF_SIGNATURE {
+            return Err(ElfError::NotElf);
+        }
+        if stat.size as usize > MAX_ELF_FILE_SIZE {
+            return Err(ElfError::InvalidFormat);
+        }
+        file.ops.seek(0).map_err(|_| ElfError::Io)?;
+
         let memory = Page::new(stat.size as usize).ok_or(ElfError::Io)?;
 
         // A filesystem read may stop at a cluster boundary. Executables must be
@@ -226,9 +257,19 @@ impl ElfFile {
 
     fn load_segments(&mut self, header: &ElfHeader) -> Result<(), ElfError> {
         for phdr in header.program_headers() {
+            if matches!(phdr.p_type, 2 | 3) {
+                return Err(ElfError::InvalidFormat);
+            }
             if phdr.p_type == 1 {
                 self.process_load_segment(phdr)?;
             }
+        }
+        if !self.segments.iter().any(|s| {
+            s.flags & PF_X != 0
+                && header.e_entry >= s.virtual_address + s.page_offset as u32
+                && header.e_entry < s.virtual_address + s.page_offset as u32 + s.memory_size as u32
+        }) {
+            return Err(ElfError::InvalidFormat);
         }
         Ok(())
     }
@@ -241,6 +282,18 @@ impl ElfFile {
         {
             return Err(ElfError::InvalidFormat);
         }
+        let end = phdr
+            .p_vaddr
+            .checked_add(phdr.p_memsz)
+            .ok_or(ElfError::InvalidFormat)?;
+        if phdr.p_vaddr < PROGRAM_VIRTUAL_ADDRESS as u32
+            || end > USER_IMAGE_END as u32
+            || (phdr.p_align > 1
+                && (!phdr.p_align.is_power_of_two()
+                    || phdr.p_vaddr % phdr.p_align != phdr.p_offset % phdr.p_align))
+        {
+            return Err(ElfError::InvalidFormat);
+        }
         let virtual_address = phdr.p_vaddr & 0xFFFFF000;
         let page_offset = (phdr.p_vaddr - virtual_address) as usize;
         let size = page_offset
@@ -248,6 +301,13 @@ impl ElfFile {
             .ok_or(ElfError::InvalidFormat)?;
         if size == 0 {
             return Ok(());
+        }
+        let page_end = end.checked_add(4095).ok_or(ElfError::InvalidFormat)? & !4095;
+        if self.segments.iter().any(|s| {
+            virtual_address < s.virtual_address + s.memory.len() as u32
+                && s.virtual_address < page_end
+        }) {
+            return Err(ElfError::InvalidFormat);
         }
         let segment_memory = Page::<u8>::new(size).ok_or(ElfError::Io)?;
 

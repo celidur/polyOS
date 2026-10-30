@@ -14,6 +14,10 @@ pub const MAX_PATH: usize = 256;
 pub const TOTAL_GDT_SEGMENTS: usize = 6;
 
 pub const PROGRAM_VIRTUAL_ADDRESS: usize = 0x00400000;
+// User executable images and the supervisor entry stack must never overlap.
+pub const KERNEL_STACK_BOTTOM: usize = 0x00500000;
+pub const USER_IMAGE_END: usize = KERNEL_STACK_BOTTOM;
+pub const KERNEL_STACK_TOP: usize = 0x00600000;
 pub const USER_HEAP_START: usize = 0x00800000;
 pub const USER_HEAP_END: usize = 0x01000000;
 pub const USER_PROGRAM_STACK_SIZE: usize = 1024 * 16; // 16KB

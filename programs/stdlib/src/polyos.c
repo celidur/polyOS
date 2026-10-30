@@ -45,7 +45,8 @@ void polyos_terminal_readline(char *out, int max, bool output_while_typing) {
     // Backspace
     if (key == 0x08 || key == 0x7f) {
       if (i > 0) {
-        write(STDOUT_FILENO, &key, 1);
+        if (output_while_typing)
+          write(STDOUT_FILENO, "\b \b", 3);
         i -= 1;
         out[i] = '\0';
       }

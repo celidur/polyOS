@@ -13,11 +13,16 @@ use crate::{
 };
 
 #[unsafe(no_mangle)]
-pub extern "C" fn interrupt_handler(interrupt: u32, frame: &InterruptFrame) {
+pub extern "C" fn interrupt_handler(
+    interrupt: u32,
+    frame: &InterruptFrame,
+    fpu: &crate::arch::FpuState,
+) {
     let previous_cr3 = current_page_directory();
     KERNEL.kernel_page();
     if frame.is_user_mode() {
         task_current_save_state(frame);
+        save_user_fpu(fpu);
     }
     eoi_irq(interrupt);
 
@@ -37,12 +42,14 @@ pub extern "C" fn interrupt_handler_error(
     error_code: u32,
     interrupt: u32,
     frame: &InterruptErrorFrame,
+    fpu: &crate::arch::FpuState,
 ) {
     let previous_cr3 = current_page_directory();
     let frame = frame.without_error_code();
     KERNEL.kernel_page();
     if frame.is_user_mode() {
         task_current_save_state(&frame);
+        save_user_fpu(fpu);
     }
     if let InterruptSource::Error(int) = InterruptSource::new(interrupt as u16)
         && let Some(cb) = int.get_callback()
@@ -54,9 +61,13 @@ pub extern "C" fn interrupt_handler_error(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn syscall_handler(frame: &mut InterruptFrame) -> u32 {
+pub extern "C" fn syscall_handler(
+    frame: &mut InterruptFrame,
+    fpu: &mut crate::arch::FpuState,
+) -> u32 {
     KERNEL.kernel_page();
     task_current_save_state(frame);
+    save_user_fpu(fpu);
     KERNEL.with_task_manager(|tm| {
         if let Some(t) = tm.get_current() {
             t.write().restarting = false;
@@ -65,9 +76,16 @@ pub extern "C" fn syscall_handler(frame: &mut InterruptFrame) -> u32 {
     let res = syscall_handle(frame);
     frame.eax = res;
     task_current_save_state(frame);
-    if crate::schedule::signal::prepare_current() || KERNEL.with_task_manager(|tm|tm.get_current().is_none_or(|t|t.read().stopped)) {
+    if crate::schedule::signal::prepare_current()
+        || KERNEL.with_task_manager(|tm| tm.get_current().is_none_or(|t| t.read().stopped))
+    {
         crate::schedule::task::task_next();
     }
+    KERNEL.with_task_manager(|tm| {
+        if let Some(t) = tm.get_current() {
+            *fpu = t.read().fpu;
+        }
+    });
     task_page();
     res
 }
@@ -76,19 +94,35 @@ pub extern "C" fn syscall_handler(frame: &mut InterruptFrame) -> u32 {
 pub extern "C" fn syscall_wrapper() {
     #[allow(unused_unsafe)]
     unsafe {
-        naked_asm!(
+        naked_asm!(concat!(
             "
         pushad
         cld
-        push esp
+        ",
+            crate::fpu_entry!(),
+            "
+        sub esp, 8
+        push ebx
+        push ebp
         call syscall_handler
-        add esp, 4
-        mov [esp + 28], eax
+        add esp, 16
+        mov [ebp + 28], eax
+        ",
+            crate::fpu_leave!(),
+            "
         popad
         iretd
         ",
-        );
+        ));
     }
+}
+
+fn save_user_fpu(fpu: &crate::arch::FpuState) {
+    KERNEL.with_task_manager(|tm| {
+        if let Some(t) = tm.get_current() {
+            t.write().fpu = *fpu;
+        }
+    });
 }
 
 pub unsafe extern "C" fn default_handler() {

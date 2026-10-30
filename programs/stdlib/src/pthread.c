@@ -377,6 +377,8 @@ void __pthread_before_fork(void) {
 }
 void __pthread_parent_after_fork(void) { unlock(); }
 void __pthread_after_fork(void) {
+  extern u32 __pthread_once_generation;
+  __pthread_once_generation += 4;
   registry_lock = 0;
   memset(errno_slots, 0, sizeof(errno_slots));
   *__pthread_errno_location() = fork_errno;

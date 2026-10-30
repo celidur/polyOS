@@ -31,6 +31,7 @@ pub fn open(process: &Process, path: &str, flags: u32, mode: u16) -> Result<i32,
             if flags & DIRECTORY != 0 {
                 return Err(FsError::NotADirectory);
             }
+            super::access::parent_write(process, path)?;
             vfs.create(path, false)?;
             created = true;
             match vfs.chown(path, process.euid(), process.egid()) {

@@ -98,7 +98,11 @@ pub fn syscall_execve(path_ptr: u32, argv_ptr: u32, envp_ptr: u32) -> u32 {
         }
         Err(error) => {
             serial_println!("execve({}) failed: {:?}", path, error);
-            abi::errno(abi::ENOENT)
+            abi::errno(match error {
+                crate::error::KernelError::InvalidExecutable => abi::ENOEXEC,
+                crate::error::KernelError::Allocation => abi::ENOMEM,
+                _ => abi::EIO,
+            })
         }
     }
 }

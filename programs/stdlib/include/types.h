@@ -53,6 +53,7 @@ struct timezone
 };
 
 #define F_DUPFD 0
+#define F_DUPFD_CLOEXEC 1030
 #define F_GETFD 1
 #define F_SETFD 2
 #define F_GETFL 3

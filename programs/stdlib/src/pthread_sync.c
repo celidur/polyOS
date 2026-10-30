@@ -151,18 +151,28 @@ int pthread_cond_broadcast(pthread_cond_t *c) {
   futex(&c->sequence, 1, 0x7fffffff, 0);
   return 0;
 }
+/* Fork advances the generation so a child can claim initialization abandoned
+ * by a thread that did not survive fork. Completed once objects stay complete.
+ */
+u32 __pthread_once_generation;
 int pthread_once(pthread_once_t *once, void (*init)(void)) {
   if (!once || !init)
     return EINVAL;
-  u32 zero = 0;
-  if (__atomic_compare_exchange_n(once, &zero, 1, 0, __ATOMIC_ACQUIRE,
-                                  __ATOMIC_RELAXED)) {
+  for (;;) {
+    u32 state = __atomic_load_n(once, __ATOMIC_ACQUIRE);
+    if (state == 2)
+      return 0;
+    u32 progress = __pthread_once_generation | 1u;
+    if (state == progress) {
+      futex(once, 0, progress, 0);
+      continue;
+    }
+    if (!__atomic_compare_exchange_n(once, &state, progress, 0,
+                                     __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
+      continue;
     init();
     __atomic_store_n(once, 2, __ATOMIC_RELEASE);
     futex(once, 1, 0x7fffffff, 0);
     return 0;
   }
-  while (__atomic_load_n(once, __ATOMIC_ACQUIRE) != 2)
-    futex(once, 0, 1, 0);
-  return 0;
 }

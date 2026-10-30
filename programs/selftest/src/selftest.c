@@ -971,9 +971,29 @@ extern void test_synchronization(void (*expect)(const char *, int, int));
 extern void test_signal_runtime(void (*expect)(const char *, int, int));
 extern void test_management(void (*expect)(const char *, int, int));
 extern void test_terminal(void (*expect)(const char *, int, int));
+extern void test_review(void (*expect)(const char *, int, int));
+extern void test_hardening(void (*expect)(const char *, int, int));
+extern int review_fpu_control(void);
 extern void test_threads(void (*expect)(const char *, int, int));
 int main(int argc, char **argv)
 {
+    if (argc > 1 && strncmp(argv[1], "--shell-job-child", sizeof("--shell-job-child")) == 0) {
+        printf("shell-job-ready\n");
+        char line[16];
+        ssize_t n = read(0, line, sizeof(line));
+        if (n != 5 || memcmp(line, "done\n", 5)) return 97;
+        printf("shell-job-done\n");
+        return 46;
+    }
+    if (argc > 1 && strncmp(argv[1], "--shell-pipe-child", sizeof("--shell-pipe-child")) == 0) {
+        printf("shell-pipeline-ready\n");
+        char data[64];
+        ssize_t n;
+        while ((n = read(0, data, sizeof(data))) > 0) write(1, data, n);
+        return 47;
+    }
+    if (argc > 1 && strncmp(argv[1], "--fpu-exec-child", sizeof("--fpu-exec-child")) == 0) return review_fpu_control() == 0x037f ? 44 : 95;
+    if (argc > 1 && strncmp(argv[1], "--cloexec-child", sizeof("--cloexec-child")) == 0) return fcntl(100, F_GETFD, 0) == -1 && errno == EBADF ? 45 : 96;
     if (argc > 1 && strncmp(argv[1], "--thread-exec-child", sizeof("--thread-exec-child")) == 0) return getpid() == gettid() ? 43 : 99;
     if (argc>1 && strncmp(argv[1],"--credentials-child",sizeof("--credentials-child"))==0) return getuid()==1000 && geteuid()==1000 && getauxval(AT_UID)==1000 && getauxval(AT_EUID)==1000 && strncmp((char *)getauxval(AT_EXECFN),"/bin/selftest.elf",18)==0 ? 48:98;
     printf("selftest: start\n");
@@ -994,6 +1014,8 @@ int main(int argc, char **argv)
     test_signals();
     test_environment();
     test_threads(expect);
+    test_review(expect);
+    test_hardening(expect);
     test_terminal(expect);
     test_management(expect);
     test_signal_runtime(expect);

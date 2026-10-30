@@ -5,6 +5,7 @@ extern crate alloc;
 #[macro_use]
 mod macros;
 
+mod arch;
 mod constant;
 mod device;
 mod entrypoint;
@@ -61,6 +62,7 @@ fn list_pci_devices() {
 }
 
 pub fn kernel_main() -> ! {
+    arch::init();
     lazy_static::initialize(&KERNEL);
 
     SCREEN_DRIVER.set_mode(ScreenMode::Text(TextMode::Text90x60));

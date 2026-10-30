@@ -143,6 +143,7 @@ static int spawn(pid_t *out, const char *file,
     return EINVAL;
   if (attr && attr->flags & ~(1 | 2 | 4 | 8 | 128))
     return EINVAL;
+  const char *search_path = getenv("PATH");
   int pipes[2];
   if (pipe2(pipes, O_CLOEXEC) < 0)
     return errno;
@@ -150,7 +151,7 @@ static int spawn(pid_t *out, const char *file,
   for (int minimum = 127; minimum >= 3; minimum--) {
     if (referred(actions, minimum))
       continue;
-    int fd = fcntl(pipes[1], F_DUPFD, minimum);
+    int fd = fcntl(pipes[1], F_DUPFD_CLOEXEC, minimum);
     if (fd < 0)
       continue;
     if (referred(actions, fd)) {
@@ -166,7 +167,6 @@ static int spawn(pid_t *out, const char *file,
     return EMFILE;
   }
   close(pipes[1]);
-  fcntl(errorfd, F_SETFD, FD_CLOEXEC);
   pid_t child = fork();
   if (child < 0) {
     int error = errno;
@@ -223,8 +223,9 @@ static int spawn(pid_t *out, const char *file,
       }
     }
     if (search) {
-      environ = (char **)envp;
-      execvp(file, argv);
+      extern int __polyos_exec_search(const char *, char *const[],
+                                      char *const[], const char *);
+      __polyos_exec_search(file, argv, envp, search_path);
     } else
       execve(file, argv, envp);
     child_fail(errorfd);

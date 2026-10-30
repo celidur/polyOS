@@ -32,6 +32,13 @@ creation, removal, and futex wait queues. `exec` removes siblings and restores t
 process leader identity. Group exit removes every task before freeing process
 memory. Exiting only the leader leaves surviving threads runnable.
 
+`arch.rs` owns aligned x86 FXSAVE images and CPU floating-point setup. Interrupt
+and syscall stubs save x87/MMX, XMM and MXCSR before calling Rust, then use a clean
+kernel floating-point environment. Tasks own user images; nested kernel interrupts
+preserve their own scratch images. Fork and clone inherit the caller's image,
+exec initializes a fresh one, and trusted signal frames preserve the interrupted
+image through signal return. The CPU must support FXSR and SSE.
+
 Libc `pthread.c` owns join/detach state, stacks and thread-specific values. A stack
 is reclaimed only after the kernel clears its completion word on thread exit.
 Detached stacks are collected by the next create/detach operation, bounded by the
@@ -70,6 +77,10 @@ socket endpoints. The process module owns the descriptor table and per-descripto
 close-on-exec bits. File status flags are shared across dup/fork. Local stream
 socket pairs use two pipes, with the same blocking, EOF, wakeup and SIGPIPE rules.
 Writes up to the pipe capacity are atomic.
+
+F_DUPFD_CLOEXEC publishes a duplicate with its close-on-exec bit already set;
+spawn uses it for the private error pipe so concurrent fork cannot inherit an
+unprotected writer between duplication and flag setup.
 
 `interrupts/syscall/ipc.rs` validates pipe2, socketpair, writev and poll arguments.
 Poll sleeps the calling task between readiness scans; console readiness does not
@@ -128,6 +139,14 @@ Failed realloc leaves the original block intact. Tail trimming verifies the actu
 program break before releasing memory. brk/sbrk share a separate lock and query the
 current kernel break; fork snapshots both locks and resets them in the child.
 Kernel page allocation checks multiplication and alignment overflow before allocating.
+
+Executable mappings occupy `[0x00400000, 0x00500000)`; the supervisor entry stack
+reserves `[0x00500000, 0x00600000)`. The static ELF32/i386 loader validates segment
+ranges and page overlap before allocation, and requires the entry point to lie
+inside an executable segment. ELF files are bounded to 16 MiB including nonloaded
+metadata; loaded segments must fit the executable window. Recognized malformed
+ELF files return ENOEXEC and cannot fall back to the raw-binary loader. Raw images
+must also fit the executable window and are read completely.
 
 ## Synchronization
 
@@ -208,6 +227,17 @@ Output is synchronous, so TCSADRAIN has no software output queue to drain. Nonze
 VTIME, hardware baud/parity changes and unsupported termios flags return ENOTSUP.
 The console is one terminal; pseudo-terminals are not implemented. Rust and C
 readline share libc's character-mode setup and restoration.
+
+Poll honors the raw-mode VMIN threshold (at least one byte for VMIN=0). Changing
+from canonical to raw preserves queued bytes while dropping canonical record
+delimiters, so restoring canonical mode cannot expose a stale EOF.
+
+`programs/shell-v2/src/jobs.rs` owns shell process groups, terminal handoff and
+stopped-job bookkeeping. A pipe barrier keeps children from reading the terminal
+until the parent has foregrounded the complete command or pipeline. WUNTRACED
+waits return the prompt after Ctrl-Z; `jobs` lists stopped jobs and `fg [%job]`
+resumes them with their terminal settings. The shell restores its own group and
+settings after foreground execution.
 
 The QEMU runner injects canonical editing, EOF, raw bytes and control characters;
 it also verifies a stopped background reader resumes after foreground transfer.

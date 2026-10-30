@@ -35,6 +35,32 @@ void test_terminal(void (*expect)(const char *, int, int)) {
          1);
   printf("tty-eof-ready\n");
   expect("terminal canonical EOF", read(0, buffer, sizeof(buffer)) == 0, 1);
+  printf("tty-eof-pair-ready\n");
+  struct pollfd eof_ready = {0, POLLIN, 0};
+  poll(&eof_ready, 1, 1000);
+  /* Let the input pump collect both EOF records before the first read. */
+  struct timespec settle = {0, 20000000};
+  nanosleep(&settle, 0);
+  int eof_flags = fcntl(0, F_GETFL, 0);
+  fcntl(0, F_SETFL, eof_flags | O_NONBLOCK);
+  ssize_t first_eof = read(0, buffer, sizeof(buffer));
+  ssize_t second_eof = read(0, buffer, sizeof(buffer));
+  expect("terminal preserves consecutive EOF records",
+         first_eof == 0 && second_eof == 0, 1);
+  fcntl(0, F_SETFL, eof_flags);
+  printf("tty-transition-ready\n");
+  poll(&eof_ready, 1, 1000);
+  struct termios canonical = settings;
+  cfmakeraw(&settings);
+  tcsetattr(0, TCSANOW, &settings);
+  n = read(0, buffer, 2);
+  tcsetattr(0, TCSANOW, &canonical);
+  fcntl(0, F_SETFL, eof_flags | O_NONBLOCK);
+  errno = 0;
+  expect("raw transition preserves bytes without stale canonical EOF",
+         n == 2 && buffer[0] == 'T' && buffer[1] == '\n' &&
+         read(0, buffer, sizeof(buffer)) == -1 && errno == EAGAIN, 1);
+  fcntl(0, F_SETFL, eof_flags);
   cfmakeraw(&settings);
   settings.c_cc[VMIN] = 2;
   expect("terminal raw mode", tcsetattr(0, TCSANOW, &settings) == 0, 1);
@@ -42,6 +68,13 @@ void test_terminal(void (*expect)(const char *, int, int)) {
   n = read(0, buffer, 2);
   expect("terminal raw NUL and VMIN",
          n == 2 && buffer[0] == 0 && buffer[1] == 'Z', 1);
+  printf("tty-vmin-partial-ready\n");
+  struct pollfd partial = {0, POLLIN, 0};
+  expect("terminal poll waits for VMIN", poll(&partial, 1, 40) == 0, 1);
+  printf("tty-vmin-complete-ready\n");
+  expect("terminal poll ready after VMIN bytes", poll(&partial, 1, 1000) == 1, 1);
+  n = read(0, buffer, 2);
+  expect("terminal VMIN readiness matches read", n == 2 && buffer[0] == 'K' && buffer[1] == 'L', 1);
   int original_flags = fcntl(0, F_GETFL, 0);
   fcntl(0, F_SETFL, original_flags | O_NONBLOCK);
   printf("tty-nonblock-ready\n");

@@ -35,10 +35,16 @@ pub struct IdtDesc {
 macro_rules! __gen_dispatch {
     ($num:literal, true) => {
         concat!(
-            "mov eax, [esp+40]\n",
+            "push ebx\n",
+            "push ebp\n",
+            "push ",
+            stringify!($num),
+            "\n",
+            "mov eax, [ebp+32]\n",
             "push eax\n",
             "call interrupt_handler_error\n",
-            "add esp, 12\n",
+            "add esp, 16\n",
+            $crate::fpu_leave!(),
             "popad\n",
             "add esp, 4\n",
             "iretd\n",
@@ -46,8 +52,15 @@ macro_rules! __gen_dispatch {
     };
     ($num:literal, false) => {
         concat!(
+            "sub esp, 4\n",
+            "push ebx\n",
+            "push ebp\n",
+            "push ",
+            stringify!($num),
+            "\n",
             "call interrupt_handler\n",
-            "add esp, 8\n",
+            "add esp, 16\n",
+            $crate::fpu_leave!(),
             "popad\n",
             "iretd\n",
         )
@@ -85,8 +98,7 @@ macro_rules! def_interrupts {
                         concat!(
                             "pushad\n",
                             "cld\n",
-                            "push esp\n",
-                            "push ", stringify!(N), "\n",
+                            $crate::fpu_entry!(),
                             [<__dispatch_ $table_ident>]!(N),
                         ),
                     );

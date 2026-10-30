@@ -6,6 +6,7 @@ pub enum KernelError {
     Allocation,
     NoTasks,
     Io,
+    InvalidExecutable,
 }
 
 impl fmt::Display for KernelError {

@@ -5,13 +5,16 @@ use core::ffi::c_void;
 
 use bindings::{clear_screen, malloc, print_memory, reboot};
 use polyos_std::*;
+mod jobs;
 
 #[polyos_std::main]
 fn main() {
     let mut buffer = [0u8; 1024];
     let mut env = ShellEnv::from_process();
+    let mut jobs = jobs::Jobs::new();
     println!("PolyOS v2.0.0");
     loop {
+        jobs.reap();
         print!("> ");
         buffer.fill(0);
         let len = polyos_std::stdio::terminal_readline(&mut buffer, true);
@@ -30,10 +33,10 @@ fn main() {
         };
 
         if commands.len() == 1 && !commands[0].has_redirection() {
-            if run_simple_command(&commands[0], &mut env) {
+            if run_simple_command(&commands[0], &mut env, &mut jobs) {
                 break;
             }
-        } else if let Err(error) = run_pipeline(&commands, &env) {
+        } else if let Err(error) = run_pipeline(&commands, &env, &mut jobs) {
             println!("shell: {}", error);
         }
     }
@@ -190,12 +193,15 @@ fn parse_command_line(input: &str) -> Result<Vec<ParsedCommand<'_>>, &'static st
     Ok(commands)
 }
 
-fn run_simple_command(command: &ParsedCommand, env: &mut ShellEnv) -> bool {
-    if let Some(result) = run_builtin(command, env) {
+fn run_simple_command(command: &ParsedCommand, env: &mut ShellEnv, jobs: &mut jobs::Jobs) -> bool {
+    if let Some(result) = run_builtin(command, env, jobs) {
         return matches!(result, BuiltinResult::Exit);
     }
 
-    let status = run_external_command(command, env);
+    let status = run_external_command(command, env, jobs);
+    if status == -2 {
+        return false;
+    }
     if status < 0 || status == 127 {
         if let Some(name) = command.command() {
             println!("{}: command not found", name);
@@ -207,28 +213,41 @@ fn run_simple_command(command: &ParsedCommand, env: &mut ShellEnv) -> bool {
     false
 }
 
-fn run_external_command(command: &ParsedCommand, env: &ShellEnv) -> i32 {
+fn run_external_command(command: &ParsedCommand, env: &ShellEnv, jobs: &mut jobs::Jobs) -> i32 {
+    let Ok(mut launch) = jobs::Launch::new() else {
+        return -1;
+    };
     let pid = process::fork();
     if pid < 0 {
+        launch.abort();
         return -1;
     }
 
     if pid == 0 {
+        launch.child();
         exec_search(command, env);
     }
 
-    let mut status = 0;
-    if process::waitpid(pid, &mut status, 0) < 0 {
+    if launch.add(pid).is_err() {
+        launch.abort();
         return -1;
     }
-
-    (status >> 8) & 0xff
+    jobs.foreground(launch, command.args.join(" "))
 }
 
-fn run_builtin(command: &ParsedCommand, env: &mut ShellEnv) -> Option<BuiltinResult> {
+fn run_builtin(
+    command: &ParsedCommand,
+    env: &mut ShellEnv,
+    jobs: &mut jobs::Jobs,
+) -> Option<BuiltinResult> {
     let name = command.command()?;
     let args = &command.args[1..];
     match name {
+        "jobs" => {
+            jobs.list();
+            Some(BuiltinResult::Continue(0))
+        }
+        "fg" => Some(BuiltinResult::Continue(jobs.resume(args.first().copied()))),
         "help" => {
             print_help();
             Some(BuiltinResult::Continue(0))
@@ -369,16 +388,27 @@ fn print_joined(args: &[&str]) {
     println!();
 }
 
-fn run_pipeline(commands: &[ParsedCommand], env: &ShellEnv) -> Result<(), &'static str> {
+fn run_pipeline(
+    commands: &[ParsedCommand],
+    env: &ShellEnv,
+    jobs: &mut jobs::Jobs,
+) -> Result<(), &'static str> {
     let mut previous_read = -1;
-    let mut pids = Vec::new();
+    let mut launch = jobs::Launch::new()?;
 
     for (index, command) in commands.iter().enumerate() {
         let is_last = index + 1 == commands.len();
         let pipe = if is_last {
             None
         } else {
-            Some(io::pipe().map_err(|_| "pipe failed")?)
+            match io::pipe() {
+                Ok(pipe) => Some(pipe),
+                Err(_) => {
+                    close_if_open(previous_read);
+                    launch.abort();
+                    return Err("pipe failed");
+                }
+            }
         };
 
         let pid = process::fork();
@@ -388,10 +418,12 @@ fn run_pipeline(commands: &[ParsedCommand], env: &ShellEnv) -> Result<(), &'stat
                 close_if_open(read_fd);
                 close_if_open(write_fd);
             }
+            launch.abort();
             return Err("fork failed");
         }
 
         if pid == 0 {
+            launch.child();
             if previous_read >= 0 {
                 let _ = io::dup2(previous_read, bindings::STDIN_FILENO as i32);
             }
@@ -412,7 +444,7 @@ fn run_pipeline(commands: &[ParsedCommand], env: &ShellEnv) -> Result<(), &'stat
             }
 
             let mut child_env = env.clone();
-            if let Some(result) = run_builtin(command, &mut child_env) {
+            if let Some(result) = run_builtin(command, &mut child_env, jobs) {
                 let status = match result {
                     BuiltinResult::Continue(status) => status,
                     BuiltinResult::Exit => 0,
@@ -423,7 +455,15 @@ fn run_pipeline(commands: &[ParsedCommand], env: &ShellEnv) -> Result<(), &'stat
             exec_search(command, env);
         }
 
-        pids.push(pid);
+        if let Err(error) = launch.add(pid) {
+            close_if_open(previous_read);
+            if let Some((read_fd, write_fd)) = pipe {
+                close_if_open(read_fd);
+                close_if_open(write_fd);
+            }
+            launch.abort();
+            return Err(error);
+        }
         close_if_open(previous_read);
         if let Some((read_fd, write_fd)) = pipe {
             close_if_open(write_fd);
@@ -435,10 +475,14 @@ fn run_pipeline(commands: &[ParsedCommand], env: &ShellEnv) -> Result<(), &'stat
 
     close_if_open(previous_read);
 
-    for pid in pids {
-        let mut status = 0;
-        let _ = process::waitpid(pid, &mut status, 0);
-    }
+    jobs.foreground(
+        launch,
+        commands
+            .iter()
+            .map(|c| c.args.join(" "))
+            .collect::<Vec<_>>()
+            .join(" | "),
+    );
 
     Ok(())
 }
@@ -557,6 +601,8 @@ fn close_if_open(fd: i32) {
 
 fn print_help() {
     println!("Builtins:");
+    println!("  jobs          list stopped jobs");
+    println!("  fg [%job]     resume a stopped job in the foreground");
     println!("  cd [dir]      change directory");
     println!("  pwd           print current directory");
     println!("  id            print user and group ids");

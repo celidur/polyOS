@@ -106,7 +106,11 @@ def main():
             terminal_inputs = [
                 ("tty-canonical-ready", b"ab\x7fc\r"),
                 ("tty-eof-ready", b"\x04"),
+                ("tty-eof-pair-ready", b"\x04\x04"),
+                ("tty-transition-ready", b"T\n"),
                 ("tty-raw-ready", b"\x00Z"),
+                ("tty-vmin-partial-ready", b"K"),
+                ("tty-vmin-complete-ready", b"L"),
                 ("tty-nonblock-ready", b"N"),
                 ("tty-signal-ready", b"\x03"),
                 ("tty-background-ready", b"B"),

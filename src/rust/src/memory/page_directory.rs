@@ -1,4 +1,7 @@
+use crate::error::KernelError;
+use alloc::collections::BTreeMap;
 use core::arch::asm;
+use spin::Mutex;
 
 use crate::{
     constant::{
@@ -27,6 +30,7 @@ pub enum PagingError {
 pub struct PageDirectory {
     pub directory: Page<u32>,
     _entries: Page<u32>,
+    cow_pages: Mutex<BTreeMap<u32, Page<u8>>>,
 }
 
 unsafe impl Send for PageDirectory {}
@@ -53,6 +57,7 @@ impl PageDirectory {
 
         Some(Self {
             _entries: entries,
+            cow_pages: Mutex::new(BTreeMap::new()),
             directory,
         })
     }
@@ -98,8 +103,46 @@ impl PageDirectory {
 
         Some(Self {
             _entries: new_entries,
+            cow_pages: Mutex::new(self.cow_pages.lock().clone()),
             directory: new_directory,
         })
+    }
+
+    /// Own private fault copies with the address space, so user copies can resolve
+    /// COW without recursively acquiring the task manager from a page fault.
+    pub fn handle_cow_fault(&self, address: u32) -> Result<bool, KernelError> {
+        let address = Self::align_address_down(address);
+        let entry = self.get(address).map_err(|_| KernelError::Paging)?;
+        if entry & (flags::PRESENT | flags::USER_ACCESS | flags::COW)
+            != flags::PRESENT | flags::USER_ACCESS | flags::COW
+        {
+            return Ok(false);
+        }
+        let page = Page::<u8>::new(PAGING_PAGE_SIZE).ok_or(KernelError::Allocation)?;
+        let old =
+            unsafe { core::slice::from_raw_parts((entry & !4095) as *const u8, PAGING_PAGE_SIZE) };
+        page.as_mut_slice().copy_from_slice(old);
+        self.map(
+            address,
+            page.as_ptr() as u32,
+            ((entry & 4095) | flags::WRITABLE) & !flags::COW,
+        )
+        .map_err(|_| KernelError::Paging)?;
+        self.cow_pages.lock().insert(address, page);
+        Ok(true)
+    }
+    pub fn remove_cow_pages(&self, start: u32, size: u32) {
+        let end = start.saturating_add(size);
+        self.cow_pages
+            .lock()
+            .retain(|address, _| *address < start || *address >= end);
+    }
+    pub fn clear_cow_pages(&self) {
+        let mut pages = self.cow_pages.lock();
+        for &address in pages.keys() {
+            let _ = self.set(address, 0);
+        }
+        pages.clear();
     }
 
     pub fn switch(&self) {

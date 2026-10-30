@@ -277,7 +277,9 @@ fn read_mode(out: &mut [u8], nonblocking: bool) -> Result<usize, FsError> {
             None => break,
         }
     }
-    if canonical && tty.ready.front() == Some(&None) {
+    // A full buffer can end immediately before its record delimiter. If the
+    // loop already consumed a delimiter, the next one belongs to another EOF.
+    if canonical && count == out.len() && tty.ready.front() == Some(&None) {
         tty.ready.pop_front();
     }
     Ok(count)
@@ -286,7 +288,13 @@ pub fn poll(events: u16) -> u16 {
     attach();
     pump();
     let tty = TERMINAL.lock();
-    (events & 4) | if !tty.ready.is_empty() { events & 1 } else { 0 }
+    let readable = if tty.settings.local & 2 != 0 {
+        !tty.ready.is_empty()
+    } else {
+        let minimum = (tty.settings.chars[6] as usize).max(1);
+        tty.ready.iter().filter(|b| b.is_some()).count() >= minimum
+    };
+    (events & 4) | if readable { events & 1 } else { 0 }
 }
 fn output<T>(directory: &PageDirectory, ptr: u32, value: &T) -> Result<u32, FsError> {
     user::write_value(directory, ptr, value).map_err(|_| FsError::BadAddress)?;
@@ -321,6 +329,10 @@ pub fn ioctl(request: u32, arg: u32, directory: &PageDirectory) -> Result<Option
                 tty.ready.clear();
                 tty.edit.clear();
             } else if tty.settings.local & 2 != 0 && settings.local & 2 == 0 {
+                // Canonical record delimiters are bookkeeping, not input bytes.
+                // Keeping them in raw mode can surface a stale EOF when a
+                // readline user restores canonical mode for its child.
+                tty.ready.retain(|byte| byte.is_some());
                 let edit = core::mem::take(&mut tty.edit);
                 for b in edit {
                     tty.ready.push_back(Some(b));

@@ -39,11 +39,20 @@ impl From<UserSignalAction> for SignalAction {
     }
 }
 
-pub fn syscall_kill(selector:u32,signal:u32)->u32{
- if signal!=0 && !valid_signal(signal){return abi::errno(abi::EINVAL);}
- let Some(pid)=KERNEL.with_task_manager(|tm|Some(tm.get_current()?.read().process.pid))else{return abi::errno(abi::ESRCH)};
- task_current_set_return_value(0);
- match KERNEL.with_process_manager(|pm|pm.send_signal(pid,selector as i32,signal)){Ok(true)=>task_next(),Ok(false)=>0,Err(e)=>abi::errno(e)}
+pub fn syscall_kill(selector: u32, signal: u32) -> u32 {
+    if signal != 0 && !valid_signal(signal) {
+        return abi::errno(abi::EINVAL);
+    }
+    let Some(pid) = KERNEL.with_task_manager(|tm| Some(tm.get_current()?.read().process.pid))
+    else {
+        return abi::errno(abi::ESRCH);
+    };
+    task_current_set_return_value(0);
+    match KERNEL.with_process_manager(|pm| pm.send_signal(pid, selector as i32, signal)) {
+        Ok(true) => task_next(),
+        Ok(false) => 0,
+        Err(e) => abi::errno(e),
+    }
 }
 
 pub fn syscall_sigaction(signum: u32, act_ptr: u32, oldact_ptr: u32) -> u32 {
@@ -68,25 +77,25 @@ pub fn syscall_sigaction(signum: u32, act_ptr: u32, oldact_ptr: u32) -> u32 {
         return abi::errno(abi::EINVAL);
     };
 
-    if oldact_ptr != 0 {
-        let user_old: UserSignalAction = old_action.into();
-        if user::write_value(&process.page_directory, oldact_ptr, &user_old).is_err() {
-            return abi::errno(abi::EFAULT);
-        }
-    }
-
-    if act_ptr != 0 {
-        let mut user_action = UserSignalAction::default();
-        if user::copy_from_user(
+    let mut user_action = UserSignalAction::default();
+    if act_ptr != 0
+        && user::copy_from_user(
             &process.page_directory,
             act_ptr,
             &mut user_action as *mut UserSignalAction as *mut u8,
             core::mem::size_of::<UserSignalAction>() as u32,
         )
         .is_err()
-        {
+    {
+        return abi::errno(abi::EFAULT);
+    }
+    if oldact_ptr != 0 {
+        let old: UserSignalAction = old_action.into();
+        if user::write_value(&process.page_directory, oldact_ptr, &old).is_err() {
             return abi::errno(abi::EFAULT);
         }
+    }
+    if act_ptr != 0 {
         // SA_ONSTACK, SA_NODEFER and SA_RESETHAND. Restart semantics are not silently promised.
         if user_action.flags & !(0x08000000 | 0x40000000 | 0x80000000) != 0 {
             return abi::errno(abi::ENOTSUP);
@@ -207,6 +216,18 @@ pub fn syscall_sigaltstack(new: u32, old: u32) -> u32 {
         if t.signals.on_alt {
             stack.flags = 1;
         }
+        let mut requested = stack;
+        if new != 0
+            && user::copy_from_user(
+                &t.process.page_directory,
+                new,
+                &mut requested as *mut AltStack as *mut u8,
+                12,
+            )
+            .is_err()
+        {
+            return abi::errno(abi::EFAULT);
+        }
         if old != 0 && user::write_value(&t.process.page_directory, old, &stack).is_err() {
             return abi::errno(abi::EFAULT);
         }
@@ -214,16 +235,7 @@ pub fn syscall_sigaltstack(new: u32, old: u32) -> u32 {
             if t.signals.on_alt {
                 return abi::errno(abi::EPERM);
             }
-            if user::copy_from_user(
-                &t.process.page_directory,
-                new,
-                &mut stack as *mut AltStack as *mut u8,
-                12,
-            )
-            .is_err()
-            {
-                return abi::errno(abi::EFAULT);
-            }
+            stack = requested;
             if stack.flags & !2 != 0 {
                 return abi::errno(abi::EINVAL);
             }

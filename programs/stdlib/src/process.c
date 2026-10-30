@@ -43,15 +43,15 @@ int prctl(int option, ...) {
 int execv(const char *path, char *const argv[]) {
   return execve(path, argv, environ);
 }
-int execvp(const char *file, char *const argv[]) {
+int __polyos_exec_search(const char *file, char *const argv[],
+                         char *const envp[], const char *path) {
   if (!file || !*file) {
     errno = ENOENT;
     return -1;
   }
   for (const char *p = file; *p; p++)
     if (*p == '/')
-      return execv(file, argv);
-  const char *path = getenv("PATH");
+      return execve(file, argv, envp);
   if (!path)
     path = "/bin";
   int denied = 0;
@@ -69,7 +69,7 @@ int execvp(const char *file, char *const argv[]) {
         at = n + 1;
       }
       memcpy(candidate + at, file, m + 1);
-      execv(candidate, argv);
+      execve(candidate, argv, envp);
       if (errno == EACCES)
         denied = 1;
       else if (errno != ENOENT && errno != ENOTDIR)
@@ -81,6 +81,9 @@ int execvp(const char *file, char *const argv[]) {
   }
   errno = denied ? EACCES : ENOENT;
   return -1;
+}
+int execvp(const char *file, char *const argv[]) {
+  return __polyos_exec_search(file, argv, environ, getenv("PATH"));
 }
 int waitid(idtype_t type, pid_t id, siginfo_t *info, int options) {
   return call6(284, type, id, (long)info, options, 0, 0);

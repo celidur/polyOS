@@ -24,7 +24,10 @@ lazy_static! {
 }
 
 lazy_static! {
-    pub static ref TSS: Tss = Tss::new_with_kernel_stack(0x600000, KERNEL_DATA_SELECTOR as u32);
+    pub static ref TSS: Tss = Tss::new_with_kernel_stack(
+        crate::constant::KERNEL_STACK_TOP as u32,
+        KERNEL_DATA_SELECTOR as u32
+    );
 }
 
 #[derive(Debug)]

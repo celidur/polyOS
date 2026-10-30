@@ -314,13 +314,15 @@ impl ProcessManager {
             return Ok(SignalEffect::Terminated);
         }
         if signal == SIGCONT {
-            self.child_event(&process, 0xffff);
-            KERNEL.with_task_manager(|tm| tm.stop_process(pid, false));
+            if KERNEL.with_task_manager(|tm| tm.stop_process(pid, false)) {
+                self.child_event(&process, 0xffff);
+            }
             *process.pending_signals.lock() &= !((1 << 18) | (1 << 19) | (1 << 20) | (1 << 21));
         }
         if signal == SIGSTOP || (matches!(signal, 20 | 21 | 22) && action.handler == SIG_DFL) {
-            self.child_event(&process, ((signal as i32) << 8) | 0x7f);
-            KERNEL.with_task_manager(|tm| tm.stop_process(pid, true));
+            if KERNEL.with_task_manager(|tm| tm.stop_process(pid, true)) {
+                self.child_event(&process, ((signal as i32) << 8) | 0x7f);
+            }
             *process.pending_signals.lock() &= !(1 << 17);
             return Ok(SignalEffect::Delivered);
         }

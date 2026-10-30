@@ -2,10 +2,9 @@ use alloc::sync::Arc;
 use core::arch::{asm, naked_asm};
 
 use crate::{
-    constant::{PAGING_PAGE_SIZE, USER_CODE_SEGMENT, USER_DATA_SEGMENT},
-    interrupts::{InterruptFrame, enable_interrupts, without_interrupts},
+    constant::{USER_CODE_SEGMENT, USER_DATA_SEGMENT},
+    interrupts::{InterruptFrame, enable_interrupts},
     kernel::KERNEL,
-    memory::{self, PageDirectory},
     utils::halt,
 };
 
@@ -68,6 +67,7 @@ pub struct Registers {
 pub struct Task {
     pub id: TaskId,
     pub registers: Registers,
+    pub fpu: crate::arch::FpuState,
     pub process: Arc<Process>,
     pub priority: usize,
     #[allow(dead_code)]
@@ -75,7 +75,7 @@ pub struct Task {
     pub state: TaskState,
     pub clear_child_tid: u32,
     pub signals: super::signal::ThreadSignals,
-    pub name:[u8;16],
+    pub name: [u8; 16],
     pub stopped: bool,
     pub restarting: bool,
     pub sleep_remaining: Option<(u32, u64)>,
@@ -87,7 +87,8 @@ impl Task {
         Self {
             id,
             registers: Self::entry_registers(&process),
-            name:task_name(&process),
+            fpu: Default::default(),
+            name: task_name(&process),
             process,
             priority,
             time_slice: 0,
@@ -110,7 +111,8 @@ impl Task {
         Self {
             id,
             registers,
-            name:task_name(&process),
+            fpu: Default::default(),
+            name: task_name(&process),
             process,
             priority,
             time_slice: 0,
@@ -201,11 +203,15 @@ pub fn task_next() -> ! {
             TaskSwitch::Run(_registers) => {
                 KERNEL.kernel_page();
                 super::signal::prepare_current();
-                let registers =
-                    KERNEL.with_task_manager(|tm| tm.get_current().map(|t| t.read().registers));
-                if let Some(registers) = registers {
+                let context = KERNEL.with_task_manager(|tm| {
+                    tm.get_current().map(|t| {
+                        let t = t.read();
+                        (t.registers, t.fpu)
+                    })
+                });
+                if let Some((registers, fpu)) = context {
                     task_page();
-                    unsafe { task_return(&registers) }
+                    unsafe { task_return(&registers, &fpu) }
                 }
             }
             TaskSwitch::Idle => {
@@ -248,85 +254,6 @@ pub fn task_current_set_return_value(value: u32) {
     });
 }
 
-pub fn copy_string_from_task(
-    directory: &PageDirectory,
-    virt: u32,
-    phys: u32,
-    size: u32,
-) -> Result<(), ()> {
-    without_interrupts(|| {
-        let mut remain = size;
-        let flags = memory::PRESENT | memory::USER_ACCESS | memory::WRITABLE;
-
-        let mut virt = virt;
-        let mut phys = phys;
-
-        while remain > 0 {
-            let to_copy = remain.min(PAGING_PAGE_SIZE as u32);
-            let page = memory::Page::new(to_copy as usize).ok_or(())?;
-            let page_addr = page.as_ptr() as u32;
-            let old_entry = directory.get(page_addr).map_err(|_| ())?;
-            directory
-                .map_page(page_addr, &page, flags)
-                .map_err(|_| ())?;
-            let buffer =
-                unsafe { core::slice::from_raw_parts_mut(virt as *mut u8, to_copy as usize) };
-            let buffer2 = page.as_mut_slice();
-            directory.switch();
-            buffer2[..to_copy as usize].copy_from_slice(&buffer[..to_copy as usize]);
-            KERNEL.kernel_page();
-            directory.set(page_addr, old_entry).map_err(|_| ())?;
-            remain -= to_copy;
-            let buffer =
-                unsafe { core::slice::from_raw_parts_mut(phys as *mut u8, to_copy as usize) };
-            buffer[..to_copy as usize].copy_from_slice(&buffer2[..to_copy as usize]);
-            virt += to_copy;
-            phys += to_copy;
-        }
-
-        Ok(())
-    })
-}
-
-pub fn copy_string_to_task(
-    directory: &PageDirectory,
-    buff: u32,
-    virt: u32,
-    size: u32,
-) -> Result<(), ()> {
-    without_interrupts(|| {
-        let mut remain = size;
-        let flags = memory::PRESENT | memory::USER_ACCESS | memory::WRITABLE;
-
-        let mut virt = virt;
-        let mut buff = buff;
-
-        while remain > 0 {
-            let phs_addr = PageDirectory::align_address_down(buff);
-            let old_entry = directory.get(phs_addr).map_err(|_| ())?;
-
-            directory.set(phs_addr, phs_addr | flags).map_err(|_| ())?;
-
-            let offset = buff - phs_addr;
-            let to_copy = (PAGING_PAGE_SIZE as u32 - offset).min(remain);
-            let buffer =
-                unsafe { core::slice::from_raw_parts_mut(virt as *mut u8, to_copy as usize) };
-            let buffer2 = unsafe {
-                core::slice::from_raw_parts((phs_addr + offset) as *const u8, to_copy as usize)
-            };
-            directory.switch();
-            buffer[..to_copy as usize].copy_from_slice(&buffer2[..to_copy as usize]);
-            KERNEL.kernel_page();
-            directory.set(phs_addr, old_entry).map_err(|_| ())?;
-            remain -= to_copy;
-            virt += to_copy;
-            buff += to_copy;
-        }
-
-        Ok(())
-    })
-}
-
 pub fn user_registers() {
     unsafe {
         asm!(
@@ -342,10 +269,12 @@ pub fn user_registers() {
 
 #[unsafe(naked)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn task_return(regs: &Registers) -> ! {
+pub unsafe extern "C" fn task_return(regs: &Registers, fpu: &crate::arch::FpuState) -> ! {
     naked_asm!(
         // Get &Registers from the stack (cdecl: at [esp+4])
         "mov  ebp, esp",
+        "mov  eax, [ebp + 8]",
+        "fxrstor [eax]",
         "mov  ebx, [ebp + 4]",
         // Stack frame for iret: SS, ESP, EFLAGS, CS, EIP
         "push dword ptr [ebx + 44]", // SS
@@ -373,4 +302,15 @@ pub unsafe extern "C" fn task_return(regs: &Registers) -> ! {
     );
 }
 
-fn task_name(process:&Process)->[u8;16]{let mut name=[0;16];let text=process.executable_path.rsplit('/').next().unwrap_or("").as_bytes();let n=text.len().min(15);name[..n].copy_from_slice(&text[..n]);name}
+fn task_name(process: &Process) -> [u8; 16] {
+    let mut name = [0; 16];
+    let text = process
+        .executable_path
+        .rsplit('/')
+        .next()
+        .unwrap_or("")
+        .as_bytes();
+    let n = text.len().min(15);
+    name[..n].copy_from_slice(&text[..n]);
+    name
+}

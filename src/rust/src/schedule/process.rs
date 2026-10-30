@@ -97,7 +97,6 @@ pub struct Process {
     pub brk: Mutex<u32>,
     signal_actions: Mutex<[SignalAction; MAX_SIGNAL + 1]>,
     brk_pages: Mutex<BTreeMap<u32, Page<u8>>>,
-    cow_pages: Mutex<BTreeMap<u32, Page<u8>>>,
 }
 
 unsafe impl Send for Process {}
@@ -110,7 +109,7 @@ impl Process {
         filename: &str,
         args: Option<ProcessArguments>,
     ) -> Result<Self, KernelError> {
-        let mut process = if let Some(elf) = Self::load_elf(filename) {
+        let mut process = if let Some(elf) = Self::load_elf(filename)? {
             elf
         } else {
             Self::load_binary(filename)?
@@ -139,7 +138,7 @@ impl Process {
 
         let argv = push_stack_strings(stack, &mut stack_pointer, &args.args)?;
         let envp = push_stack_strings(stack, &mut stack_pointer, &args.env)?;
-        let executable=push_stack_strings(stack,&mut stack_pointer,&[filename.to_string()])?;
+        let executable = push_stack_strings(stack, &mut stack_pointer, &[filename.to_string()])?;
         stack_pointer &= !0xF;
 
         let header_bytes = headers.len() * core::mem::size_of::<super::loader::elf::Elf32Phdr>();
@@ -188,11 +187,18 @@ impl Process {
         Ok(process)
     }
 
-    fn load_elf(filename: &str) -> Option<Self> {
-        let elf = ElfFile::load(filename).ok()?;
+    fn load_elf(filename: &str) -> Result<Option<Self>, KernelError> {
+        use crate::schedule::loader::elf::ElfError;
+        let elf = match ElfFile::load(filename) {
+            Ok(elf) => elf,
+            Err(ElfError::NotElf) => return Ok(None),
+            Err(ElfError::Io) => return Err(KernelError::Io),
+            Err(_) => return Err(KernelError::InvalidExecutable),
+        };
         let entrypoint = elf.header().e_entry;
-        let page_directory = PageDirectory::new_4gb(memory::PRESENT)?;
-        Some(Self {
+        let page_directory =
+            PageDirectory::new_4gb(memory::PRESENT).ok_or(KernelError::Allocation)?;
+        Ok(Some(Self {
             pid: 0,
             control: Mutex::new(Default::default()),
             auxv_address: 0,
@@ -206,17 +212,16 @@ impl Process {
             page_directory,
             pending_signals: Mutex::new(0),
             mappings: Mutex::new(Default::default()),
-            stack: Page::new(USER_PROGRAM_STACK_SIZE)?,
+            stack: Page::new(USER_PROGRAM_STACK_SIZE).ok_or(KernelError::Allocation)?,
             start_stack: USER_PROGRAM_VIRTUAL_STACK_ADDRESS_START,
             entrypoint,
             brk: Mutex::new(USER_HEAP_START as u32),
             signal_actions: Mutex::new([SignalAction::default(); MAX_SIGNAL + 1]),
             brk_pages: Mutex::new(BTreeMap::new()),
-            cow_pages: Mutex::new(BTreeMap::new()),
             cwd: Mutex::new("/".to_string()),
             umask: Mutex::new(0o022),
             env: Mutex::new(default_environment()),
-        })
+        }))
     }
 
     fn load_binary(filename: &str) -> Result<Self, KernelError> {
@@ -226,12 +231,22 @@ impl Process {
             .open(filename)
             .map_err(|_| KernelError::Io)?;
         let stat = file.ops.stat().map_err(|_| KernelError::Io)?;
+        if stat.size == 0
+            || stat.size as usize > crate::constant::USER_IMAGE_END - PROGRAM_VIRTUAL_ADDRESS
+        {
+            return Err(KernelError::InvalidExecutable);
+        }
 
         let memory = Page::new(stat.size as usize).ok_or(KernelError::Allocation)?;
 
-        file.ops
-            .read(memory.as_mut_slice())
-            .map_err(|_| KernelError::Io)?;
+        let mut remaining = memory.as_mut_slice();
+        while !remaining.is_empty() {
+            let count = file.ops.read(remaining).map_err(|_| KernelError::Io)?;
+            if count == 0 {
+                return Err(KernelError::Io);
+            }
+            remaining = &mut remaining[count..];
+        }
         let page_directory =
             PageDirectory::new_4gb(memory::PRESENT).ok_or(KernelError::Allocation)?;
         Ok(Self {
@@ -254,7 +269,6 @@ impl Process {
             brk: Mutex::new(USER_HEAP_START as u32),
             signal_actions: Mutex::new([SignalAction::default(); MAX_SIGNAL + 1]),
             brk_pages: Mutex::new(BTreeMap::new()),
-            cow_pages: Mutex::new(BTreeMap::new()),
             cwd: Mutex::new("/".to_string()),
             umask: Mutex::new(0o022),
             env: Mutex::new(default_environment()),
@@ -281,13 +295,6 @@ impl Process {
             .page_directory
             .cow_copy()
             .ok_or(KernelError::Allocation)?;
-
-        let cow_pages = parent
-            .cow_pages
-            .lock()
-            .iter()
-            .map(|(addr, page)| (*addr, page.clone()))
-            .collect();
 
         let brk_pages = parent
             .brk_pages
@@ -324,7 +331,6 @@ impl Process {
             brk: Mutex::new(*parent.brk.lock()),
             signal_actions: Mutex::new(signal_actions),
             brk_pages: Mutex::new(brk_pages),
-            cow_pages: Mutex::new(cow_pages),
             cwd: Mutex::new(parent.cwd.lock().clone()),
             umask: Mutex::new(*parent.umask.lock()),
             env: Mutex::new(parent.env.lock().clone()),
@@ -475,12 +481,23 @@ impl Process {
     }
 
     pub fn duplicate_fd_from(&self, fd: i32, min_fd: i32) -> Result<i32, KernelError> {
+        self.duplicate_fd_from_flags(fd, min_fd, 0)
+    }
+
+    pub fn duplicate_fd_from_flags(
+        &self,
+        fd: i32,
+        min_fd: i32,
+        flags: u32,
+    ) -> Result<i32, KernelError> {
         if min_fd < 0 {
             return Err(KernelError::Io);
         }
 
         let fd_entry = self.get_fd_entry(fd).ok_or(KernelError::Io)?;
-        self.insert_fd_from(min_fd as usize, fd_entry.duplicate_for_dup())
+        let mut entry = fd_entry.duplicate_for_dup();
+        entry.flags = flags & FD_CLOEXEC;
+        self.insert_fd_from(min_fd as usize, entry)
     }
 
     pub fn duplicate_fd_to(&self, old_fd: i32, new_fd: i32) -> Result<i32, KernelError> {
@@ -620,10 +637,7 @@ impl Process {
         }
         self.brk_pages.lock().clear();
 
-        for addr in self.cow_pages.lock().keys() {
-            let _ = self.page_directory.set(*addr, 0);
-        }
-        self.cow_pages.lock().clear();
+        self.page_directory.clear_cow_pages();
     }
 
     pub fn resolve_path(&self, path: &str) -> Option<String> {
@@ -646,8 +660,11 @@ impl Process {
         crate::fs::path::resolve_root(&self.control.lock().root, base, path)
     }
     pub fn follow_path(&self, path: &str) -> Result<String, FsError> {
-        let root=self.control.lock().root.clone();
-        KERNEL.vfs.read().follow_in(&root,path)
+        crate::fs::access::search(self, path)?;
+        let root = self.control.lock().root.clone();
+        let resolved = KERNEL.vfs.read().follow_in(&root, path)?;
+        crate::fs::access::search(self, &resolved)?;
+        Ok(resolved)
     }
     pub fn refresh_aux_ids(&self) {
         let c = self.control.lock();
@@ -748,38 +765,12 @@ impl Process {
         *self.signal_actions.lock() = actions;
     }
 
-    pub fn handle_cow_fault(&self, faulting_address: u32) -> Result<bool, KernelError> {
-        let page_address = PageDirectory::align_address_down(faulting_address);
-        let entry = self
-            .page_directory
-            .get(page_address)
-            .map_err(|_| KernelError::Paging)?;
-
-        if entry & memory::PRESENT == 0 || entry & memory::COW == 0 {
-            return Ok(false);
-        }
-
-        let old_physical = entry & 0xFFFFF000;
-        let new_page = Page::<u8>::new(PAGING_PAGE_SIZE).ok_or(KernelError::Allocation)?;
-        let source =
-            unsafe { core::slice::from_raw_parts(old_physical as *const u8, PAGING_PAGE_SIZE) };
-        new_page.as_mut_slice()[..PAGING_PAGE_SIZE].copy_from_slice(source);
-
-        let flags = (entry & 0xFFF | memory::WRITABLE) & !memory::COW;
-        self.page_directory
-            .map(page_address, new_page.as_ptr() as u32, flags)
-            .map_err(|_| KernelError::Paging)?;
-
-        self.cow_pages.lock().insert(page_address, new_page);
-
-        Ok(true)
+    pub fn handle_cow_fault(&self, address: u32) -> Result<bool, KernelError> {
+        self.page_directory.handle_cow_fault(address)
     }
 
     pub(crate) fn remove_cow_pages_in_range(&self, start: u32, size: u32) {
-        let end = start.saturating_add(size);
-        self.cow_pages
-            .lock()
-            .retain(|addr, _| *addr < start || *addr >= end);
+        self.page_directory.remove_cow_pages(start, size);
     }
 }
 

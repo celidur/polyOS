@@ -146,13 +146,8 @@ impl FileOps for ScreenFile {
                     ws_ypixel: 0,
                 };
 
-                crate::schedule::task::copy_string_to_task(
-                    directory,
-                    &size as *const WinSize as u32,
-                    arg,
-                    core::mem::size_of::<WinSize>() as u32,
-                )
-                .map_err(|_| FsError::IoError)?;
+                crate::memory::user::write_value(directory,arg,&size)
+                .map_err(|_| FsError::BadAddress)?;
 
                 Ok(0)
             }

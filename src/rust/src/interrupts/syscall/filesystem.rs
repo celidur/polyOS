@@ -12,7 +12,9 @@ fn process() -> Option<Arc<Process>> {
 }
 fn pathname(process: &Process, fd: i32, ptr: u32) -> Result<alloc::string::String, FsError> {
     let name = user::read_process_string(process, ptr, MAX_PATH).ok_or(FsError::BadAddress)?;
-    path::resolve_at(process, fd, &name)
+    let path = path::resolve_at(process, fd, &name)?;
+    crate::fs::access::search(process, &path)?;
+    Ok(path)
 }
 pub fn syscall_openat(fd: u32, ptr: u32, flags: u32, mode: u32) -> u32 {
     let Some(p) = process() else {
@@ -182,6 +184,7 @@ fn metadata_at(p: &Process, fd: i32, ptr: u32, flags: u32) -> Result<FileMetadat
         };
     }
     let path = path::resolve_at(p, fd, &name)?;
+    crate::fs::access::search(p, &path)?;
     if flags & 0x100 != 0 {
         KERNEL.vfs.read().lstat(&path)
     } else {
