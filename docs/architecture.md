@@ -1,7 +1,8 @@
 # Kernel and userspace boundaries
 
-The selective runtime port keeps the device registry and driver abstractions from
-`main`. It does not require the Orbis shell, Rust std migration, or SMP bootstrap.
+The runtime port keeps the device registry and driver abstractions from `main`.
+The kernel remains single CPU. The optional Rust std adapter and vendored Orbis
+shell build on the same syscall and subsystem boundaries.
 
 * `interrupts/interrupt_frame.rs` describes the saved i386 machine state.
 * `interrupts/syscall/register.rs` is the sole adapter from registers to typed
@@ -48,9 +49,11 @@ child's registry to the calling thread. TLS destructors run outside registry loc
 
 This port targets the existing single-CPU scheduler. It implements shared-address-
 space clone with PARENT_SETTID and CHILD_CLEARTID, plus private futex wait/wake.
-Joining/detaching the initial thread, compiler TLS setup, nonzero stack guards
-are rejected rather
-than silently accepted. Thread-specific keys and destructors are supported.
+Joining/detaching the initial thread and compiler TLS setup are rejected.
+Thread-specific keys and destructors are supported. Pthread stacks can include a
+page-rounded PROT_NONE guard; the mapping is reclaimed only after completion.
+Caller-supplied stacks cannot request an additional guard. The std adapter uses
+pthread-key TLS and a default 4 KiB guard.
 
 The thread tests also exposed prerequisites fixed here: partial ELF reads, the
 segment-register inline-assembly clobber, and preserving user state across kernel
@@ -150,11 +153,13 @@ program break before releasing memory. brk/sbrk share a separate lock and query 
 current kernel break; fork snapshots both locks and resets them in the child.
 Kernel page allocation checks multiplication and alignment overflow before allocating.
 
-Executable mappings occupy `[0x00400000, 0x00500000)`; the supervisor entry stack
+Legacy executable mappings occupy `[0x00400000, 0x00500000)`; static std
+executables use `[0x08000000, 0x0c000000)`, separate from the kernel heap and mmap
+window. The initial user stack is 256 KiB. The supervisor entry stack
 reserves `[0x00500000, 0x00600000)`. The static ELF32/i386 loader validates segment
 ranges and page overlap before allocation, and requires the entry point to lie
 inside an executable segment. ELF files are bounded to 16 MiB including nonloaded
-metadata; loaded segments must fit the executable window. Recognized malformed
+metadata; loaded segments must fit one of the executable windows. Recognized malformed
 ELF files return ENOEXEC and cannot fall back to the raw-binary loader. Raw images
 must also fit the executable window and are read completely.
 
@@ -257,3 +262,50 @@ it also verifies a stopped background reader resumes after foreground transfer.
 Interrupt and syscall entry clear the direction flag before running Rust, while
 iret restores the user's saved flags. The regression suite calls a syscall with
 DF set to verify that user flags cannot reverse kernel memory copies.
+
+
+## Numeric process inspection and accounting
+
+Procfs enumerates live numeric PIDs. `/proc/<pid>/{status,cmdline,maps,stat,exe}`
+and `/proc/self/...` use the same snapshot implementation. `cmdline` contains
+NUL-separated arguments; `maps` reports logical permissions, offsets and image,
+stack, heap and anonymous regions. Snapshot file mappings are labeled
+`[file-snapshot]` because the VM does not retain their original path. The stat
+record has 52 fields for tools such as Orbisbox ps. Scheduler ticks, start tick,
+thread count and mapped size are populated; unsupported accounting fields are
+zero and resident size approximates the allocated mappings. Exited/reaped PIDs
+are absent; procfs currently does not expose zombie records. Cmdline, maps and exe
+require root or matching real and effective UIDs. Open files retain their snapshot.
+
+`/proc/metrics` counts syscall entries and scheduler attempts. `/proc/timing`
+reports aggregate and maximum TSC cycles from syscall entry until return or its
+first scheduler handoff. These are uncalibrated execution measurements, not
+wall-clock syscall latency; resumed execution after a blocking handoff is excluded.
+Accounting is designed for the single CPU scheduler.
+
+## Rust std and Orbis
+
+`programs/rust-std` owns an isolated static GNU/i386 ABI adapter. Its target selects
+upstream Rust's Linux Unix std implementation with vendor `polyos`, then translates
+GNU ABI structures and startup conventions to PolyOS. This is a compatibility
+profile, not a Linux kernel, glibc implementation, or a native upstream Rust target.
+It requires SSE2 and uses panic=abort. Existing freestanding C and Rust programs
+retain their original runtime. See `programs/rust-std/README.md` for build commands
+and supported surfaces, and `vendor/orbis/POLYOS.md` for source provenance and patches.
+
+The kernel supplies absolute monotonic FUTEX_WAIT_BITSET with a full bit mask,
+unlinkat, FIONBIO, getrandom and local SOCK_SEQPACKET records. Partial futex masks
+and real-time futex deadlines are unsupported. Packet sockets retain record
+boundaries, truncate a consumed record on a short read and cap records at 4096
+bytes; queues are bounded by bytes and record count. Ancillary messages are absent.
+Secure getrandom requests require hardware RDRAND and otherwise return EAGAIN.
+GRND_INSECURE explicitly permits a non-cryptographic seed for hash tables.
+
+`device/terminal_output.rs` consumes a bounded ANSI CSI subset for VGA cursor
+motion, erasure and colors, while forwarding output to serial. Cursor queries
+receive one synthesized terminal response. This supports Rustyline redraw and
+physical Backspace editing; it is not a complete terminal emulator.
+
+The boot entry clears the complete linker-defined BSS before accessing globals.
+The disk loader can leave filesystem bytes after the raw kernel image; relying
+on those bytes being zero corrupts static locks and counters.

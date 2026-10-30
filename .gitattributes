@@ -1,0 +1,2 @@
+# Preserve the vendored snapshot's original CRLF files.
+vendor/orbis/** whitespace=cr-at-eol
