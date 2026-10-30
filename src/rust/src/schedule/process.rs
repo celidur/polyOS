@@ -476,11 +476,11 @@ impl Process {
         Ok((table.len() - 1) as i32)
     }
 
-    pub fn duplicate_fd(&self, fd: i32) -> Result<i32, KernelError> {
+    pub fn duplicate_fd(&self, fd: i32) -> Result<i32, FsError> {
         self.duplicate_fd_from(fd, 0)
     }
 
-    pub fn duplicate_fd_from(&self, fd: i32, min_fd: i32) -> Result<i32, KernelError> {
+    pub fn duplicate_fd_from(&self, fd: i32, min_fd: i32) -> Result<i32, FsError> {
         self.duplicate_fd_from_flags(fd, min_fd, 0)
     }
 
@@ -489,15 +489,29 @@ impl Process {
         fd: i32,
         min_fd: i32,
         flags: u32,
-    ) -> Result<i32, KernelError> {
-        if min_fd < 0 {
-            return Err(KernelError::Io);
+    ) -> Result<i32, FsError> {
+        let mut table = self.fd_table.lock();
+        let fd_entry = if fd < 0 {
+            None
+        } else {
+            table.get(fd as usize).and_then(|e| e.clone())
         }
-
-        let fd_entry = self.get_fd_entry(fd).ok_or(KernelError::Io)?;
+        .ok_or(FsError::BadDescriptor)?;
+        if min_fd < 0 || min_fd as usize >= MAX_PROCESS_FD {
+            return Err(FsError::InvalidArgument);
+        }
+        // Reserve capacity before taking endpoint references: failed dup must
+        // never leave a phantom pipe/socket reader or writer behind.
+        let slot = (min_fd as usize..MAX_PROCESS_FD)
+            .find(|&n| table.get(n).is_none_or(|e| e.is_none()))
+            .ok_or(FsError::TooManyFiles)?;
+        if table.len() <= slot {
+            table.resize_with(slot + 1, || None);
+        }
         let mut entry = fd_entry.duplicate_for_dup();
         entry.flags = flags & FD_CLOEXEC;
-        self.insert_fd_from(min_fd as usize, entry)
+        table[slot] = Some(entry);
+        Ok(slot as i32)
     }
 
     pub fn duplicate_fd_to(&self, old_fd: i32, new_fd: i32) -> Result<i32, KernelError> {

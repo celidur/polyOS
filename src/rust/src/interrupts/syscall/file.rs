@@ -384,7 +384,7 @@ pub fn syscall_dup(fd: u32) -> u32 {
 
     match process.duplicate_fd(fd) {
         Ok(new_fd) => new_fd as u32,
-        Err(_) => abi::errno(abi::EBADF),
+        Err(e) => fs_errno(e),
     }
 }
 
@@ -419,7 +419,7 @@ pub fn syscall_fcntl(fd: u32, cmd: u32, arg: u32) -> u32 {
             },
         ) {
             Ok(new_fd) => new_fd as u32,
-            Err(_) => abi::errno(abi::EBADF),
+            Err(e) => fs_errno(e),
         },
         F_GETFD => process
             .get_fd_flags(fd)
