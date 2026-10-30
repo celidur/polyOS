@@ -157,6 +157,7 @@ impl TextVga<'_> {
     }
 
     pub fn write_char_color(&mut self, ascii_character: u8, color_code: ColorCode) {
+        if ascii_character == b'\r' { self.move_to(self.pos.0, 0); return; }
         if ascii_character == b'\n' {
             self.new_line();
             return;
@@ -184,6 +185,23 @@ impl TextVga<'_> {
 
     pub fn cols(&self) -> usize {
         self.cols
+    }
+    pub fn position(&self) -> (usize, usize) { self.pos }
+    pub fn move_to(&mut self, row: usize, column: usize) {
+        self.pos = (row.min(self.rows - 1), column.min(self.cols - 1));
+        self.set_cursor(self.screen_pos() as u16);
+    }
+    pub fn erase_line(&mut self, mode: u16, color: ColorCode) {
+        let base = self.pos.0 * self.cols;
+        let column = self.pos.1.min(self.cols - 1);
+        let (start, end) = match mode { 1 => (base, base + column + 1), 2 => (base, base + self.cols), _ => (base + column, base + self.cols) };
+        self.ptr.as_mut_slice()[start..end].fill(ScreenChar::new(b' ', color));
+    }
+    pub fn erase_display(&mut self, mode: u16, color: ColorCode) {
+        let length = self.rows * self.cols;
+        let cursor = self.screen_pos().min(length - 1);
+        let (start, end) = match mode { 1 => (0, cursor + 1), 2 | 3 => (0, length), _ => (cursor, length) };
+        self.ptr.as_mut_slice()[start..end].fill(ScreenChar::new(b' ', color));
     }
 
     pub fn rows(&self) -> usize {

@@ -978,6 +978,7 @@ extern void test_fd_lifetime(void (*expect)(const char *, int, int));
 extern void test_signal_fork(void (*expect)(const char *, int, int));
 extern void test_poll_lifetime(void (*expect)(const char *, int, int));
 extern void test_path_traversal(void (*expect)(const char *, int, int));
+extern void test_std_abi(void (*expect)(const char *, int, int));
 extern void test_proc_views(void (*expect)(const char *, int, int));
 extern int review_fpu_control(void);
 extern void test_threads(void (*expect)(const char *, int, int));
@@ -1035,6 +1036,7 @@ int main(int argc, char **argv)
     test_virtual_memory(expect);
     test_inspection(expect);
     test_proc_views(expect);
+    test_std_abi(expect);
     test_ipc(expect);
     test_filesystem(expect);
 

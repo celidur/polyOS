@@ -15,9 +15,11 @@ pub enum PipeError {
     WouldBlock,
     BrokenPipe,
     WrongEnd,
+    MessageTooLarge,
 }
 
 pub struct Pipe {
+    packet_sizes: Option<VecDeque<usize>>,
     buffer: VecDeque<u8>,
     readers: usize,
     writers: usize,
@@ -28,6 +30,7 @@ pub struct Pipe {
 impl Pipe {
     pub fn new() -> Self {
         Self {
+            packet_sizes: None,
             buffer: VecDeque::new(),
             readers: 1,
             writers: 1,
@@ -35,18 +38,32 @@ impl Pipe {
             write_waiters: VecDeque::new(),
         }
     }
+    pub fn packets() -> Self {
+        Self {
+            packet_sizes: Some(VecDeque::new()),
+            ..Self::new()
+        }
+    }
+    pub fn is_packet(&self) -> bool {
+        self.packet_sizes.is_some()
+    }
 
     pub fn poll(&self, end: PipeEnd, events: u16) -> u16 {
         match end {
             PipeEnd::Read => {
-                (if !self.buffer.is_empty() || self.writers == 0 {
+                (if !self.buffer.is_empty()
+                    || self.packet_sizes.as_ref().is_some_and(|q| !q.is_empty())
+                    || self.writers == 0
+                {
                     events & 1
                 } else {
                     0
                 }) | (if self.writers == 0 { 16 } else { 0 })
             }
             PipeEnd::Write => {
-                (if self.buffer.len() < PIPE_CAPACITY {
+                (if self.buffer.len() < PIPE_CAPACITY
+                    && self.packet_sizes.as_ref().is_none_or(|q| q.len() < 128)
+                {
                     events & 4
                 } else {
                     0
@@ -87,7 +104,7 @@ impl Pipe {
             return Ok(0);
         }
 
-        if self.buffer.is_empty() {
+        if self.buffer.is_empty() && self.packet_sizes.as_ref().is_none_or(|q| q.is_empty()) {
             return if self.writers == 0 {
                 Ok(0)
             } else {
@@ -95,14 +112,21 @@ impl Pipe {
             };
         }
 
+        let packet = self.packet_sizes.as_mut().and_then(|q| q.pop_front());
+        let limit = packet.unwrap_or(out.len()).min(out.len());
         let mut read = 0;
-        while read < out.len() {
+        while read < limit {
             let Some(byte) = self.buffer.pop_front() else {
                 break;
             };
 
             out[read] = byte;
             read += 1;
+        }
+        if let Some(size) = packet {
+            for _ in read..size {
+                self.buffer.pop_front();
+            }
         }
 
         Ok(read)
@@ -117,17 +141,30 @@ impl Pipe {
             return Err(PipeError::BrokenPipe);
         }
 
-        if input.is_empty() {
+        if let Some(queue) = &self.packet_sizes {
+            if input.len() > PIPE_CAPACITY {
+                return Err(PipeError::MessageTooLarge);
+            }
+            if queue.len() >= 128 {
+                return Err(PipeError::WouldBlock);
+            }
+        }
+        if input.is_empty() && !self.is_packet() {
             return Ok(0);
         }
 
         let available = PIPE_CAPACITY.saturating_sub(self.buffer.len());
-        if available == 0 || (input.len() <= PIPE_CAPACITY && available < input.len()) {
+        if (available == 0 && !input.is_empty())
+            || (input.len() <= PIPE_CAPACITY && available < input.len())
+        {
             return Err(PipeError::WouldBlock);
         }
 
         let to_write = available.min(input.len());
         self.buffer.extend(input[..to_write].iter().copied());
+        if let Some(queue) = &mut self.packet_sizes {
+            queue.push_back(to_write);
+        }
         Ok(to_write)
     }
 

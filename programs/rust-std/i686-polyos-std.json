@@ -1,0 +1,23 @@
+{
+  "llvm-target": "i686-unknown-linux-gnu",
+  "data-layout": "e-m:e-p:32:32-p270:32:32-p271:32:32-p272:64:64-i128:128-f64:32:64-f80:32-n8:16:32-S128",
+  "arch": "x86",
+  "os": "linux",
+  "env": "gnu",
+  "vendor": "polyos",
+  "target-family": ["unix"],
+  "target-pointer-width": 32,
+  "target-endian": "little",
+  "executables": true,
+  "linker-flavor": "gnu-cc",
+  "linker": "i686-elf-gcc",
+  "panic-strategy": "abort",
+  "relocation-model": "static",
+  "position-independent-executables": false,
+  "has-thread-local": false,
+  "features": "+sse,+sse2",
+  "max-atomic-width": 64,
+  "crt-static-default": true,
+  "crt-static-respected": true,
+  "pre-link-args": {"gnu-cc": ["-nostdlib", "-static"]}
+}

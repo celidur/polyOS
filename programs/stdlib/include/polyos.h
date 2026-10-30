@@ -24,6 +24,7 @@ struct network_info {
 
 #define AF_UNIX 1
 #define SOCK_STREAM 1
+#define SOCK_SEQPACKET 5
 #define SOCK_NONBLOCK 0x800
 #define SOCK_CLOEXEC 0x80000
 #define O_CLOEXEC 0x80000

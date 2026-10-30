@@ -167,6 +167,16 @@ pub fn syscall_ioctl(fd: u32, request: u32, arg: u32) -> u32 {
         return abi::errno(abi::EFAULT);
     };
 
+    if request == 0x5421 { // FIONBIO applies to every descriptor kind.
+        let Some(flags) = process.get_status_flags(fd) else { return abi::errno(abi::EBADF); };
+        let mut enabled = 0u32;
+        if user::copy_from_user(&process.page_directory, arg, &mut enabled as *mut _ as *mut u8, 4).is_err() {
+            return abi::errno(abi::EFAULT);
+        }
+        let flags = if enabled == 0 { flags & !0x800 } else { flags | 0x800 };
+        return match process.set_status_flags(fd, flags) { Ok(()) => 0, Err(_) => abi::errno(abi::EBADF) };
+    }
+
     match process.get_fd(fd) {
         Some(descriptor) => match descriptor.ioctl(request, arg, &process.page_directory) {
             Ok(result) => result,

@@ -19,6 +19,8 @@ struct thread_control {
   int detached;
   int joining;
   int owns_stack;
+  void *stack_mapping;
+  size_t stack_mapping_size;
   pthread_attr_t attr;
   void *(*start)(void *);
   void *arg;
@@ -91,7 +93,9 @@ static void remove_locked(struct thread_control *t) {
 static void destroy(struct thread_control *t) {
   if (t->tid)
     release_errno(t->tid);
-  if (t->owns_stack)
+  if (t->stack_mapping)
+    munmap(t->stack_mapping, t->stack_mapping_size);
+  else if (t->owns_stack)
     free(t->attr.stackaddr);
   free(t);
 }
@@ -133,8 +137,9 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
       selected.stacksize > 16 * 1024 * 1024 ||
       (selected.detachstate != 0 && selected.detachstate != 1))
     return EINVAL;
-  if (selected.guardsize)
-    return ENOTSUP;
+  if (selected.guardsize > 1024 * 1024 ||
+      (selected.stackaddr && selected.guardsize))
+    return EINVAL;
   reap_detached();
   struct thread_control *t = malloc(sizeof(*t));
   if (!t)
@@ -142,7 +147,28 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
   memset(t, 0, sizeof(*t));
   t->attr = selected;
   if (!t->attr.stackaddr) {
-    t->attr.stackaddr = malloc(selected.stacksize);
+    if (selected.guardsize) {
+      size_t guard = (selected.guardsize + 4095) & ~4095u;
+      size_t usable = (selected.stacksize + 4095) & ~4095u;
+      void *mapping = mmap(0, guard + usable, PROT_READ | PROT_WRITE,
+                           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+      if (mapping == MAP_FAILED) {
+        free(t);
+        return ENOMEM;
+      }
+      if (mprotect(mapping, guard, PROT_NONE)) {
+        munmap(mapping, guard + usable);
+        free(t);
+        return ENOMEM;
+      }
+      t->stack_mapping = mapping;
+      t->stack_mapping_size = guard + usable;
+      t->attr.stackaddr = (char *)mapping + guard;
+      t->attr.stacksize = usable;
+      t->attr.guardsize = guard;
+    } else {
+      t->attr.stackaddr = malloc(selected.stacksize);
+    }
     if (!t->attr.stackaddr) {
       free(t);
       return ENOMEM;
@@ -335,9 +361,9 @@ int pthread_attr_getstack(const pthread_attr_t *a, void **p, size_t *n) {
 int pthread_attr_setguardsize(pthread_attr_t *a, size_t n) {
   if (!a)
     return EINVAL;
-  if (n)
-    return ENOTSUP;
-  a->guardsize = 0;
+  if (n > 1024 * 1024)
+    return EINVAL;
+  a->guardsize = n;
   return 0;
 }
 int pthread_attr_getguardsize(const pthread_attr_t *a, size_t *n) {
@@ -388,6 +414,8 @@ void __pthread_after_fork(void) {
   main_thread.tid = gettid();
   main_thread.live_tid = 0;
   main_thread.owns_stack = 0;
+  main_thread.stack_mapping = 0;
+  main_thread.stack_mapping_size = 0;
   main_thread.joining = 0;
   main_thread.detached = 0;
   threads[0] = &main_thread;

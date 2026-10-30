@@ -10,6 +10,39 @@ static void *delayed(void *unused) {
   return 0;
 }
 void test_ipc(void (*expect)(const char *, int, int)) {
+  int packets[2];
+  char packet[8];
+  int made = socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_NONBLOCK, 0, packets);
+  expect("seqpacket socketpair", made == 0, 1);
+  if (made == 0) {
+    expect("seqpacket atomic records",
+           write(packets[0], "abc", 3) == 3 && write(packets[0], "XY", 2) == 2,
+           1);
+    expect("seqpacket truncates one record",
+           read(packets[1], packet, 2) == 2 && strncmp(packet, "ab", 2) == 0,
+           1);
+    expect("seqpacket preserves next record",
+           read(packets[1], packet, 8) == 2 && strncmp(packet, "XY", 2) == 0,
+           1);
+    expect("seqpacket empty record", write(packets[0], "", 0) == 0, 1);
+    struct pollfd ready = {packets[1], POLLIN, 0};
+    expect("seqpacket empty record readiness",
+           poll(&ready, 1, 0) == 1 && (ready.revents & POLLIN) &&
+               read(packets[1], packet, 8) == 0,
+           1);
+    errno = 0;
+    expect("seqpacket empty queue",
+           read(packets[1], packet, 8) == -1 && errno == EAGAIN, 1);
+    static char oversized[4097];
+    errno = 0;
+    expect("seqpacket rejects oversized record",
+           write(packets[0], oversized, sizeof(oversized)) == -1 &&
+               errno == EMSGSIZE,
+           1);
+    close(packets[0]);
+    expect("seqpacket peer EOF", read(packets[1], packet, 8) == 0, 1);
+    close(packets[1]);
+  }
   int fds[2], sv[2];
   char buf[16];
   expect("pipe2 flags", pipe2(fds, O_NONBLOCK | O_CLOEXEC) == 0, 1);
@@ -86,7 +119,8 @@ void test_ipc(void (*expect)(const char *, int, int)) {
 
   pipe2(fds, O_NONBLOCK);
   char capacity[4096];
-  for (int i = 0; i < 4096; i++) capacity[i] = 'A';
+  for (int i = 0; i < 4096; i++)
+    capacity[i] = 'A';
   expect("pipe capacity", write(fds[1], capacity, 4095) == 4095, 1);
   errno = 0;
   expect("pipe atomic small write",

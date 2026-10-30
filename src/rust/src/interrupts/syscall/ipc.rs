@@ -88,15 +88,16 @@ pub(super) fn socketpair(
     protocol: u32,
     ptr: u32,
 ) -> u32 {
-    if domain != 1 || kind & !(0x800 | 0x80000) != 1 || protocol != 0 {
+    let base = kind & !(0x800 | 0x80000);
+    if domain != 1 || !matches!(base, 1 | 5) || protocol != 0 {
         return abi::errno(abi::ENOTSUP);
     }
-    let a = Arc::new(Mutex::new(Pipe::new()));
-    let b = Arc::new(Mutex::new(Pipe::new()));
+    let a = Arc::new(Mutex::new(if base == 5 { Pipe::packets() } else { Pipe::new() }));
+    let b = Arc::new(Mutex::new(if base == 5 { Pipe::packets() } else { Pipe::new() }));
     install_pair(
         process,
         ptr,
-        kind & !1,
+        kind & (0x800 | 0x80000),
         [
             ProcessDescriptor::LocalSocket {
                 rx: a.clone(),

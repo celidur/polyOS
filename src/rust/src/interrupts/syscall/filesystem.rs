@@ -29,6 +29,12 @@ pub fn syscall_openat(fd: u32, ptr: u32, flags: u32, mode: u32) -> u32 {
         Err(e) => file::fs_errno(e),
     }
 }
+pub fn syscall_unlinkat(fd: u32, ptr: u32, flags: u32) -> u32 {
+    if flags & !0x200 != 0 { return abi::errno(abi::EINVAL); }
+    let Some(p) = process() else { return abi::errno(abi::ESRCH); };
+    let path = match pathname(&p, fd as i32, ptr) { Ok(p) => p, Err(e) => return file::fs_errno(e) };
+    file::remove_resolved(&p, &path, flags & 0x200 != 0)
+}
 pub fn syscall_access(ptr: u32, mode: u32) -> u32 {
     if mode & !7 != 0 {
         return abi::errno(abi::EINVAL);

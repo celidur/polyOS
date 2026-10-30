@@ -79,13 +79,8 @@ fn attach() {
     }
 }
 fn emit(bytes: &[u8], post: bool) {
-    for &b in bytes {
-        if post && b == b'\n' {
-            SERIAL_DRIVER.write(b"\r");
-        }
-        SERIAL_DRIVER.write(&[b]);
-        crate::print::terminal_writechar(b, 15);
-    }
+    let replies = super::terminal_output::emit(bytes, post);
+    if !replies.is_empty() { let mut tty = TERMINAL.lock(); for byte in replies { tty.ready.push_back(Some(byte)); } }
 }
 pub fn write(bytes: &[u8]) -> Result<usize, FsError> {
     attach();

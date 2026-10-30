@@ -1,6 +1,8 @@
 #[repr(u16)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SyscallId {
+    UnlinkAt = 301,
+    GetRandom = 355,
     // Linux i386 int 0x80 numbers for the syscalls with matching ABI.
     Exit = 1,
     Fork = 2,
@@ -159,6 +161,8 @@ impl SyscallId {
             220 => Some(Self::GetDents64),
             295 => Some(Self::OpenAt),
             300 => Some(Self::FstatAt),
+            301 => Some(Self::UnlinkAt),
+            355 => Some(Self::GetRandom),
             116 => Some(Self::SysInfo),
             90 => Some(Self::Mmap),
             91 => Some(Self::Munmap),

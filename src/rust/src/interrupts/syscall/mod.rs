@@ -25,3 +25,4 @@ mod virtual_memory;
 mod sysv;
 
 mod management;
+mod random;

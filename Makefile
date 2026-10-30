@@ -14,7 +14,7 @@ DIRECTORIES = $(BIN_DIR) $(sort $(dir $(OBJ_FILES)))
 OS := $(shell uname -s)
 
 PROGRAM_DIRS := $(wildcard ./programs/*/)
-PROGRAM_NAMES := $(filter-out stdlib, $(notdir $(patsubst %/,%,$(PROGRAM_DIRS))))
+PROGRAM_NAMES := $(filter-out stdlib rust-std, $(notdir $(patsubst %/,%,$(PROGRAM_DIRS))))
 
 all: $(DIRECTORIES) $(BIN_DIR)/os.bin user_programs
 	mkdir -p ./log

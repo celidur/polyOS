@@ -21,6 +21,8 @@ use super::sync::*;
 use super::types::SyscallId;
 
 pub fn syscall_init() {
+    syscall_register(SyscallId::UnlinkAt, SyscallHandler::Args3(filesystem::syscall_unlinkat));
+    syscall_register(SyscallId::GetRandom, SyscallHandler::Args3(super::random::syscall_getrandom));
     syscall_register(SyscallId::WaitId, SyscallHandler::Args5(management::syscall_waitid));
     syscall_register(SyscallId::SetUid, SyscallHandler::Args1(management::syscall_setuid));
     syscall_register(SyscallId::SetGid, SyscallHandler::Args1(management::syscall_setgid));
@@ -113,7 +115,7 @@ pub fn syscall_init() {
     );
     syscall_register(
         SyscallId::Futex,
-        SyscallHandler::Args4(thread::syscall_futex),
+        SyscallHandler::Args6(thread::syscall_futex),
     );
 
     syscall_register(SyscallId::Execve, SyscallHandler::Args3(syscall_execve));
@@ -209,7 +211,6 @@ pub fn syscall_handle(frame: &InterruptFrame) -> u32 {
     let cmd = match SyscallId::new(cmd) {
         Some(c) => c,
         None => {
-            serial_println!("Unknown syscall command: {}", cmd);
             return abi::errno(abi::ENOSYS);
         }
     };
@@ -217,7 +218,6 @@ pub fn syscall_handle(frame: &InterruptFrame) -> u32 {
     syscall_get_handler(cmd)
         .map(|handler| handler.call(frame))
         .unwrap_or_else(|| {
-            serial_println!("Unknown syscall command: {:?}", cmd);
             abi::errno(abi::ENOSYS)
         })
 }

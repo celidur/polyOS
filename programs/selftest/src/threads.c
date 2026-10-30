@@ -9,6 +9,17 @@ static volatile int total;
 static volatile int dtors;
 static volatile int gate;
 static volatile int detached_done;
+static void *guard_worker(void *unused) {
+    pthread_attr_t attr;
+    if (pthread_getattr_np(pthread_self(), &attr) || attr.guardsize != 4096) return (void *)1;
+    return 0;
+}
+static void *touch_guard(void *unused) {
+    pthread_attr_t attr;
+    pthread_getattr_np(pthread_self(), &attr);
+    *((volatile char *)attr.stackaddr - 1) = 1;
+    return (void *)1;
+}
 
 static void destroy_value(void *value) {
     if (value)
@@ -114,7 +125,20 @@ void test_threads(void (*expect)(const char *, int, int)) {
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     expect("reject small thread stack", pthread_attr_setstacksize(&attr, 1) == EINVAL, 0);
-    expect("reject unsupported guards", pthread_attr_setguardsize(&attr, 4096) == ENOTSUP, 0);
+    expect("accept protected thread guards", pthread_attr_setguardsize(&attr, 4096) == 0, 0);
+    pthread_t guarded;
+    void *guard_result = (void *)1;
+    int guard_created = pthread_create(&guarded, &attr, guard_worker, NULL);
+    if (!guard_created) pthread_join(guarded, &guard_result);
+    expect("guarded stack attributes and cleanup", !guard_created && !guard_result, 0);
+    int guard_child = fork(), guard_status = -1;
+    if (!guard_child) {
+        if (pthread_create(&guarded, &attr, touch_guard, NULL)) _exit(98);
+        pthread_join(guarded, NULL); _exit(99);
+    }
+    expect("thread guard faults protect process memory",
+           guard_child > 0 && waitpid(guard_child, &guard_status, 0) == guard_child &&
+           WIFSIGNALED(guard_status) && WTERMSIG(guard_status) == SIGSEGV, guard_status);
     pthread_t tid;
     gate = 0;
     int r = pthread_create(&tid, NULL, detached_worker, NULL);

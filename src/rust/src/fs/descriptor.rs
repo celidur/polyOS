@@ -133,7 +133,7 @@ impl ProcessDescriptor {
                 let (result, waiters) = {
                     let mut pipe = pipe.lock();
                     let result = pipe.read(*end, buf);
-                    let waiters = if matches!(result, Ok(read) if read > 0) {
+                    let waiters = if matches!(result, Ok(read) if read > 0 || pipe.is_packet()) {
                         pipe.take_write_waiters()
                     } else {
                         Vec::new()
@@ -160,7 +160,7 @@ impl ProcessDescriptor {
                 let (result, waiters) = {
                     let mut pipe = pipe.lock();
                     let result = pipe.write(*end, buf);
-                    let waiters = if matches!(result, Ok(written) if written > 0) {
+                    let waiters = if matches!(result, Ok(written) if written > 0 || pipe.is_packet()) {
                         pipe.take_read_waiters()
                     } else {
                         Vec::new()
@@ -279,5 +279,6 @@ fn pipe_error(error: PipeError) -> FsError {
         PipeError::WouldBlock => FsError::WouldBlock,
         PipeError::BrokenPipe => FsError::BrokenPipe,
         PipeError::WrongEnd => FsError::InvalidArgument,
+        PipeError::MessageTooLarge => FsError::MessageTooLarge,
     }
 }

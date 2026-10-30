@@ -32,3 +32,4 @@ pub use node::{DeviceNodeRegistration, find as find_device_node, names as device
 mod network_control;
 
 pub mod terminal;
+mod terminal_output;

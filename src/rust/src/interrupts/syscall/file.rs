@@ -211,7 +211,7 @@ fn syscall_pipe_read(
         let pipe_id = pipe.id();
         match pipe.read(end, data.as_mut_slice()) {
             Ok(read) => {
-                let waiters = if read > 0 {
+                let waiters = if read > 0 || pipe.is_packet() {
                     pipe.take_write_waiters()
                 } else {
                     Vec::new()
@@ -266,7 +266,7 @@ fn syscall_pipe_write(
         let pipe_id = pipe.id();
         match pipe.write(end, data) {
             Ok(written) => {
-                let waiters = if written > 0 {
+                let waiters = if written > 0 || pipe.is_packet() {
                     pipe.take_read_waiters()
                 } else {
                     Vec::new()
@@ -690,18 +690,22 @@ fn remove_path(path_ptr: u32, directory: bool) -> u32 {
         Ok(context) => context,
         Err(e) => return fs_errno(e),
     };
+    remove_resolved(&process, &path, directory)
+}
+
+pub(super) fn remove_resolved(process: &Process, path: &str, directory: bool) -> u32 {
     if let Err(e) = crate::fs::access::parent_write(&process, &path) {
         return fs_errno(e);
     }
     let vfs = KERNEL.vfs.read();
-    match vfs.stat(path.as_str()) {
+    match vfs.stat(path) {
         Ok(metadata) if directory && !metadata.is_dir => return abi::errno(abi::ENOTDIR),
         Ok(metadata) if !directory && metadata.is_dir => return abi::errno(abi::EISDIR),
         Ok(_) => {}
         Err(error) => return fs_errno(error),
     }
 
-    match vfs.remove(path.as_str()) {
+    match vfs.remove(path) {
         Ok(()) => 0,
         Err(error) => fs_errno(error),
     }
@@ -796,6 +800,7 @@ pub(super) fn fs_errno(error: FsError) -> u32 {
         FsError::IsADirectory => abi::EISDIR,
         FsError::WouldBlock => abi::EAGAIN,
         FsError::BrokenPipe => abi::EPIPE,
+        FsError::MessageTooLarge => abi::EMSGSIZE,
     };
     abi::errno(code)
 }
@@ -805,6 +810,7 @@ fn pipe_fs_error(error: PipeError) -> FsError {
         PipeError::WouldBlock => FsError::WouldBlock,
         PipeError::BrokenPipe => FsError::BrokenPipe,
         PipeError::WrongEnd => FsError::InvalidArgument,
+        PipeError::MessageTooLarge => FsError::MessageTooLarge,
     }
 }
 

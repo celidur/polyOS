@@ -2,7 +2,7 @@
 use alloc::vec::Vec;
 
 use crate::{
-    constant::{PROGRAM_VIRTUAL_ADDRESS, USER_IMAGE_END},
+    constant::{PROGRAM_VIRTUAL_ADDRESS, USER_IMAGE_END, USER_STD_IMAGE_START, USER_STD_IMAGE_END},
     kernel::KERNEL,
     memory::Page,
 };
@@ -288,8 +288,9 @@ impl ElfFile {
             .p_vaddr
             .checked_add(phdr.p_memsz)
             .ok_or(ElfError::InvalidFormat)?;
-        if phdr.p_vaddr < PROGRAM_VIRTUAL_ADDRESS as u32
-            || end > USER_IMAGE_END as u32
+        let legacy_image = phdr.p_vaddr >= PROGRAM_VIRTUAL_ADDRESS as u32 && end <= USER_IMAGE_END as u32;
+        let std_image = phdr.p_vaddr >= USER_STD_IMAGE_START as u32 && end <= USER_STD_IMAGE_END as u32;
+        if !(legacy_image || std_image)
             || (phdr.p_align > 1
                 && (!phdr.p_align.is_power_of_two()
                     || phdr.p_vaddr % phdr.p_align != phdr.p_offset % phdr.p_align))

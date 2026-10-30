@@ -1,0 +1,8 @@
+[unstable]
+build-std = ["std", "panic_abort"]
+
+[build]
+target = "../rust-std/i686-polyos-std.json"
+
+[target.i686-polyos-std]
+rustflags = []

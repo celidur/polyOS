@@ -33,6 +33,7 @@ pub enum FsError {
     IsADirectory,
     WouldBlock,
     BrokenPipe,
+    MessageTooLarge,
 }
 
 #[derive(Debug, Clone, Default)]
