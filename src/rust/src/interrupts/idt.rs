@@ -143,7 +143,9 @@ fn idt_set(interrupt_no: usize, address: unsafe extern "C" fn()) {
     desc.offset_2 = ((addr >> 16) & 0xFFFF) as u16;
     desc.selector = KERNEL_CODE_SELECTOR;
     desc.zero = 0x00;
-    desc.type_attr = 0xEE;
+    // Hardware IRQs and exceptions are privileged entry points. Only the
+    // syscall vector may be invoked through INT from ring 3.
+    desc.type_attr = if interrupt_no == 0x80 { 0xEE } else { 0x8E };
 }
 
 pub fn idt_init() {
