@@ -150,13 +150,16 @@ impl Terminal {
                 self.finish();
                 return;
             }
-            if self.edit.len() < 4095 {
+            let line_end = b == b'\n' || (s.chars[11] != 0 && b == s.chars[11]);
+            // Reserve the last byte for a terminator, including after excess
+            // ordinary characters have been discarded from a full line.
+            if self.edit.len() < 4095 || line_end {
                 self.edit.push(b);
                 if s.local & 8 != 0 {
                     echo.push(b);
                 }
             }
-            if b == b'\n' || (s.chars[11] != 0 && b == s.chars[11]) {
+            if line_end {
                 self.finish();
             }
         } else if self.ready.len() < 8192 {

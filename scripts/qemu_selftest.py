@@ -105,6 +105,8 @@ def main():
 
             terminal_inputs = [
                 ("tty-canonical-ready", b"ab\x7fc\r"),
+                ("tty-full-line-ready", b"A" * 4095 + b"\n"),
+                ("tty-overflow-line-ready", b"B" * 5000 + b"\n"),
                 ("tty-eof-ready", b"\x04"),
                 ("tty-eof-pair-ready", b"\x04\x04"),
                 ("tty-transition-ready", b"T\n"),

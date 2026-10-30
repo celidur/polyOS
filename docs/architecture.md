@@ -233,6 +233,8 @@ TOSTOP writes and background terminal changes generate SIGTTOU.
 Canonical input supports erase, kill, line boundaries and EOF. Raw input preserves
 NUL and supports VMIN, including immediate reads with VMIN=0. Input CR/NL mapping,
 echo, output NL processing, flushes and window-size notifications are implemented.
+Canonical lines reserve a final terminator byte: up to 4095 ordinary bytes plus
+newline/EOL are returned together; excess ordinary bytes are discarded.
 Output is synchronous, so TCSADRAIN has no software output queue to drain. Nonzero
 VTIME, hardware baud/parity changes and unsupported termios flags return ENOTSUP.
 The console is one terminal; pseudo-terminals are not implemented. Rust and C

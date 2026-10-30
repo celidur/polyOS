@@ -33,6 +33,19 @@ void test_terminal(void (*expect)(const char *, int, int)) {
   expect("terminal canonical erase and line",
          n == 3 && buffer[0] == 'a' && buffer[1] == 'c' && buffer[2] == '\n',
          1);
+  struct termios quiet = settings;
+  quiet.c_lflag = ISIG | ICANON;
+  tcsetattr(0, TCSANOW, &quiet);
+  char full_line[4096];
+  printf("tty-full-line-ready\n");
+  n = read(0, full_line, sizeof(full_line));
+  expect("canonical full line retains newline",
+         n == 4096 && full_line[0] == 'A' && full_line[4094] == 'A' && full_line[4095] == '\n', 1);
+  printf("tty-overflow-line-ready\n");
+  n = read(0, full_line, sizeof(full_line));
+  expect("canonical overflow discards excess but retains newline",
+         n == 4096 && full_line[0] == 'B' && full_line[4094] == 'B' && full_line[4095] == '\n', 1);
+  tcsetattr(0, TCSANOW, &settings);
   printf("tty-eof-ready\n");
   expect("terminal canonical EOF", read(0, buffer, sizeof(buffer)) == 0, 1);
   printf("tty-eof-pair-ready\n");
