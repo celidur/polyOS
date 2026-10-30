@@ -1,6 +1,10 @@
 use crate::{
     interrupts::{interrupt_frame::InterruptFrame, utils::get_cr2},
-    schedule::{process_manager::process_terminate, task::task_next},
+    schedule::{
+        process_manager::process_terminate,
+        signal::{FaultSignal, fault_current},
+        task::task_next,
+    },
 };
 
 pub fn idt_handle_exception(_frame: &InterruptFrame) {
@@ -85,17 +89,35 @@ pub fn idt_page_fault(frame: &InterruptFrame, code_error: u32) {
         .with_task_manager(|tm| tm.get_current().map(|t| t.read().process.pid));
     serial_println!("Faulting process PID: {:?}", pid);
 
-    if !frame.is_user_mode() {panic!("kernel page fault at {:#x}",faulting_address);}
-    let context=crate::kernel::KERNEL.with_task_manager(|tm|tm.get_current().map(|t|{let t=t.read();(t.process.pid,t.signals.blocked,t.process.get_signal_action(11).unwrap_or_default())}));
-    if let Some((pid,mask,action))=context {
-        crate::kernel::KERNEL.with_process_manager(|pm|{if mask&(1<<10)!=0 || action.handler<=1 {pm.terminate_signal(pid,11);}else{let _=pm.signal(pid,11);}});
+    if !frame.is_user_mode() {
+        panic!("kernel page fault at {:#x}", faulting_address);
+    }
+    let signal = FaultSignal::SegmentationFault as u32;
+    let context = crate::kernel::KERNEL.with_task_manager(|tm| {
+        tm.get_current().map(|t| {
+            let t = t.read();
+            (
+                t.process.pid,
+                t.signals.blocked,
+                t.process.get_signal_action(signal).unwrap_or_default(),
+            )
+        })
+    });
+    if let Some((pid, mask, action)) = context {
+        crate::kernel::KERNEL.with_process_manager(|pm| {
+            if mask & (1 << (signal - 1)) != 0 || action.handler <= 1 {
+                pm.terminate_signal(pid, signal);
+            } else {
+                let _ = pm.signal(pid, signal);
+            }
+        });
     }
     task_next();
 }
 
 pub fn idt_general_protection_fault(_frame: &InterruptFrame, code_error: u32) {
     if _frame.is_user_mode() {
-        crate::schedule::signal::fault_current(11);
+        fault_current(FaultSignal::SegmentationFault);
     }
     serial_println!("{:?}", _frame);
     serial_println!("General protection fault");

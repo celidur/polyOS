@@ -7,9 +7,17 @@ use crate::{kernel::KERNEL, memory::user};
 use alloc::vec::Vec;
 pub const UNBLOCKABLE: u32 = (1 << 8) | (1 << 18);
 
+/// Signals currently delivered by the kernel's hardware-fault handlers.
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FaultSignal {
+    SegmentationFault = 11,
+}
+
 /// Hardware faults belong to the faulting task, rather than an arbitrary
 /// eligible thread. An ignored/blocked synchronous fault must terminate.
-pub fn fault_current(signal: u32) -> ! {
+pub fn fault_current(signal: FaultSignal) -> ! {
+    let signal = signal as u32;
     let terminate = KERNEL.with_task_manager(|tm| {
         let task = tm.get_current()?;
         let mut task = task.write();
@@ -61,7 +69,10 @@ impl ThreadSignals {
     /// Fork duplicates the calling thread's live return frames and alternate
     /// stack; pending signals are not inherited. Clone threads start fresh.
     pub fn fork_context(&self) -> Self {
-        Self { pending: 0, ..self.clone() }
+        Self {
+            pending: 0,
+            ..self.clone()
+        }
     }
 }
 pub fn frame(task: &mut Task, signal: u32) -> Result<bool, ()> {
@@ -156,7 +167,7 @@ pub fn prepare_current() -> bool {
                     {
                         signal
                     } else {
-                        11
+                        FaultSignal::SegmentationFault as u32
                     },
                 )),
             ),
